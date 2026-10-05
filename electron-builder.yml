@@ -31,7 +31,10 @@ nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
 mac:
-  target: dmg
+  # The DMG installs; the zip is what updates download (electron-updater on macOS).
+  target:
+    - dmg
+    - zip
   category: public.app-category.developer-tools
   icon: build/icon.png
   # Signed and notarized when the build has an Apple identity (CSC_LINK / APPLE_ID…).
@@ -49,8 +52,13 @@ linux:
   maintainer: Dimitris
   synopsis: Run coding agents in git worktrees, side by side
 npmRebuild: true
-# Updates (Help → Check for updates) need a release channel, e.g. GitHub releases:
-# publish:
-#   provider: github
-#   owner: <your GitHub user or org>
-#   repo: switchyard
+# Updates (Help → Check for updates, and the check at start): GitHub releases of
+# DimChtz/switchyard. `npm run release:win` (or :mac / :linux) builds and uploads the
+# installers and latest*.yml to a draft release for package.json's version (GH_TOKEN
+# needed); installed copies update once that draft is published. The repository is
+# public, so they read releases without a token.
+publish:
+  provider: github
+  owner: DimChtz
+  repo: switchyard
+  releaseType: draft

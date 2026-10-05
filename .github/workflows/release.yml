@@ -1,0 +1,70 @@
+# Releases: push a version tag (git tag v0.1.1 && git push origin v0.1.1) whose number
+# matches package.json's "version". The installers for Windows, macOS and Linux are
+# built and uploaded, with the latest*.yml files the updater reads, to one draft
+# release. Publish the draft on GitHub and installed copies update to it.
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: The tag is package.json's version
+        run: |
+          v="$(node -p "require('./package.json').version")"
+          if [ "${GITHUB_REF_NAME}" != "v$v" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} doesn't match package.json version $v - bump the version, or tag v$v."
+            exit 1
+          fi
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      # One draft for the three builds to add to (each creating its own could make duplicates).
+      - name: Draft release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --draft --title "Switchyard ${GITHUB_REF_NAME#v}" --generate-notes
+
+  build:
+    needs: check
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: --win
+          # Apple Silicon and Intel in one build (one latest-mac.yml for the updater).
+          - os: macos-latest
+            target: --mac --arm64 --x64
+          - os: ubuntu-latest
+            target: --linux
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # npm installs the terminal's native part for this Mac only (Apple Silicon); the Intel build needs its own too.
+      - name: The Intel Mac terminal binary
+        if: runner.os == 'macOS'
+        run: npm install --no-save --force "@lydell/node-pty-darwin-x64@$(node -p "require('@lydell/node-pty/package.json').version")"
+      - run: npx electron-vite build
+      - name: Build and upload
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # No Apple Developer account: the Mac app is unsigned (and not notarized).
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npx electron-builder ${{ matrix.target }} --publish always

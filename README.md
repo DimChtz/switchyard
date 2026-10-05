@@ -57,10 +57,28 @@ Then add a project: a local git repository, or one cloned by URL.
 | `npm run typecheck` | Type-checks the main/preload and renderer projects. |
 | `npm run lint` | Runs ESLint. |
 | `npm test` | Runs the unit tests (Vitest). |
-| `npm run build:win` / `build:mac` / `build:linux` | Packages installers into `dist/`: NSIS on Windows, DMG on macOS, AppImage and deb on Linux. |
+| `npm run build:win` / `build:mac` / `build:linux` | Packages installers into `dist/` (NSIS on Windows, DMG and zip on macOS, AppImage and deb on Linux) without publishing anything. |
+| `npm run release:win` / `release:mac` / `release:linux` | Packages and uploads to a draft GitHub release (see below). |
 | `npm run plugin:pack -- <folder> [-o <out>]` | Packs a plugin folder into a `.syplugin` file. |
 
-Automatic updates (Help → Check for updates) need a release channel. Set `publish` in `electron-builder.yml`.
+### Releasing updates
+
+Installed copies update themselves from this repository's GitHub Releases. They check at start and every few hours, download in the background, and install when Switchyard quits. **Help → Check for updates** checks right away.
+
+To release a version:
+
+1. Bump `version` in `package.json` (for example `0.1.1`) and commit it.
+2. Tag the commit and push the tag: `git tag v0.1.1 && git push origin v0.1.1`.
+3. GitHub Actions (`.github/workflows/release.yml`) checks the code, then builds Windows, macOS (Apple Silicon and Intel) and Linux and uploads them, with the `latest*.yml` files the updater reads, to a **draft** release.
+4. Publish the draft on GitHub. Installed copies only see published releases.
+
+`npm run release:win` (and `:mac` / `:linux`) does the same for one platform from your machine, with `GH_TOKEN` set to a token that can write releases.
+
+**Platform notes:**
+
+- **Windows:** builds aren't code-signed, so SmartScreen warns on first install. Updates work.
+- **macOS:** builds aren't signed or notarized (no Apple Developer account). macOS blocks the downloaded app at first; allow it in System Settings → Privacy & Security, or run `xattr -cr /Applications/Switchyard.app`. It doesn't update itself until it's signed.
+- **Linux:** the AppImage updates itself; the deb doesn't.
 
 ## Project layout
 
