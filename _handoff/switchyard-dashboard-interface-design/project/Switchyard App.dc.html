@@ -1,0 +1,1514 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>html,body{margin:0;background:#0F1012;font-family:Geist,system-ui,sans-serif;-webkit-font-smoothing:antialiased}a{color:#95B4E8;text-decoration:none}a:hover{color:#C3D5F5}textarea,input{font-family:inherit}::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:#2A2C31;border-radius:4px}::-webkit-scrollbar-track{background:transparent}</style>
+</helmet>
+<div style="width:100vw;height:100vh;min-width:1280px;min-height:760px;display:flex;flex-direction:column;background:#0F1012;color:#E8E8E6;font-family:Geist,system-ui,sans-serif;overflow:hidden;position:relative">
+  <div style="height:36px;flex:none;display:flex;align-items:center;gap:8px;padding:0 14px;background:#0B0C0E;border-bottom:1px solid #1F2126;position:relative"><span style="width:12px;height:12px;border-radius:50%;background:#3A3C42"></span><span style="width:12px;height:12px;border-radius:50%;background:#3A3C42"></span><span style="width:12px;height:12px;border-radius:50%;background:#3A3C42"></span><span style="position:absolute;left:0;right:0;text-align:center;font-size:12px;color:#6E717A;pointer-events:none">Switchyard — {{ title }}</span></div>
+  <div style="flex:1;display:flex;min-height:0">
+    <div style="width:232px;flex:none;background:#0B0C0E;border-right:1px solid #1F2126;display:flex;flex-direction:column;min-height:0;color:#A4A7AE">
+      <div style="padding:10px 10px 6px">
+        <div onClick="{{ openPalette }}" style="display:flex;align-items:center;gap:8px;height:30px;padding:0 10px;border:1px solid #23252B;border-radius:6px;background:#121317;color:#6E717A;font-size:12.5px;cursor:pointer" style-hover="border-color:#33363C"><span style="flex:1">Search or run…</span><span style="font:11px 'Geist Mono',monospace">⌘K</span></div>
+      </div>
+      <div style="padding:4px 8px 10px;display:flex;flex-direction:column;gap:1px">
+        <sc-for list="{{ nav }}" as="n" hint-placeholder-count="3">
+          <div onClick="{{ n.onClick }}" style="display:flex;align-items:center;gap:8px;height:28px;padding:0 10px;border-radius:5px;background:{{ n.bg }};color:{{ n.fg }};font-size:13px;cursor:pointer" style-hover="background:rgba(255,255,255,0.05)">
+            <span style="flex:1">{{ n.label }}</span>
+            <sc-if value="{{ n.hasBadge }}" hint-placeholder-val="{{ false }}"><span style="font:600 10.5px/16px 'Geist Mono',monospace;color:#0B0C0E;background:#E3B25A;border-radius:3px;padding:0 5px">{{ n.badge }}</span></sc-if>
+            <span style="font:11px 'Geist Mono',monospace;color:#4E5159">{{ n.key }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display:flex;align-items:center;padding:8px 18px 6px;font:500 11px 'Geist Mono',monospace;letter-spacing:0.06em;text-transform:uppercase;color:#5A5D66"><span style="flex:1">Projects</span></div>
+      <div style="padding:0 8px;display:flex;flex-direction:column;gap:1px;flex:1;min-height:0;overflow:auto">
+        <sc-for list="{{ sbProjects }}" as="p" hint-placeholder-count="6">
+          <div style="display:flex;flex-direction:column">
+            <div onClick="{{ p.onClick }}" style="display:flex;align-items:center;gap:9px;height:28px;padding:0 10px;border-radius:5px;background:{{ p.bg }};color:{{ p.fg }};font-size:13px;cursor:pointer" style-hover="background:rgba(255,255,255,0.05)">
+              <span style="width:7px;height:7px;border-radius:50%;background:{{ p.dot }};flex:none"></span>
+              <span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.name }}</span>
+              <span style="font:11px 'Geist Mono',monospace;color:#5A5D66">{{ p.count }}</span>
+            </div>
+            <sc-if value="{{ p.expanded }}" hint-placeholder-val="{{ false }}">
+              <div style="margin:2px 0 6px 13px;border-left:1px solid #26282E;padding-left:6px;display:flex;flex-direction:column;gap:1px">
+                <sc-for list="{{ p.tasks }}" as="t" hint-placeholder-count="3">
+                  <div onClick="{{ t.onClick }}" style="display:flex;align-items:center;gap:8px;height:26px;padding:0 8px;border-radius:5px;background:{{ t.bg }};color:{{ t.fg }};font-size:12.5px;cursor:pointer" style-hover="background:rgba(255,255,255,0.05)">
+                    <span style="width:6px;height:6px;border-radius:50%;background:{{ t.dot }};flex:none"></span>
+                    <span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ t.name }}</span>
+                    <span style="font:10.5px 'Geist Mono',monospace;color:{{ t.dot }}">{{ t.agent }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-if>
+          </div>
+        </sc-for>
+      </div>
+      <div style="border-top:1px solid #1F2126;padding:10px 18px;display:flex;align-items:center;gap:10px;font-size:12.5px">
+        <span style="width:22px;height:22px;border-radius:50%;background:#23252B;color:#A4A7AE;font:600 10.5px/22px Geist,sans-serif;text-align:center">AR</span>
+        <span style="flex:1;color:#A4A7AE">ana · ~/code</span>
+        <span style="font:11px 'Geist Mono',monospace;color:#4E5159">⌘,</span>
+      </div>
+    </div>
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;min-height:0">
+      <sc-if value="{{ isDash }}" hint-placeholder-val="{{ true }}">
+      <div style="flex:1;min-height:0;display:flex;flex-direction:column;padding:28px 36px;gap:28px;overflow:auto">
+        <div style="display:flex;align-items:center;gap:14px">
+          <div style="font:600 20px Geist,sans-serif;letter-spacing:-0.01em">Projects</div>
+          <div style="font:12.5px 'Geist Mono',monospace;color:#6E717A">{{ dashSummary }}</div>
+          <div style="flex:1"></div>
+          <div onClick="{{ openPalette }}" style="height:28px;padding:0 12px;border:1px solid #2A2C31;border-radius:5px;display:flex;align-items:center;gap:10px;font-size:12.5px;color:#A4A7AE;cursor:pointer" style-hover="border-color:#3A3C43;color:#E8E8E6">Jump to…<span style="font:11px 'Geist Mono',monospace;color:#5A5D66">⌘K</span></div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:10px">
+          <div style="display:flex;align-items:baseline;gap:10px"><span style="font:500 13px Geist,sans-serif;color:#E3B25A">Needs you</span><span style="font:12px 'Geist Mono',monospace;color:#6E717A">{{ dashNeedsLabel }}</span></div>
+          <sc-if value="{{ noNeeds }}" hint-placeholder-val="{{ false }}"><div style="border:1px solid #23252B;border-radius:6px;padding:14px 16px;font:13px Geist,sans-serif;color:#6E717A">Nothing is blocked. Agents are working or finished.</div></sc-if>
+          <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px">
+            <sc-for list="{{ dashNeeds }}" as="n" hint-placeholder-count="3">
+              <div onClick="{{ n.onClick }}" style="background:#15161A;border:1px solid {{ n.border }};border-radius:6px;padding:14px 16px;display:flex;flex-direction:column;gap:8px;cursor:pointer" style-hover="background:#1A1B20">
+                <div style="display:flex;align-items:center;gap:8px;font:12px 'Geist Mono',monospace"><span style="width:7px;height:7px;border-radius:50%;background:{{ n.c }}"></span><span style="color:{{ n.c }}">{{ n.agent }} · {{ n.state }}</span><span style="flex:1"></span><span style="color:#5A5D66">{{ n.ago }}</span></div>
+                <div style="font:500 14px Geist,sans-serif">{{ n.task }} <span style="color:#6E717A;font-weight:400">· {{ n.project }}</span></div>
+                <div style="font:12.5px/1.45 Geist,sans-serif;color:#A4A7AE;text-wrap:pretty">{{ n.msg }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column">
+          <div style="display:grid;grid-template-columns:2.2fr 0.9fr 0.8fr 1.1fr 3fr;gap:20px;padding:0 16px 8px;font:500 11px 'Geist Mono',monospace;letter-spacing:.06em;text-transform:uppercase;color:#5A5D66;border-bottom:1px solid #1F2126">
+            <span>Project</span><span>Tasks</span><span>Worktrees</span><span>Agents</span><span>Recent activity</span>
+          </div>
+          <sc-for list="{{ dashProjects }}" as="p" hint-placeholder-count="6">
+            <div onClick="{{ p.onClick }}" style="display:grid;grid-template-columns:2.2fr 0.9fr 0.8fr 1.1fr 3fr;gap:20px;align-items:center;padding:0 16px;height:62px;border-bottom:1px solid #1B1D21;cursor:pointer" style-hover="background:#141519">
+              <div style="display:flex;flex-direction:column;gap:3px;min-width:0"><span style="font:500 14px Geist,sans-serif;color:{{ p.fg }}">{{ p.name }}</span><span style="font:12px 'Geist Mono',monospace;color:#6E717A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.repo }} · {{ p.lang }}</span></div>
+              <div style="font:13px 'Geist Mono',monospace;color:#A4A7AE"><span style="color:{{ p.fg }}">{{ p.active }}</span> active <span style="color:#5A5D66">/ {{ p.open }}</span></div>
+              <div style="font:13px 'Geist Mono',monospace;color:#A4A7AE">{{ p.wt }}</div>
+              <div style="display:flex;align-items:center;gap:10px">
+                <div style="display:flex;gap:4px"><sc-for list="{{ p.dots }}" as="d" hint-placeholder-count="2"><span style="width:8px;height:8px;border-radius:50%;background:{{ d.c }}"></span></sc-for></div>
+                <sc-if value="{{ p.hasNeeds }}" hint-placeholder-val="{{ false }}"><span style="font:500 12px 'Geist Mono',monospace;color:#E3B25A">{{ p.needs }}</span></sc-if>
+                <sc-if value="{{ p.idle }}" hint-placeholder-val="{{ false }}"><span style="font:12px 'Geist Mono',monospace;color:#5A5D66">idle</span></sc-if>
+              </div>
+              <div style="display:flex;gap:14px;align-items:baseline;min-width:0"><span style="font:13px Geist,sans-serif;color:#A4A7AE;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.act }}</span><span style="font:12px 'Geist Mono',monospace;color:#5A5D66;flex:none">{{ p.ago }}</span></div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="flex:1"></div>
+        <sc-if value="{{ hasStaleDash }}" hint-placeholder-val="{{ false }}"><div onClick="{{ goWt }}" style="display:flex;gap:16px;font:12px 'Geist Mono',monospace;color:#6E717A;cursor:pointer"><span style="color:#A4A7AE" style-hover="color:#E8E8E6">{{ staleCount }} worktrees to clean up → Worktrees</span></div></sc-if>
+      </div>
+      </sc-if>
+      <sc-if value="{{ isBoard }}" hint-placeholder-val="{{ false }}">
+      <div style="flex:1;min-height:0;display:flex;flex-direction:column">
+        <div style="height:56px;flex:none;display:flex;align-items:center;gap:14px;padding:0 20px;border-bottom:1px solid #1F2126">
+          <span style="font:600 16px Geist,sans-serif">{{ board.name }}</span>
+          <span style="font:12px 'Geist Mono',monospace;color:#6E717A">{{ board.repo }} · {{ board.head }}</span>
+          <div style="flex:1"></div>
+          <span style="font:12px 'Geist Mono',monospace;color:#6E717A">{{ board.summary }}</span>
+          <span style="font:11.5px 'Geist Mono',monospace;color:#4E5159">HJKL move · S start · ↵ open · drag cards</span>
+          <div onClick="{{ onAdd }}" style="height:28px;padding:0 12px;background:#E8E8E6;color:#0F1012;border-radius:5px;display:flex;align-items:center;gap:10px;font-weight:500;font-size:12.5px;cursor:pointer" style-hover="background:#FFFFFF">New task<span style="font:11px 'Geist Mono',monospace;color:#5A5D66">C</span></div>
+        </div>
+        <div style="flex:1;min-height:0;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;padding:14px 16px">
+          <sc-for list="{{ columns }}" as="col" hint-placeholder-count="5">
+            <div onDragOver="{{ col.onDragOver }}" onDragLeave="{{ col.onDragLeave }}" onDrop="{{ col.onDrop }}" style="display:flex;flex-direction:column;gap:8px;min-width:0;min-height:0;border-radius:8px;padding:4px;background:{{ col.dropBg }};box-shadow:inset 0 0 0 1px {{ col.dropRing }}">
+              <div style="display:flex;align-items:center;gap:8px;height:24px;padding:0 4px;flex:none">
+                <span style="font:500 12.5px Geist,sans-serif;color:#E8E8E6">{{ col.name }}</span>
+                <span style="font:12px 'Geist Mono',monospace;color:#5A5D66">{{ col.count }}</span>
+                <span style="flex:1"></span>
+                <span style="font:11px 'Geist Mono',monospace;color:#5A5D66">{{ col.hint }}</span>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:8px;overflow:auto;min-height:0;flex:1">
+                <sc-if value="{{ col.isBacklog }}" hint-placeholder-val="{{ false }}">
+                  <sc-if value="{{ adding }}" hint-placeholder-val="{{ false }}">
+                    <input autoFocus="{{ true }}" value="{{ newTitle }}" onChange="{{ onNewTitle }}" onKeyDown="{{ onNewKey }}" onBlur="{{ onAddBlur }}" placeholder="Task title, then ↵" style="height:38px;flex:none;box-sizing:border-box;background:#121317;border:1px solid rgba(149,180,232,0.6);border-radius:6px;padding:0 12px;color:#E8E8E6;font-size:13px;outline:none">
+                  </sc-if>
+                </sc-if>
+                <sc-for list="{{ col.cards }}" as="card" hint-placeholder-count="3">
+                  <div draggable="true" onDragStart="{{ card.onDragStart }}" onClick="{{ card.onClick }}" onDoubleClick="{{ card.onDouble }}" style="background:{{ card.bg }};border:1px solid {{ card.ring }};border-radius:6px;padding:11px 12px;display:flex;flex-direction:column;gap:9px;cursor:pointer;flex:none" style-hover="border-color:#3A3C43">
+                    <div style="display:flex;gap:8px;align-items:baseline"><span style="font:500 13px/1.35 Geist,sans-serif;color:{{ card.tc }};flex:1;text-wrap:pretty">{{ card.title }}</span><span style="font:11px 'Geist Mono',monospace;color:#5A5D66">{{ card.key }}</span></div>
+                    <sc-if value="{{ card.hasDesc }}" hint-placeholder-val="{{ false }}"><div style="font:12px/1.45 Geist,sans-serif;color:#7E818A;text-wrap:pretty">{{ card.desc }}</div></sc-if>
+                    <sc-if value="{{ card.active }}" hint-placeholder-val="{{ false }}">
+                      <div style="margin-left:3px;border-left:1px solid #2E3037;padding-left:10px;display:flex;flex-direction:column;gap:5px">
+                        <div style="display:flex;align-items:center;gap:7px;font:12px Geist,sans-serif"><span style="width:7px;height:7px;border-radius:50%;background:{{ card.dot }};margin-left:-14px;box-shadow:0 0 0 3px {{ card.bg }}"></span><span style="color:#E8E8E6">{{ card.agent }}</span><span style="color:{{ card.dot }}">{{ card.stLabel }}</span></div>
+                        <div style="font:11.5px 'Geist Mono',monospace;color:#A4A7AE;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ card.branch }}</div>
+                        <div style="display:flex;gap:8px;font:11.5px 'Geist Mono',monospace;color:#6E717A"><span>{{ card.files }}</span><span style="color:#6BCB8B">{{ card.add }}</span><span style="color:#E86A5F">{{ card.del }}</span><span style="flex:1"></span><span style="color:{{ card.testsC }}">{{ card.tests }}</span></div>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{ card.hasNote }}" hint-placeholder-val="{{ false }}"><div style="font:12px/1.4 Geist,sans-serif;color:{{ card.noteC }};background:{{ card.noteBg }};border-radius:4px;padding:6px 8px;text-wrap:pretty">{{ card.note }}</div></sc-if>
+                    <sc-if value="{{ card.showStart }}" hint-placeholder-val="{{ false }}"><div style="display:flex;gap:8px;align-items:center"><span onClick="{{ card.onStart }}" style="height:24px;padding:0 10px;border-radius:4px;background:#E8E8E6;color:#0F1012;display:flex;align-items:center;gap:8px;font:500 12px Geist,sans-serif" style-hover="background:#FFFFFF">Start with agent<span style="font:10.5px 'Geist Mono',monospace;color:#5A5D66">S</span></span><span style="font:11px 'Geist Mono',monospace;color:#5A5D66">or drag → In Progress</span></div></sc-if>
+                    <sc-if value="{{ card.showOpen }}" hint-placeholder-val="{{ false }}"><div style="display:flex;gap:12px;font:11.5px 'Geist Mono',monospace;color:#95B4E8"><span onClick="{{ card.onOpen }}">↵ open workspace</span></div></sc-if>
+                  </div>
+                </sc-for>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      </sc-if>
+      <sc-if value="{{ isAgents }}" hint-placeholder-val="{{ false }}">
+      <div style="flex:1;min-height:0;display:flex;flex-direction:column;padding:24px 28px;gap:16px;overflow:auto">
+        <div style="display:flex;align-items:center;gap:16px">
+          <div style="font:600 20px Geist,sans-serif;letter-spacing:-0.01em">Agents</div>
+          <div style="display:flex;gap:2px;background:#15161A;border:1px solid #23252B;border-radius:6px;padding:2px;font:12px Geist,sans-serif">
+            <sc-for list="{{ agFilters }}" as="f" hint-placeholder-count="4">
+              <span onClick="{{ f.onClick }}" style="padding:3px 10px;border-radius:4px;background:{{ f.bg }};color:{{ f.fg }};cursor:pointer;display:flex;gap:6px">{{ f.l }} <span style="font-family:'Geist Mono';opacity:.7">{{ f.n }}</span></span>
+            </sc-for>
+          </div>
+          <div style="flex:1"></div>
+          <span style="font:11.5px 'Geist Mono',monospace;color:#5A5D66">Y/N answer oldest · R send failure back · O open · ⌘J next</span>
+        </div>
+        <sc-if value="{{ agEmpty }}" hint-placeholder-val="{{ false }}"><div style="border:1px solid #23252B;border-radius:6px;padding:16px;font:13px Geist,sans-serif;color:#6E717A">No agents in this filter.</div></sc-if>
+        <sc-if value="{{ showNeeds }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div style="display:flex;align-items:baseline;gap:10px"><span style="font:500 13px Geist,sans-serif;color:#E3B25A">Needs you</span><span style="font:12px 'Geist Mono',monospace;color:#5A5D66">oldest first</span></div>
+            <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px">
+              <sc-for list="{{ agBlocked }}" as="t" hint-placeholder-count="3">
+                <div onClick="{{ t.onClick }}" style="background:#15161A;border:1px solid {{ t.border }};border-radius:7px;display:flex;flex-direction:column;overflow:hidden;cursor:pointer">
+                  <div style="padding:12px 14px 10px;display:flex;flex-direction:column;gap:6px">
+                    <div style="display:flex;align-items:center;gap:8px;font:12px 'Geist Mono',monospace"><span style="width:7px;height:7px;border-radius:50%;background:{{ t.c }}"></span><span style="color:#E8E8E6">{{ t.agent }}</span><span style="color:{{ t.c }}">{{ t.state }}</span><span style="flex:1"></span><span style="color:#5A5D66">{{ t.ago }}</span></div>
+                    <div style="font:500 14.5px Geist,sans-serif">{{ t.task }}</div>
+                    <div style="font:11.5px 'Geist Mono',monospace;color:#6E717A">{{ t.project }} · {{ t.branch }}</div>
+                  </div>
+                  <div style="background:#0C0D0F;border-top:1px solid #1F2126;border-bottom:1px solid #1F2126;padding:10px 14px;font:11.5px/18px 'Geist Mono',monospace;height:110px;box-sizing:border-box;overflow:hidden">
+                    <sc-for list="{{ t.lines }}" as="l" hint-placeholder-count="5"><div style="color:{{ l.c }};white-space:pre;overflow:hidden;text-overflow:ellipsis">{{ l.t }}</div></sc-for>
+                  </div>
+                  <div style="padding:12px 14px;display:flex;flex-direction:column;gap:10px">
+                    <div style="font:13px/1.45 Geist,sans-serif;color:#E8E8E6;text-wrap:pretty">{{ t.ask }}</div>
+                    <div style="display:flex;gap:6px;flex-wrap:wrap">
+                      <sc-for list="{{ t.actions }}" as="b" hint-placeholder-count="3">
+                        <span onClick="{{ b.onClick }}" style="height:26px;padding:0 10px;border-radius:5px;display:flex;align-items:center;gap:8px;font:500 12px Geist,sans-serif;background:{{ b.bg }};color:{{ b.fg }};border:1px solid {{ b.bd }};cursor:pointer" style-hover="filter:brightness(1.15)">{{ b.l }}<span style="font:10.5px 'Geist Mono',monospace;opacity:.6">{{ b.k }}</span></span>
+                      </sc-for>
+                    </div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+        <sc-if value="{{ showWorking }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;flex-direction:column;gap:10px;margin-top:6px">
+            <div style="font:500 13px Geist,sans-serif;color:#A4A7AE">Working</div>
+            <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px">
+              <sc-for list="{{ agWorking }}" as="t" hint-placeholder-count="3">
+                <div onClick="{{ t.onClick }}" style="background:#131418;border:1px solid #23252B;border-radius:7px;display:flex;flex-direction:column;overflow:hidden;cursor:pointer" style-hover="border-color:#33363C">
+                  <div style="padding:12px 14px 10px;display:flex;align-items:center;gap:8px">
+                    <span style="width:7px;height:7px;border-radius:50%;background:{{ t.dot }}"></span>
+                    <span style="font:500 13.5px Geist,sans-serif;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ t.task }}</span>
+                    <span style="font:11.5px 'Geist Mono',monospace;color:#6E717A">{{ t.agent }} · {{ t.ago }}</span>
+                  </div>
+                  <div style="padding:0 14px 12px;font:11.5px 'Geist Mono',monospace;color:#5A5D66">{{ t.project }} · {{ t.branch }}</div>
+                  <div style="background:#0C0D0F;border-top:1px solid #1F2126;padding:10px 14px;font:11.5px/18px 'Geist Mono',monospace;height:92px;box-sizing:border-box;overflow:hidden">
+                    <sc-for list="{{ t.lines }}" as="l" hint-placeholder-count="4"><div style="color:{{ l.c }};white-space:pre;overflow:hidden;text-overflow:ellipsis">{{ l.t }}</div></sc-for>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+        <sc-if value="{{ showDone }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;flex-direction:column;margin-top:6px">
+            <div style="font:500 13px Geist,sans-serif;color:#A4A7AE;margin-bottom:6px">Done — ready for review</div>
+            <sc-for list="{{ agDone }}" as="d" hint-placeholder-count="2">
+              <div onClick="{{ d.onClick }}" style="display:grid;grid-template-columns:16px 1.6fr 1.4fr 1fr 1fr auto;gap:14px;align-items:center;height:40px;border-top:1px solid #1B1D21;font:12.5px Geist,sans-serif;cursor:pointer;padding:0 6px" style-hover="background:#141519">
+                <span style="color:#6BCB8B;font-family:'Geist Mono'">✓</span>
+                <span style="color:#E8E8E6">{{ d.task }}</span>
+                <span style="font:12px 'Geist Mono',monospace;color:#6E717A">{{ d.project }} · {{ d.branch }}</span>
+                <span style="font:12px 'Geist Mono',monospace;color:#A4A7AE">{{ d.agent }} · {{ d.ago }}</span>
+                <span style="font:12px 'Geist Mono',monospace;color:#6BCB8B">{{ d.tests }}</span>
+                <span onClick="{{ d.onReview }}" style="font:12px Geist,sans-serif;color:#A4A7AE" style-hover="color:#E8E8E6">Review changes →</span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+      </div>
+      </sc-if>
+      <sc-if value="{{ isWt }}" hint-placeholder-val="{{ false }}">
+      <div style="flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 312px">
+        <div style="display:flex;flex-direction:column;padding:24px 28px;gap:16px;min-width:0;overflow:auto">
+          <div style="display:flex;align-items:center;gap:14px">
+            <div style="font:600 20px Geist,sans-serif;letter-spacing:-0.01em">Worktrees</div>
+            <div style="font:12.5px 'Geist Mono',monospace;color:#6E717A">{{ wtSummary }}</div>
+          </div>
+          <div style="display:grid;grid-template-columns:2.3fr 1.5fr 1.2fr 0.8fr 0.9fr 0.6fr;gap:16px;padding:0 12px 8px;font:500 11px 'Geist Mono',monospace;letter-spacing:.06em;text-transform:uppercase;color:#5A5D66;border-bottom:1px solid #1F2126">
+            <span>Branch · path</span><span>Task</span><span>Agent</span><span>vs main</span><span>Working tree</span><span style="text-align:right">Last</span>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:6px;margin-top:-8px">
+            <sc-for list="{{ wtGroups }}" as="g" hint-placeholder-count="4">
+              <div style="display:flex;flex-direction:column">
+                <div style="display:flex;align-items:center;gap:10px;height:32px;padding:0 12px;font:500 12.5px Geist,sans-serif;color:#A4A7AE"><span>{{ g.name }}</span><span style="font:11.5px 'Geist Mono',monospace;color:#5A5D66">{{ g.meta }}</span></div>
+                <sc-for list="{{ g.rows }}" as="r" hint-placeholder-count="3">
+                  <div onClick="{{ r.onClick }}" onDoubleClick="{{ r.onDouble }}" style="display:grid;grid-template-columns:2.3fr 1.5fr 1.2fr 0.8fr 0.9fr 0.6fr;gap:16px;align-items:center;min-height:48px;padding:0 12px;border-radius:5px;background:{{ r.bg }};box-shadow:inset 0 0 0 1px {{ r.ring }};cursor:pointer" style-hover="background:#15161A">
+                    <div style="display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font:12.5px 'Geist Mono',monospace;color:#E8E8E6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.branch }}</span><span style="font:11.5px 'Geist Mono',monospace;color:#5A5D66;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.path }}</span></div>
+                    <span style="font:12.5px Geist,sans-serif;color:#A4A7AE;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.task }}</span>
+                    <span style="display:flex;align-items:center;gap:7px;font:12.5px Geist,sans-serif;color:#A4A7AE"><span style="width:6px;height:6px;border-radius:50%;background:{{ r.dot }};flex:none"></span>{{ r.agent }}</span>
+                    <span style="font:12px 'Geist Mono',monospace;color:#A4A7AE">{{ r.ahead }} <span style="color:{{ r.behindC }}">{{ r.behind }}</span></span>
+                    <span style="font:12px 'Geist Mono',monospace;color:{{ r.dirtyC }}">{{ r.dirty }}</span>
+                    <span style="font:12px 'Geist Mono',monospace;color:#5A5D66;text-align:right">{{ r.last }}</span>
+                  </div>
+                </sc-for>
+              </div>
+            </sc-for>
+          </div>
+          <sc-if value="{{ hasStale }}" hint-placeholder-val="{{ true }}">
+            <div style="margin-top:4px;border:1px solid #2A2C31;border-radius:6px;background:#131418;display:flex;flex-direction:column">
+              <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid #1F2126">
+                <span style="font:500 13px Geist,sans-serif;color:#E8E8E6">Clean up</span>
+                <span style="font:12px 'Geist Mono',monospace;color:#6E717A">{{ staleSize }}</span>
+                <span style="flex:1"></span>
+                <span onClick="{{ pruneAll }}" style="height:26px;padding:0 10px;border:1px solid #2E3037;border-radius:5px;display:flex;align-items:center;gap:8px;font:500 12px Geist,sans-serif;color:#E8E8E6;cursor:pointer" style-hover="border-color:#4A4D55">Prune all</span>
+              </div>
+              <sc-for list="{{ stale }}" as="s" hint-placeholder-count="2">
+                <div style="display:grid;grid-template-columns:2.3fr 3.2fr auto;gap:16px;align-items:center;height:44px;padding:0 12px;border-top:1px solid #1B1D21">
+                  <div style="display:flex;flex-direction:column;gap:1px;min-width:0"><span style="font:12.5px 'Geist Mono',monospace;color:#A4A7AE">{{ s.branch }}</span><span style="font:11.5px 'Geist Mono',monospace;color:#5A5D66">{{ s.project }} · {{ s.size }}</span></div>
+                  <span style="font:12.5px Geist,sans-serif;color:#6E717A">{{ s.why }}</span>
+                  <span onClick="{{ s.onPrune }}" style="font:12px Geist,sans-serif;color:#A4A7AE;cursor:pointer" style-hover="color:#E86A5F">Prune</span>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+        </div>
+        <div style="border-left:1px solid #1F2126;padding:22px 20px;display:flex;flex-direction:column;gap:20px;overflow:auto;background:#0D0E10">
+          <sc-if value="{{ wd.has }}" hint-placeholder-val="{{ true }}">
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <div style="font:12px 'Geist Mono',monospace;color:#6E717A">{{ wd.key }}</div>
+              <div style="font:500 14px 'Geist Mono',monospace;color:#E8E8E6;overflow-wrap:anywhere">{{ wd.branch }}</div>
+              <div style="display:flex;align-items:center;gap:7px;font:12.5px Geist,sans-serif;color:{{ wd.c }}"><span style="width:6px;height:6px;border-radius:50%;background:{{ wd.c }}"></span>{{ wd.agent }}</div>
+            </div>
+            <sc-if value="{{ wd.behind }}" hint-placeholder-val="{{ false }}">
+              <div style="border:1px solid rgba(227,178,90,0.3);border-radius:6px;padding:10px 12px;display:flex;flex-direction:column;gap:8px">
+                <div style="font:13px/1.45 Geist,sans-serif;color:#E8E8E6;text-wrap:pretty">{{ wd.behindMsg }}</div>
+                <div style="display:flex;gap:6px"><span onClick="{{ wd.onRebase }}" style="height:26px;padding:0 10px;background:#E8E8E6;color:#0F1012;border-radius:5px;display:flex;align-items:center;font:500 12px Geist,sans-serif;cursor:pointer">{{ wd.rebaseLabel }}</span><span onClick="{{ wd.onRebaseSelf }}" style="height:26px;padding:0 10px;border:1px solid #2E3037;border-radius:5px;display:flex;align-items:center;font:500 12px Geist,sans-serif;color:#A4A7AE;cursor:pointer">Rebase myself</span></div>
+              </div>
+            </sc-if>
+            <div style="display:grid;grid-template-columns:72px 1fr;row-gap:9px;column-gap:10px;font:12px 'Geist Mono',monospace;align-items:baseline">
+              <sc-for list="{{ wd.rows }}" as="d" hint-placeholder-count="5">
+                <span style="font-family:Geist,sans-serif;color:#5A5D66">{{ d.k }}</span><span style="color:#A4A7AE;overflow-wrap:anywhere">{{ d.v }}</span>
+              </sc-for>
+            </div>
+            <div style="flex:1"></div>
+            <div style="display:flex;flex-direction:column;gap:1px">
+              <sc-for list="{{ wd.actions }}" as="a" hint-placeholder-count="4">
+                <div onClick="{{ a.onClick }}" style="display:flex;align-items:center;height:30px;padding:0 8px;margin:0 -8px;border-radius:5px;font:13px Geist,sans-serif;color:{{ a.c }};cursor:pointer" style-hover="background:#17181C"><span style="flex:1">{{ a.l }}</span><span style="font:11px 'Geist Mono',monospace;color:#5A5D66">{{ a.k }}</span></div>
+              </sc-for>
+              <div style="font:11.5px/1.45 Geist,sans-serif;color:#5A5D66;margin-top:6px;text-wrap:pretty">{{ wd.foot }}</div>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+      </sc-if>
+      <sc-if value="{{ isWs }}" hint-placeholder-val="{{ false }}">
+      <div style="flex:1;min-height:0;display:flex;flex-direction:column">
+        <div style="height:48px;flex:none;display:flex;align-items:center;gap:10px;padding:0 20px;border-bottom:1px solid #1F2126">
+          <span style="font-size:13px;color:#6E717A">{{ ws.project }}</span><span style="color:#3A3C42">/</span><span style="font-size:13px;color:#6E717A">{{ ws.colName }}</span><span style="color:#3A3C42">/</span><span style="font:500 13px Geist,sans-serif">{{ ws.title }}</span>
+          <div style="flex:1"></div>
+          <sc-if value="{{ ws.hasPause }}" hint-placeholder-val="{{ false }}"><div onClick="{{ ws.onPause }}" style="height:28px;padding:0 12px;border:1px solid #2A2C31;border-radius:5px;display:flex;align-items:center;gap:10px;font-size:12.5px;color:#A4A7AE;cursor:pointer" style-hover="border-color:#3A3C43;color:#E8E8E6">{{ ws.pauseL }}</div></sc-if>
+          <div onClick="{{ ws.onPrimary }}" style="height:28px;padding:0 12px;background:#E8E8E6;color:#0F1012;border-radius:5px;display:flex;align-items:center;gap:10px;font-weight:500;font-size:12.5px;cursor:pointer" style-hover="background:#FFFFFF">{{ ws.primaryL }}<span style="font:11px 'Geist Mono',monospace;color:#5A5D66">{{ ws.primaryK }}</span></div>
+        </div>
+        <div style="height:38px;flex:none;display:flex;align-items:stretch;gap:20px;padding:0 18px;border-bottom:1px solid #1F2126;font-size:12.5px;background:#0C0D0F">
+          <sc-for list="{{ ws.tabs }}" as="tb" hint-placeholder-count="3">
+            <span onClick="{{ tb.onClick }}" style="display:flex;align-items:center;gap:6px;color:{{ tb.fg }};box-shadow:{{ tb.sh }};cursor:pointer">{{ tb.l }} <span style="font:11px 'Geist Mono',monospace;color:#6E717A">{{ tb.n }}</span></span>
+          </sc-for>
+          <span style="flex:1"></span>
+          <span style="display:flex;align-items:center;gap:8px;font:11.5px 'Geist Mono',monospace;color:#6E717A">
+            <span>{{ ws.key }}</span><span style="color:#3A3C42">→</span><span style="color:#A4A7AE">⎇ {{ ws.branch }}</span><span style="color:#3A3C42">→</span>
+            <span style="display:flex;align-items:center;gap:6px;color:{{ ws.stC }}"><span style="width:6px;height:6px;border-radius:50%;background:{{ ws.stC }}"></span>{{ ws.breadcrumbAgent }}</span>
+          </span>
+        </div>
+
+        <sc-if value="{{ ws.isTerm }}" hint-placeholder-val="{{ true }}">
+        <div style="flex:1;min-height:0;display:grid;grid-template-columns:{{ ws.termCols }}">
+          <div style="border-right:1px solid #1F2126;padding:20px;display:flex;flex-direction:column;gap:22px;overflow:auto">
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="font:12px 'Geist Mono',monospace;color:#6E717A">{{ ws.key }} · {{ ws.colName }}</div>
+              <div style="font:600 19px/1.25 Geist,sans-serif;letter-spacing:-0.01em">{{ ws.title }}</div>
+              <div style="font:13px/1.5 Geist,sans-serif;color:#A4A7AE;text-wrap:pretty">{{ ws.desc }}</div>
+            </div>
+            <div style="display:flex;flex-direction:column">
+              <div style="font:500 11px 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#5A5D66;margin-bottom:12px">Environment</div>
+              <sc-for list="{{ ws.env }}" as="e" hint-placeholder-count="5">
+                <div style="display:grid;grid-template-columns:14px 1fr;gap:10px">
+                  <div style="display:flex;flex-direction:column;align-items:center">
+                    <span style="width:8px;height:8px;border-radius:50%;border:1.5px solid {{ e.dot }};background:{{ e.fill }};margin-top:4px;flex:none"></span>
+                    <span style="flex:1;width:1px;background:{{ e.line }}"></span>
+                  </div>
+                  <div style="padding-bottom:12px;min-width:0">
+                    <div style="display:flex;gap:8px;align-items:baseline"><span style="font:11.5px Geist,sans-serif;color:#6E717A;width:62px;flex:none">{{ e.label }}</span><span style="font:12.5px 'Geist Mono',monospace;color:{{ e.vc }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ e.v }}</span></div>
+                    <div style="font:11.5px 'Geist Mono',monospace;color:#5A5D66;margin-left:70px;margin-top:1px">{{ e.sub }}</div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="border-top:1px solid #1F2126;padding-top:14px;display:flex;flex-direction:column;gap:7px;font:12px 'Geist Mono',monospace;color:#6E717A">
+              <div style="display:flex"><span style="flex:1">Changes</span><span style="color:#A4A7AE">{{ ws.nfiles }} <span style="color:#6BCB8B">{{ ws.add }}</span> <span style="color:#E86A5F">{{ ws.del }}</span></span></div>
+              <div style="display:flex"><span style="flex:1">Tests</span><span style="color:{{ ws.testsC }}">{{ ws.testsL }}</span></div>
+              <div style="display:flex"><span style="flex:1">Commits</span><span style="color:#A4A7AE">{{ ws.commitsN }}</span></div>
+              <div style="display:flex"><span style="flex:1">Agent time</span><span style="color:#A4A7AE">{{ ws.agentTime }}</span></div>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;min-width:0;min-height:0;background:#0C0D0F">
+            <div style="height:36px;flex:none;display:flex;align-items:center;gap:4px;padding:0 10px;border-bottom:1px solid #1F2126;font:11.5px 'Geist Mono',monospace;color:#6E717A">
+              <sc-for list="{{ ws.termTabs }}" as="tt" hint-placeholder-count="2">
+                <span onClick="{{ tt.onClick }}" style="height:24px;box-sizing:border-box;background:{{ tt.bg }};border:1px solid {{ tt.bd }};color:{{ tt.fg }};border-radius:4px;padding:0 6px 0 8px;display:flex;gap:7px;align-items:center;cursor:pointer" style-hover="color:#E8E8E6">
+                  <span style="color:{{ tt.preC }};font-size:10px">{{ tt.pre }}</span>
+                  <span>{{ tt.name }}</span>
+                  <sc-if value="{{ tt.hasDot }}" hint-placeholder-val="{{ true }}"><span style="width:6px;height:6px;border-radius:50%;background:{{ tt.dot }}"></span></sc-if>
+                  <sc-if value="{{ tt.closable }}" hint-placeholder-val="{{ false }}"><span onClick="{{ tt.onClose }}" style="color:#5A5D66;padding:0 3px;border-radius:3px;font-size:12px" style-hover="color:#E8E8E6;background:rgba(255,255,255,0.08)">×</span></sc-if>
+                </span>
+              </sc-for>
+              <span onClick="{{ ws.onAddShell }}" title="New terminal" style="width:24px;height:24px;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#A4A7AE;cursor:pointer;font-size:15px" style-hover="background:#1A1C20;color:#E8E8E6">+</span>
+              <span style="flex:1"></span>
+              <span onClick="{{ ws.onSplit }}" title="Split: agent + terminal" style="height:24px;padding:0 8px;border-radius:4px;display:flex;align-items:center;gap:6px;color:{{ ws.splitFg }};background:{{ ws.splitBg }};cursor:pointer" style-hover="color:#E8E8E6">
+                <svg width="13" height="11" viewBox="0 0 13 11"><rect x="0.6" y="0.6" width="11.8" height="9.8" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.2"></rect><line x1="6.5" y1="1" x2="6.5" y2="10" stroke="currentColor" stroke-width="1.2"></line></svg>Split
+              </span>
+            </div>
+            <div style="flex:1;min-height:0;display:flex">
+            <sc-for list="{{ ws.panes }}" as="pn" hint-placeholder-count="1">
+            <div style="flex:1;min-width:0;min-height:0;display:flex;flex-direction:column;border-left:{{ pn.bl }}">
+            <sc-if value="{{ pn.isAgent }}" hint-placeholder-val="{{ true }}">
+            <div style="flex:1;min-height:0;display:flex;flex-direction:column">
+            <div data-autoscroll="1" style="flex:1;min-height:0;padding:14px 20px;display:flex;flex-direction:column;gap:1px;font:12.5px/19px 'Geist Mono',ui-monospace,monospace;overflow:auto">
+              <sc-for list="{{ ws.term }}" as="l" hint-placeholder-count="18">
+                <div style="display:flex;gap:10px;min-height:19px">
+                  <span style="width:44px;flex:none;color:{{ l.ac }};white-space:pre;overflow:hidden">{{ l.a }}</span>
+                  <span style="flex:1;min-width:0;color:{{ l.bc }};white-space:pre-wrap;overflow-wrap:anywhere">{{ l.b }}</span>
+                  <span style="color:#6BCB8B">{{ l.cA }}</span><span style="color:#E86A5F;min-width:30px;text-align:right">{{ l.cD }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <sc-if value="{{ ws.isWaiting }}" hint-placeholder-val="{{ false }}">
+              <div style="flex:none;margin:0 16px 10px;border:1px solid rgba(227,178,90,0.4);border-radius:6px;background:rgba(227,178,90,0.06);padding:10px 12px;display:flex;align-items:center;gap:12px">
+                <span style="width:7px;height:7px;border-radius:50%;background:#E3B25A;flex:none"></span>
+                <span style="flex:1;font:13px/1.4 Geist,sans-serif;color:#E8E8E6">{{ ws.ask }}</span>
+                <span onClick="{{ ws.onYes }}" style="height:26px;padding:0 10px;background:#E8E8E6;color:#0F1012;border-radius:5px;display:flex;align-items:center;gap:8px;font:500 12px Geist,sans-serif;cursor:pointer">Yes<span style="font:10.5px 'Geist Mono',monospace;opacity:.6">Y</span></span>
+                <span onClick="{{ ws.onNo }}" style="height:26px;padding:0 10px;border:1px solid #2E3037;border-radius:5px;display:flex;align-items:center;gap:8px;font:500 12px Geist,sans-serif;color:#A4A7AE;cursor:pointer">No<span style="font:10.5px 'Geist Mono',monospace;opacity:.6">N</span></span>
+              </div>
+            </sc-if>
+            <sc-if value="{{ ws.isFailed }}" hint-placeholder-val="{{ false }}">
+              <div style="flex:none;margin:0 16px 10px;border:1px solid rgba(232,106,95,0.4);border-radius:6px;background:rgba(232,106,95,0.06);padding:10px 12px;display:flex;align-items:center;gap:12px">
+                <span style="width:7px;height:7px;border-radius:50%;background:#E86A5F;flex:none"></span>
+                <span style="flex:1;font:13px/1.4 Geist,sans-serif;color:#E8E8E6">{{ ws.agent }} stopped after tests failed.</span>
+                <span onClick="{{ ws.onRetry }}" style="height:26px;padding:0 10px;background:#E8E8E6;color:#0F1012;border-radius:5px;display:flex;align-items:center;gap:8px;font:500 12px Geist,sans-serif;cursor:pointer">Send failure back<span style="font:10.5px 'Geist Mono',monospace;opacity:.6">R</span></span>
+              </div>
+            </sc-if>
+            <div style="flex:none;margin:0 16px 16px;border:1px solid #2A2C31;border-radius:6px;background:#121317;padding:4px 12px;display:flex;align-items:center;gap:12px" style-focus-within="border-color:#4A4D55">
+              <span style="font:12.5px 'Geist Mono',monospace;color:#6BCB8B">›</span>
+              <input ref="{{ msgRef }}" value="{{ ws.msg }}" onChange="{{ ws.onMsg }}" onKeyDown="{{ ws.onMsgKey }}" placeholder="{{ ws.placeholder }}" style="flex:1;height:32px;background:transparent;border:none;outline:none;color:#E8E8E6;font:13px Geist,sans-serif">
+              <span style="font:11px 'Geist Mono',monospace;color:#5A5D66">↵ send · ⌘. focus</span>
+            </div>
+            </div>
+            </sc-if>
+            <sc-if value="{{ pn.isShell }}" hint-placeholder-val="{{ false }}">
+              <div data-autoscroll="1" onClick="{{ pn.focus }}" style="flex:1;min-height:0;padding:14px 18px;overflow:auto;font:12.5px/19px 'Geist Mono',ui-monospace,monospace;cursor:text">
+                <sc-for list="{{ pn.lines }}" as="l" hint-placeholder-count="0">
+                  <div style="white-space:pre-wrap;overflow-wrap:anywhere;min-height:19px"><span style="color:#95B4E8">{{ l.pre }}</span><span style="color:{{ l.c }}">{{ l.text }}</span></div>
+                </sc-for>
+                <div style="display:flex;align-items:center;min-height:19px">
+                  <sc-if value="{{ pn.showPrompt }}" hint-placeholder-val="{{ true }}"><span style="color:#95B4E8;white-space:pre">{{ pn.prompt }}</span></sc-if>
+                  <input ref="{{ pn.setRef }}" autoFocus="{{ true }}" value="{{ pn.input }}" onChange="{{ pn.onInput }}" onKeyDown="{{ pn.onKey }}" spellCheck="{{ false }}" style="flex:1;min-width:0;background:transparent;border:none;outline:none;color:#E8E8E6;font:12.5px/19px 'Geist Mono',ui-monospace,monospace;padding:0;caret-color:#95B4E8">
+                </div>
+              </div>
+              <div style="flex:none;height:26px;display:flex;align-items:center;gap:10px;padding:0 18px;border-top:1px solid #1B1D21;font:11px 'Geist Mono',monospace;color:#5A5D66">
+                <span style="color:#6BCB8B">{{ pn.stopLabel }}</span><span>{{ pn.foot }}</span>
+              </div>
+            </sc-if>
+            </div>
+            </sc-for>
+            </div>
+          </div>
+          <sc-if value="{{ ws.showActivity }}" hint-placeholder-val="{{ true }}">
+          <div style="border-left:1px solid #1F2126;padding:20px 18px;display:flex;flex-direction:column;gap:14px;overflow:auto">
+            <div style="font:500 11px 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#5A5D66">Activity</div>
+            <div style="display:flex;flex-direction:column">
+              <sc-for list="{{ ws.activity }}" as="a" hint-placeholder-count="8">
+                <div style="display:grid;grid-template-columns:12px 1fr;gap:10px">
+                  <div style="display:flex;flex-direction:column;align-items:center"><span style="width:7px;height:7px;border-radius:50%;background:{{ a.c }};margin-top:5px;flex:none"></span><span style="flex:1;width:1px;background:#23252B"></span></div>
+                  <div style="padding-bottom:14px;min-width:0"><div style="font:12.5px/1.4 Geist,sans-serif;color:{{ a.tc }};overflow-wrap:anywhere">{{ a.t }}</div><div style="font:11px 'Geist Mono',monospace;color:#5A5D66;margin-top:2px">{{ a.m }}</div></div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          </sc-if>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{ ws.isFiles }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;min-height:0;display:grid;grid-template-columns:260px minmax(0,1fr)">
+          <div style="border-right:1px solid #1F2126;display:flex;flex-direction:column;min-height:0;background:#0D0E10">
+            <div style="padding:12px 10px 8px 14px;display:flex;align-items:center;gap:6px">
+              <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px">
+                <span style="font:500 11px 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#5A5D66">Explorer</span>
+                <span style="font:11.5px 'Geist Mono',monospace;color:#6E717A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ ws.files.path }}</span>
+              </div>
+              <span onClick="{{ ws.files.onExpandAll }}" title="Expand all" style="width:22px;height:22px;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#6E717A;cursor:pointer" style-hover="background:#1A1C20;color:#E8E8E6"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M3 4.5 6 7.5l3-3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"></path><path d="M3 1.5h6M3 10.5h6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"></path></svg></span>
+              <span onClick="{{ ws.files.onCollapseAll }}" title="Collapse all" style="width:22px;height:22px;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#6E717A;cursor:pointer" style-hover="background:#1A1C20;color:#E8E8E6"><svg width="12" height="12" viewBox="0 0 12 12"><path d="M3 7.5 6 4.5l3 3" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"></path><path d="M3 1.5h6M3 10.5h6" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"></path></svg></span>
+            </div>
+            <div style="padding:0 10px 8px 14px;display:flex;gap:6px;font:11.5px 'Geist Mono',monospace">
+              <span onClick="{{ ws.files.onToggleChanged }}" style="height:22px;padding:0 8px;border-radius:4px;display:flex;align-items:center;gap:6px;border:1px solid {{ ws.files.chgBd }};background:{{ ws.files.chgBg }};color:{{ ws.files.chgFg }};cursor:pointer">Changed only <span style="opacity:.8">{{ ws.files.changedN }}</span></span>
+              <span style="height:22px;display:flex;align-items:center;color:#4E5159">{{ ws.files.totalN }} files</span>
+            </div>
+            <div style="flex:1;min-height:0;overflow:auto;padding:0 6px 10px">
+              <sc-for list="{{ ws.files.rows }}" as="r" hint-placeholder-count="14">
+                <div onClick="{{ r.onClick }}" style="display:flex;align-items:center;height:24px;padding:0 8px 0 4px;border-radius:4px;background:{{ r.bg }};box-shadow:{{ r.sh }};font:12.5px Geist,system-ui,sans-serif;cursor:pointer;user-select:none" style-hover="background:#17181C">
+                  <sc-for list="{{ r.guides }}" as="g" hint-placeholder-count="0"><span style="width:14px;flex:none;align-self:stretch;display:flex;justify-content:center"><span style="width:1px;background:#222429"></span></span></sc-for>
+                  <span style="width:16px;flex:none;display:flex;align-items:center;justify-content:center;color:#6E717A">
+                    <sc-if value="{{ r.isDir }}" hint-placeholder-val="{{ false }}"><svg width="10" height="10" viewBox="0 0 10 10" style="transform:{{ r.rot }};transition:transform .12s ease"><path d="M3.5 1.8 6.7 5 3.5 8.2" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"></path></svg></sc-if>
+                  </span>
+                  <span style="width:20px;flex:none;display:flex;align-items:center;justify-content:center;margin-right:5px">
+                    <sc-if value="{{ r.closed }}" hint-placeholder-val="{{ false }}"><svg width="15" height="12" viewBox="0 0 15 12"><path d="M1 2.2C1 1.54 1.54 1 2.2 1h3.3l1.4 1.5h5.9c.66 0 1.2.54 1.2 1.2v6.1c0 .66-.54 1.2-1.2 1.2H2.2C1.54 11 1 10.46 1 9.8z" fill="{{ r.fc }}" fill-opacity="0.28" stroke="{{ r.fc }}" stroke-width="1"></path></svg></sc-if>
+                    <sc-if value="{{ r.open }}" hint-placeholder-val="{{ false }}"><svg width="15" height="12" viewBox="0 0 15 12"><path d="M1 2.2C1 1.54 1.54 1 2.2 1h3.3l1.4 1.5h5.1c.66 0 1.2.54 1.2 1.2V5H4.1L2.2 11H2.2C1.54 11 1 10.46 1 9.8z" fill="{{ r.fc }}" fill-opacity="0.18" stroke="{{ r.fc }}" stroke-width="1"></path><path d="M3.6 5h10.2l-1.9 6H1.7z" fill="{{ r.fc }}" fill-opacity="0.34" stroke="{{ r.fc }}" stroke-width="1" stroke-linejoin="round"></path></svg></sc-if>
+                    <sc-if value="{{ r.isFile }}" hint-placeholder-val="{{ true }}"><span style="font:700 8px/1 'Geist Mono',monospace;color:{{ r.icC }};letter-spacing:-0.02em;white-space:nowrap">{{ r.ic }}</span></sc-if>
+                  </span>
+                  <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:{{ r.fg }}">{{ r.name }}</span>
+                  <span style="color:{{ r.sc }};font:500 11px 'Geist Mono',monospace;margin-left:6px">{{ r.s }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;min-width:0;min-height:0;background:#0C0D0F">
+            <div style="height:34px;flex:none;display:flex;align-items:stretch;background:#0F1012;border-bottom:1px solid #1F2126;overflow:hidden">
+              <sc-for list="{{ ws.files.tabs }}" as="tb" hint-placeholder-count="2">
+                <div onClick="{{ tb.onClick }}" style="display:flex;align-items:center;gap:8px;padding:0 10px 0 14px;border-right:1px solid #1F2126;background:{{ tb.bg }};color:{{ tb.fg }};font:12.5px 'Geist Mono',monospace;cursor:pointer;margin-bottom:-1px;border-bottom:1px solid {{ tb.bb }}">
+                  <span style="font:700 8px/1 'Geist Mono',monospace;color:{{ tb.icC }}">{{ tb.ic }}</span>
+                  <span>{{ tb.name }}</span>
+                  <sc-if value="{{ tb.dirty }}" hint-placeholder-val="{{ false }}"><span style="width:7px;height:7px;border-radius:50%;background:#E8E8E6"></span></sc-if>
+                  <span onClick="{{ tb.onClose }}" style="color:#5A5D66;font-size:13px;padding:0 3px;border-radius:3px" style-hover="color:#E8E8E6;background:rgba(255,255,255,0.08)">×</span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="height:36px;flex:none;display:flex;align-items:center;gap:12px;padding:0 16px;border-bottom:1px solid #1F2126;background:#111215">
+              <span style="font:12.5px 'Geist Mono',monospace;color:#6E717A">{{ ws.files.dir }}<span style="color:#E8E8E6">{{ ws.files.name }}</span></span>
+              <span style="font:11.5px Geist,sans-serif;color:{{ ws.files.statusC }}">{{ ws.files.status }}</span>
+              <span style="flex:1"></span>
+              <span style="font:11.5px 'Geist Mono',monospace;color:#5A5D66">{{ ws.files.lines }} lines</span>
+              <sc-if value="{{ ws.files.canDiff }}" hint-placeholder-val="{{ false }}"><span onClick="{{ ws.files.onDiff }}" style="height:24px;padding:0 10px;border:1px solid #2A2C31;border-radius:4px;display:flex;align-items:center;font-size:12px;color:#A4A7AE;cursor:pointer" style-hover="border-color:#3A3C43">View diff</span></sc-if>
+              <sc-if value="{{ ws.files.dirty }}" hint-placeholder-val="{{ false }}"><span onClick="{{ ws.files.onSave }}" style="height:24px;padding:0 10px;background:#E8E8E6;color:#0F1012;border-radius:4px;display:flex;align-items:center;gap:8px;font:500 12px Geist,sans-serif;cursor:pointer">Save<span style="font:10.5px 'Geist Mono',monospace;color:#5A5D66">⌘S</span></span></sc-if>
+            </div>
+            <sc-if value="{{ ws.files.agentTouched }}" hint-placeholder-val="{{ false }}">
+              <div style="flex:none;display:flex;align-items:center;gap:10px;padding:7px 16px;border-bottom:1px solid #1F2126;background:rgba(107,203,139,0.05);font:12px Geist,sans-serif;color:#A4A7AE"><span style="width:6px;height:6px;border-radius:50%;background:#6BCB8B"></span>{{ ws.files.touchedMsg }}</div>
+            </sc-if>
+            <div style="flex:1;min-height:0;overflow:auto">
+              <sc-if value="{{ ws.files.hasText }}" hint-placeholder-val="{{ true }}">
+                <div style="display:flex;min-width:max-content;min-height:100%">
+                  <div style="flex:none;width:52px;padding:12px 12px 12px 0;box-sizing:border-box;text-align:right;font:12.5px/20px 'Geist Mono',ui-monospace,monospace;color:#4E5159;user-select:none;border-right:1px solid #18191D">
+                    <sc-for list="{{ ws.files.gutter }}" as="g" hint-placeholder-count="20"><div>{{ g.n }}</div></sc-for>
+                  </div>
+                  <textarea value="{{ ws.files.text }}" onChange="{{ ws.files.onEdit }}" onKeyDown="{{ ws.files.onKey }}" spellCheck="{{ false }}" wrap="off" style="flex:1;min-width:640px;height:{{ ws.files.height }};padding:12px 16px;box-sizing:border-box;background:transparent;border:none;outline:none;resize:none;overflow:hidden;color:#D4D5D2;font:12.5px/20px 'Geist Mono',ui-monospace,monospace;white-space:pre;tab-size:2;caret-color:#95B4E8"></textarea>
+                </div>
+              </sc-if>
+              <sc-if value="{{ ws.files.noText }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:40px;font:13px Geist,sans-serif;color:#6E717A">This file's contents aren't included in the prototype.</div>
+              </sc-if>
+            </div>
+          </div>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{ ws.isChanges }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;min-height:0;display:grid;grid-template-columns:292px minmax(0,1fr)">
+          <div style="border-right:1px solid #1F2126;display:flex;flex-direction:column;min-height:0">
+            <div style="padding:12px 14px 8px;display:flex;align-items:center;gap:8px;font:12px 'Geist Mono',monospace;color:#6E717A"><span style="flex:1">{{ ws.nfiles }} <span style="color:#6BCB8B">{{ ws.add }}</span> <span style="color:#E86A5F">{{ ws.del }}</span></span><span>{{ ws.viewedL }}</span></div>
+            <div style="margin:0 14px 8px;height:3px;background:#1F2126;border-radius:2px"><div style="width:{{ ws.viewedPct }};height:100%;background:#6BCB8B;border-radius:2px;transition:width .2s"></div></div>
+            <div style="flex:1;min-height:0;overflow:auto;padding:0 6px">
+              <sc-for list="{{ ws.tree }}" as="f" hint-placeholder-count="12">
+                <div onClick="{{ f.onClick }}" style="display:flex;align-items:center;gap:8px;height:26px;padding:0 8px 0 {{ f.pad }};border-radius:4px;background:{{ f.bg }};font:12px 'Geist Mono',monospace;cursor:pointer" style-hover="background:#16171B">
+                  <span style="width:10px;color:{{ f.sc }}">{{ f.s }}</span>
+                  <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:{{ f.fg }}">{{ f.name }}</span>
+                  <span style="color:#6BCB8B">{{ f.a }}</span><span style="color:#E86A5F;min-width:24px;text-align:right">{{ f.d }}</span>
+                  <span style="width:12px;text-align:center;color:#6BCB8B">{{ f.v }}</span>
+                </div>
+              </sc-for>
+            </div>
+            <div style="border-top:1px solid #1F2126;padding:10px 14px;display:flex;flex-direction:column;gap:6px;font:12px 'Geist Mono',monospace;color:#6E717A">
+              <div style="font:500 11px 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#5A5D66;margin-bottom:2px">Commits</div>
+              <sc-for list="{{ ws.commits }}" as="c" hint-placeholder-count="4">
+                <div style="display:flex;gap:10px;white-space:nowrap"><span style="color:{{ c.hc }}">{{ c.h }}</span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;color:#A4A7AE;font-family:Geist">{{ c.m }}</span><span style="color:#5A5D66">{{ c.t }}</span></div>
+              </sc-for>
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;min-width:0;min-height:0;background:#0C0D0F">
+            <div style="height:40px;flex:none;display:flex;align-items:center;gap:12px;padding:0 16px;border-bottom:1px solid #1F2126;background:#111215">
+              <span style="font:12.5px 'Geist Mono',monospace;color:#6E717A">{{ ws.selDir }}<span style="color:#E8E8E6">{{ ws.selName }}</span></span>
+              <span style="font:12px 'Geist Mono',monospace;color:#6BCB8B">{{ ws.selA }}</span><span style="font:12px 'Geist Mono',monospace;color:#E86A5F">{{ ws.selD }}</span>
+              <span style="flex:1"></span>
+              <span style="font:11.5px 'Geist Mono',monospace;color:#5A5D66">click a line to comment</span>
+              <span onClick="{{ ws.onOpenInFiles }}" style="height:24px;padding:0 10px;border:1px solid #2A2C31;border-radius:4px;display:flex;align-items:center;font-size:12px;color:#A4A7AE;cursor:pointer" style-hover="border-color:#3A3C43">Edit file</span>
+              <span onClick="{{ ws.onViewed }}" style="height:24px;padding:0 10px;border:1px solid #2A2C31;border-radius:4px;display:flex;align-items:center;gap:8px;font-size:12px;color:{{ ws.viewedFg }};cursor:pointer" style-hover="border-color:#3A3C43">{{ ws.viewedBtn }}</span>
+              <span onClick="{{ ws.onNextFile }}" style="height:24px;padding:0 10px;border:1px solid #2A2C31;border-radius:4px;display:flex;align-items:center;gap:8px;font-size:12px;color:#A4A7AE;cursor:pointer" style-hover="border-color:#3A3C43">Next file</span>
+            </div>
+            <div style="flex:1;min-height:0;overflow:auto;padding:6px 0">
+              <sc-if value="{{ ws.hasDiff }}" hint-placeholder-val="{{ true }}">
+                <sc-for list="{{ ws.diff }}" as="d" hint-placeholder-count="18">
+                  <div style="display:flex;flex-direction:column">
+                    <sc-if value="{{ d.isLine }}" hint-placeholder-val="{{ true }}">
+                      <div onClick="{{ d.onClick }}" style="display:grid;grid-template-columns:46px 46px 20px minmax(0,1fr);font:12.5px/21px 'Geist Mono',ui-monospace,monospace;background:{{ d.bg }};box-shadow:inset 2px 0 0 {{ d.edge }};cursor:text" style-hover="filter:brightness(1.35)">
+                        <span style="text-align:right;padding-right:10px;color:#4E5159">{{ d.o }}</span>
+                        <span style="text-align:right;padding-right:10px;color:#4E5159">{{ d.n }}</span>
+                        <span style="color:{{ d.sc }}">{{ d.sign }}</span>
+                        <span style="white-space:pre;overflow:hidden;text-overflow:ellipsis;color:{{ d.tc }}">{{ d.t }}</span>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{ d.isComment }}" hint-placeholder-val="{{ false }}">
+                      <div style="margin:6px 16px 8px 112px;border:1px solid #2E3037;border-radius:6px;background:#15161A;max-width:640px">
+                        <div style="padding:10px 12px;display:flex;flex-direction:column;gap:4px;border-bottom:1px solid #23252B">
+                          <div style="display:flex;gap:8px;font:12px 'Geist Mono',monospace;color:#6E717A"><span style="color:#E8E8E6">ana</span><span>{{ d.cLine }}</span><span style="flex:1"></span><span style="color:#95B4E8">→ sent to {{ d.cAgent }}</span></div>
+                          <div style="font:13px/1.45 Geist,sans-serif;color:#E8E8E6">{{ d.cText }}</div>
+                        </div>
+                        <div style="padding:10px 12px;display:flex;flex-direction:column;gap:4px">
+                          <div style="display:flex;gap:8px;align-items:center;font:12px 'Geist Mono',monospace;color:#6E717A"><span style="width:6px;height:6px;border-radius:50%;background:#6BCB8B"></span><span style="color:#E8E8E6">{{ d.cAgent }}</span><span style="flex:1"></span><span>{{ d.cStatus }}</span></div>
+                          <div style="font:13px/1.45 Geist,sans-serif;color:#A4A7AE">{{ d.cReply }}</div>
+                        </div>
+                      </div>
+                    </sc-if>
+                    <sc-if value="{{ d.isComposer }}" hint-placeholder-val="{{ false }}">
+                      <div style="margin:6px 16px 8px 112px;border:1px solid rgba(149,180,232,0.5);border-radius:6px;background:#15161A;max-width:640px;display:flex;flex-direction:column">
+                        <textarea autoFocus="{{ true }}" value="{{ ws.commentText }}" onChange="{{ ws.onCommentText }}" onKeyDown="{{ ws.onCommentKey }}" placeholder="Comment on {{ d.cLine }} — goes straight to the agent" style="min-height:64px;resize:vertical;background:transparent;border:none;outline:none;color:#E8E8E6;font:13px/1.45 Geist,sans-serif;padding:10px 12px"></textarea>
+                        <div style="display:flex;gap:8px;align-items:center;padding:8px 10px;border-top:1px solid #23252B">
+                          <span style="flex:1;font:11px 'Geist Mono',monospace;color:#5A5D66">⌘↵ send · esc cancel</span>
+                          <span onClick="{{ ws.onCancelComment }}" style="height:26px;padding:0 10px;border:1px solid #2E3037;border-radius:5px;display:flex;align-items:center;font:500 12px Geist,sans-serif;color:#A4A7AE;cursor:pointer">Cancel</span>
+                          <span onClick="{{ ws.onSendComment }}" style="height:26px;padding:0 10px;background:#E8E8E6;color:#0F1012;border-radius:5px;display:flex;align-items:center;font:500 12px Geist,sans-serif;cursor:pointer">Send to agent</span>
+                        </div>
+                      </div>
+                    </sc-if>
+                  </div>
+                </sc-for>
+              </sc-if>
+              <sc-if value="{{ ws.noDiff }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:40px;display:flex;flex-direction:column;gap:10px;font:13px Geist,sans-serif;color:#6E717A;align-items:flex-start"><span style="color:#A4A7AE">Diff not included in the prototype</span><span onClick="{{ ws.onOpenInFiles }}" style="height:26px;padding:0 10px;border:1px solid #2E3037;border-radius:5px;display:flex;align-items:center;font:500 12px Geist,sans-serif;color:#E8E8E6;cursor:pointer">Open in Files</span></div>
+              </sc-if>
+              <sc-if value="{{ ws.noFiles }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:40px;font:13px Geist,sans-serif;color:#6E717A">No changes yet. Files appear here as the agent edits them.</div>
+              </sc-if>
+            </div>
+            <div style="flex:none;border-top:1px solid #1F2126;background:#111215;padding:10px 16px;display:flex;align-items:center;gap:12px">
+              <span style="font:12.5px Geist,sans-serif;color:#A4A7AE;flex:1">{{ ws.reviewFoot }}</span>
+              <span onClick="{{ ws.onPrimary }}" style="height:28px;padding:0 12px;border:1px solid #2A2C31;border-radius:5px;display:flex;align-items:center;gap:10px;font-size:12.5px;color:#E8E8E6;cursor:pointer" style-hover="border-color:#3A3C43">{{ ws.primaryL }}</span>
+            </div>
+          </div>
+        </div>
+        </sc-if>
+
+        <sc-if value="{{ ws.isPreview }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;min-height:0;display:flex;flex-direction:column">
+          <sc-if value="{{ ws.noPreview }}" hint-placeholder-val="{{ false }}">
+            <div style="flex:1;display:flex;align-items:center;justify-content:center">
+              <div style="width:420px;display:flex;flex-direction:column;gap:10px">
+                <div style="font:500 15px Geist,sans-serif">No dev server in this worktree</div>
+                <div style="font:13px/1.5 Geist,sans-serif;color:#A4A7AE;text-wrap:pretty">Switchyard previews any localhost port opened by a process inside the worktree. Start one and it appears here.</div>
+                <div style="display:flex;gap:8px;margin-top:6px"><span onClick="{{ ws.onStartDev }}" style="height:28px;padding:0 12px;background:#E8E8E6;color:#0F1012;border-radius:5px;display:flex;align-items:center;font:500 12.5px Geist,sans-serif;cursor:pointer">Start dev server</span></div>
+              </div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ ws.hasPreview }}" hint-placeholder-val="{{ false }}">
+          <div style="flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 300px">
+            <div style="display:flex;flex-direction:column;min-width:0;min-height:0">
+              <div style="height:42px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid #1F2126">
+                <span style="display:flex;gap:12px;font:13px 'Geist Mono',monospace;color:#6E717A"><span>←</span><span style="color:#3A3C42">→</span><span>↻</span></span>
+                <div style="flex:1;height:28px;border:1px solid #2A2C31;border-radius:5px;background:#121317;display:flex;align-items:center;gap:10px;padding:0 10px;font:12.5px 'Geist Mono',monospace;min-width:0">
+                  <span style="color:#5A5D66">localhost</span><span style="color:#E8E8E6;flex:1">/checkout</span>
+                  <span style="color:#6E717A;font-size:11.5px;white-space:nowrap;flex:none">{{ ws.pvPortLabel }}</span>
+                </div>
+                <span style="display:flex;border:1px solid #2A2C31;border-radius:5px;overflow:hidden;font:12px Geist,sans-serif"><span onClick="{{ ws.onPvBranch }}" style="padding:4px 10px;background:{{ ws.pvBranchBg }};color:{{ ws.pvBranchFg }};cursor:pointer">This branch</span><span onClick="{{ ws.onPvMain }}" style="padding:4px 10px;background:{{ ws.pvMainBg }};color:{{ ws.pvMainFg }};cursor:pointer">main</span></span>
+                <span onClick="{{ ws.onPick }}" style="height:28px;padding:0 10px;border:1px solid {{ ws.pickBorder }};background:{{ ws.pickBg }};border-radius:5px;display:flex;align-items:center;gap:8px;font:500 12px Geist,sans-serif;color:#95B4E8;cursor:pointer">Pick element<span style="font:10.5px 'Geist Mono',monospace;opacity:.7">P</span></span>
+              </div>
+              <div style="flex:1;min-height:0;background:#1A1B1F;padding:18px;display:flex;justify-content:center;overflow:auto">
+                <div style="width:100%;max-width:820px;background:#FAFAF8;border-radius:4px;color:#1C1D20;font-family:Geist,system-ui,sans-serif;display:flex;flex-direction:column;align-self:flex-start">
+                  <div style="height:52px;flex:none;border-bottom:1px solid #E7E6E1;display:flex;align-items:center;padding:0 28px;gap:10px"><span style="font:600 15px Geist,sans-serif">Lumen</span><span style="flex:1"></span><span style="font-size:13px;color:#6B6C70">Cart · 2 items</span></div>
+                  <div style="display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:28px;padding:28px">
+                    <div style="display:flex;flex-direction:column;gap:14px">
+                      <div style="font:600 20px Geist,sans-serif;letter-spacing:-0.01em">Shipping</div>
+                      <div onClick="{{ ws.pk.line1.onClick }}" style="display:flex;flex-direction:column;gap:5px;outline:{{ ws.pk.line1.o }};outline-offset:3px;border-radius:2px;position:relative"><span style="font:500 12.5px Geist,sans-serif;color:#45464B">Street address</span><div style="height:38px;border:1px solid {{ ws.pvLineBorder }};border-radius:6px;background:#fff;display:flex;align-items:center;padding:0 12px;font-size:14px">P.O. Box 4412</div></div>
+                      <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:10px">
+                        <div style="display:flex;flex-direction:column;gap:5px"><span style="font:500 12.5px Geist,sans-serif;color:#45464B">City</span><div style="height:38px;border:1px solid #D6D5D0;border-radius:6px;background:#fff;display:flex;align-items:center;padding:0 12px;font-size:14px">Portland</div></div>
+                        <div style="display:flex;flex-direction:column;gap:5px"><span style="font:500 12.5px Geist,sans-serif;color:#45464B">Postal code</span><div style="height:38px;border:1px solid #D6D5D0;border-radius:6px;background:#fff;display:flex;align-items:center;padding:0 12px;font-size:14px">97205</div></div>
+                      </div>
+                      <div onClick="{{ ws.pk.delivery.onClick }}" style="display:flex;flex-direction:column;gap:6px;margin-top:4px;outline:{{ ws.pk.delivery.o }};outline-offset:3px;border-radius:2px">
+                        <span style="font:500 12.5px Geist,sans-serif;color:#45464B">Delivery</span>
+                        <div style="border:1px solid #D6D5D0;border-radius:6px;background:#fff;display:flex;flex-direction:column">
+                          <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;font-size:14px;border-bottom:1px solid #EDECE8"><span style="width:14px;height:14px;border-radius:50%;border:1.5px solid #B5B4AF;box-sizing:border-box"></span><span style="flex:1">Standard · 4–6 days</span><span style="color:#6B6C70">Free</span></div>
+                          <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;font-size:14px"><span style="width:14px;height:14px;border-radius:50%;border:4px solid #1C1D20;box-sizing:border-box"></span><span style="flex:1">Express · next day</span><span style="color:#6B6C70">$18.00</span></div>
+                        </div>
+                      </div>
+                      <sc-if value="{{ ws.pvErr }}" hint-placeholder-val="{{ true }}">
+                        <div onClick="{{ ws.pk.err.onClick }}" style="outline:{{ ws.pk.err.o }};outline-offset:3px;border-radius:2px;font-size:13px;color:#C9483C">Express delivery isn’t available for PO boxes.</div>
+                      </sc-if>
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:12px;border-left:1px solid #E7E6E1;padding-left:28px">
+                      <div style="font:600 15px Geist,sans-serif">Order</div>
+                      <div style="display:flex;font-size:14px"><span style="flex:1">Desk lamp, brass</span><span>$112.00</span></div>
+                      <div style="display:flex;font-size:14px"><span style="flex:1">Linen shade</span><span>$18.00</span></div>
+                      <div style="display:flex;font-size:14px;color:#6B6C70"><span style="flex:1">Express</span><span>$18.00</span></div>
+                      <div style="display:flex;font:600 15px Geist,sans-serif;border-top:1px solid #E7E6E1;padding-top:12px"><span style="flex:1">Total</span><span>$148.00</span></div>
+                      <div onClick="{{ ws.pk.pay.onClick }}" style="height:42px;border-radius:6px;background:{{ ws.payBg }};color:#fff;display:flex;align-items:center;justify-content:center;font:500 14px Geist,sans-serif;margin-top:6px;outline:{{ ws.pk.pay.o }};outline-offset:3px">Pay $148.00</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <sc-if value="{{ ws.hasPicked }}" hint-placeholder-val="{{ false }}">
+                <div style="flex:none;margin:0 16px 16px;margin-top:-4px;border:1px solid rgba(149,180,232,0.45);border-radius:6px;background:#121317;padding:4px 12px;display:flex;align-items:center;gap:12px">
+                  <span style="font:11.5px 'Geist Mono',monospace;color:#95B4E8;background:rgba(149,180,232,0.1);border-radius:3px;padding:2px 6px;white-space:nowrap">{{ ws.pickedSel }}</span>
+                  <input autoFocus="{{ true }}" value="{{ ws.pvMsg }}" onChange="{{ ws.onPvMsg }}" onKeyDown="{{ ws.onPvKey }}" placeholder="What should change here?" style="flex:1;height:32px;background:transparent;border:none;outline:none;color:#E8E8E6;font:13px Geist,sans-serif">
+                  <span style="font:11px 'Geist Mono',monospace;color:#5A5D66;white-space:nowrap">↵ send · includes screenshot</span>
+                </div>
+              </sc-if>
+            </div>
+            <div style="border-left:1px solid #1F2126;display:flex;flex-direction:column;min-height:0">
+              <div style="height:36px;flex:none;display:flex;align-items:center;padding:0 16px;border-bottom:1px solid #1F2126;font-size:12.5px;color:#E8E8E6">Console</div>
+              <div style="flex:1;min-height:0;padding:10px 16px;display:flex;flex-direction:column;gap:8px;overflow:auto;font:11.5px/1.5 'Geist Mono',monospace">
+                <div style="display:flex;gap:8px"><span style="color:#5A5D66">12:41:08</span><span style="color:#6E717A">[vite] hmr update /app/api/checkout/route.ts</span></div>
+                <div style="display:flex;gap:8px"><span style="color:#5A5D66">12:41:22</span><span style="color:#A4A7AE">POST /api/checkout 422 → field "line1", code "express_po_box"</span></div>
+                <div style="display:flex;gap:8px"><span style="color:#5A5D66">12:41:22</span><span style="color:#E3B25A">Warning: Each child in a list should have a unique "key" prop. Check ShippingOptions.</span></div>
+              </div>
+              <div style="border-top:1px solid #1F2126;padding:12px 16px;display:flex;flex-direction:column;gap:7px;font:11.5px 'Geist Mono',monospace">
+                <div style="font:500 11px 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#5A5D66;margin-bottom:2px">Requests</div>
+                <div style="display:grid;grid-template-columns:36px 1fr auto;gap:8px"><span style="color:#E3B25A">422</span><span style="color:#A4A7AE">POST /api/checkout</span><span style="color:#5A5D66">38ms</span></div>
+                <div style="display:grid;grid-template-columns:36px 1fr auto;gap:8px"><span style="color:#6BCB8B">200</span><span style="color:#A4A7AE">GET /api/cart</span><span style="color:#5A5D66">12ms</span></div>
+                <div style="display:grid;grid-template-columns:36px 1fr auto;gap:8px"><span style="color:#6BCB8B">200</span><span style="color:#A4A7AE">GET /api/shipping-rates</span><span style="color:#5A5D66">64ms</span></div>
+              </div>
+              <div style="border-top:1px solid #1F2126;padding:12px 16px;font:12px/1.5 Geist,sans-serif;color:#6E717A;text-wrap:pretty">{{ ws.pvHint }}</div>
+            </div>
+          </div>
+          </sc-if>
+        </div>
+        </sc-if>
+      </div>
+      </sc-if>
+    </div>
+  </div>
+  <div style="height:26px;flex:none;background:#0B0C0E;border-top:1px solid #1F2126;display:flex;align-items:center;gap:16px;padding:0 12px;font:11.5px 'Geist Mono',ui-monospace,monospace;color:#6E717A;white-space:nowrap">
+    <span style="color:#5A5D66">agents</span>
+    <div style="display:flex;align-items:center;gap:4px;flex:1;min-width:0;overflow:hidden">
+      <sc-for list="{{ sbAgents }}" as="i" hint-placeholder-count="8">
+        <span onClick="{{ i.onClick }}" style="display:flex;align-items:center;gap:6px;color:{{ i.fg }};padding:2px 6px;border-radius:3px;cursor:pointer" style-hover="background:rgba(255,255,255,0.06)"><span style="width:6px;height:6px;border-radius:50%;background:{{ i.dot }}"></span>{{ i.name }}</span>
+      </sc-for>
+    </div>
+    <span style="color:#A4A7AE">{{ statusCtx }}</span>
+    <span style="color:#5A5D66">⌘J next blocked</span>
+  </div>
+  <sc-if value="{{ st.show }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ st.onCancel }}" style="position:absolute;inset:36px 0 26px 0;background:rgba(6,7,8,0.62);display:flex;align-items:flex-start;justify-content:center;padding-top:88px;z-index:20">
+      <div onClick="{{ st.stop }}" style="width:620px;background:#15161A;border:1px solid #2E3037;border-radius:10px;box-shadow:0 24px 64px rgba(0,0,0,0.55);display:flex;flex-direction:column;overflow:hidden">
+        <sc-if value="{{ st.isConfig }}" hint-placeholder-val="{{ true }}">
+          <div style="padding:18px 20px 14px;display:flex;flex-direction:column;gap:4px;border-bottom:1px solid #23252B">
+            <div style="display:flex;font:12px 'Geist Mono',monospace;color:#6E717A"><span style="flex:1">Start task · {{ st.key }} · {{ st.project }}</span><span>esc</span></div>
+            <div style="font:600 18px Geist,sans-serif;letter-spacing:-0.01em">{{ st.title }}</div>
+          </div>
+          <div style="padding:14px 12px 6px;display:flex;flex-direction:column;gap:2px">
+            <div style="font:500 11px 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#5A5D66;padding:0 8px 8px">Agent</div>
+            <sc-for list="{{ st.agents }}" as="g" hint-placeholder-count="4">
+              <div onClick="{{ g.onClick }}" style="display:grid;grid-template-columns:22px 1fr auto;gap:12px;align-items:center;padding:9px 10px;border-radius:6px;background:{{ g.bg }};box-shadow:inset 0 0 0 1px {{ g.ring }};cursor:pointer" style-hover="background:#1B1D22">
+                <span style="font:500 11.5px 'Geist Mono',monospace;color:{{ g.kc }};text-align:center;border:1px solid #2E3037;border-radius:4px;line-height:18px">{{ g.n }}</span>
+                <div style="display:flex;flex-direction:column;gap:1px"><span style="font:500 13.5px Geist,sans-serif;color:{{ g.fg }}">{{ g.name }}</span><span style="font:12px Geist,sans-serif;color:#6E717A">{{ g.note }}</span></div>
+                <span style="font:11.5px 'Geist Mono',monospace;color:#5A5D66">{{ g.meta }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="margin:10px 20px 0;border:1px solid #23252B;border-radius:6px;background:#111215;padding:8px 12px;display:grid;grid-template-columns:78px 1fr;row-gap:6px;column-gap:12px;font:12.5px 'Geist Mono',monospace;align-items:center">
+            <span style="color:#5A5D66;font-family:Geist">Branch</span><input value="{{ st.branch }}" onChange="{{ st.onBranch }}" style="background:transparent;border:none;border-bottom:1px dashed #33363C;outline:none;color:#E8E8E6;font:12.5px 'Geist Mono',monospace;padding:2px 0">
+            <span style="color:#5A5D66;font-family:Geist">From</span><span style="color:#A4A7AE">{{ st.head }}</span>
+            <span style="color:#5A5D66;font-family:Geist">Worktree</span><span style="color:#A4A7AE">{{ st.wtPath }}</span>
+            <span style="color:#5A5D66;font-family:Geist">Setup</span><span style="color:#A4A7AE">{{ st.setup }}</span>
+          </div>
+          <div style="margin:10px 20px 0;display:flex;flex-direction:column;gap:6px">
+            <div style="font:12px Geist,sans-serif;color:#6E717A">First message to {{ st.agentName }} <span style="color:#5A5D66">— prefilled from the task</span></div>
+            <textarea value="{{ st.msg }}" onChange="{{ st.onMsg }}" style="border:1px solid #23252B;border-radius:6px;padding:10px 12px;font:13px/1.5 Geist,sans-serif;color:#E8E8E6;background:#111215;min-height:58px;resize:vertical;outline:none"></textarea>
+          </div>
+          <div style="margin-top:16px;padding:12px 20px;border-top:1px solid #23252B;background:#121317;display:flex;align-items:center;gap:10px">
+            <span style="flex:1;font:12px Geist,sans-serif;color:#6E717A">Creates the worktree and branch, runs setup, launches {{ st.agentName }}, opens the workspace.</span>
+            <span onClick="{{ st.onCancel }}" style="height:30px;padding:0 12px;border:1px solid #2A2C31;border-radius:5px;display:flex;align-items:center;font-size:12.5px;color:#A4A7AE;cursor:pointer">Cancel</span>
+            <span onClick="{{ st.onStart }}" style="height:30px;padding:0 14px;background:#E8E8E6;color:#0F1012;border-radius:5px;display:flex;align-items:center;gap:10px;font-weight:500;font-size:12.5px;cursor:pointer;white-space:nowrap" style-hover="background:#FFFFFF">Start with {{ st.agentName }}<span style="font:11px 'Geist Mono',monospace;color:#5A5D66">⌘↵</span></span>
+          </div>
+        </sc-if>
+        <sc-if value="{{ st.isLaunch }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:18px 20px 14px;display:flex;flex-direction:column;gap:4px;border-bottom:1px solid #23252B">
+            <div style="display:flex;font:12px 'Geist Mono',monospace;color:#6E717A"><span style="flex:1">Starting · {{ st.key }} · {{ st.agentName }}</span><span>{{ st.elapsed }}</span></div>
+            <div style="font:600 18px Geist,sans-serif;letter-spacing:-0.01em">{{ st.title }}</div>
+          </div>
+          <div style="padding:18px 20px 8px;display:flex;flex-direction:column">
+            <sc-for list="{{ st.steps }}" as="x" hint-placeholder-count="5">
+              <div style="display:grid;grid-template-columns:16px 1fr;gap:12px">
+                <div style="display:flex;flex-direction:column;align-items:center"><span style="width:14px;height:14px;border-radius:50%;border:1.5px solid {{ x.c }};background:{{ x.fill }};color:#0F1012;font:600 9px/11px 'Geist Mono',monospace;text-align:center;box-sizing:border-box;flex:none;transition:all .2s">{{ x.g }}</span><span style="flex:1;width:1px;background:#2A2C31;min-height:10px"></span></div>
+                <div style="padding-bottom:14px;min-width:0"><div style="font:13.5px Geist,sans-serif;color:{{ x.tc }}">{{ x.t }}</div><div style="font:12px 'Geist Mono',monospace;color:#6E717A;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ x.d }}</div></div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="padding:12px 20px;border-top:1px solid #23252B;background:#121317;display:flex;align-items:center;gap:10px">
+            <span style="flex:1;font:12px Geist,sans-serif;color:#6E717A">The workspace opens when {{ st.agentName }} is ready.</span>
+            <span onClick="{{ st.onBg }}" style="height:30px;padding:0 12px;border:1px solid #2A2C31;border-radius:5px;display:flex;align-items:center;gap:10px;font-size:12.5px;color:#A4A7AE;cursor:pointer">Keep in background<span style="font:11px 'Geist Mono',monospace;color:#5A5D66">esc</span></span>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </sc-if>
+  <sc-if value="{{ pal.show }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ pal.onClose }}" style="position:absolute;inset:36px 0 26px 0;background:rgba(6,7,8,0.5);display:flex;align-items:flex-start;justify-content:center;padding-top:96px;z-index:30">
+      <div onClick="{{ pal.stop }}" style="width:600px;background:#15161A;border:1px solid #2E3037;border-radius:10px;box-shadow:0 24px 64px rgba(0,0,0,0.55);overflow:hidden;display:flex;flex-direction:column">
+        <input ref="{{ palRef }}" autoFocus="{{ true }}" value="{{ pal.q }}" onChange="{{ pal.onQ }}" onKeyDown="{{ pal.onKey }}" placeholder="Jump to a task, project or command…" style="height:48px;background:transparent;border:none;border-bottom:1px solid #23252B;outline:none;color:#E8E8E6;font:15px Geist,sans-serif;padding:0 18px">
+        <div style="padding:6px;display:flex;flex-direction:column;gap:1px;max-height:420px;overflow:auto">
+          <sc-for list="{{ pal.items }}" as="i" hint-placeholder-count="6">
+            <div onClick="{{ i.onClick }}" onMouseEnter="{{ i.onHover }}" style="display:flex;align-items:center;gap:10px;height:34px;padding:0 12px;border-radius:6px;background:{{ i.bg }};color:{{ i.fg }};font-size:13px;cursor:pointer">
+              <span style="width:6px;height:6px;border-radius:50%;background:{{ i.dot }};flex:none"></span>
+              <span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ i.l }}</span>
+              <span style="font:11px 'Geist Mono',monospace;color:#5A5D66">{{ i.kind }}</span>
+              <span style="font:11px 'Geist Mono',monospace;color:#5A5D66;min-width:20px;text-align:right">{{ i.k }}</span>
+            </div>
+          </sc-for>
+          <sc-if value="{{ pal.empty }}" hint-placeholder-val="{{ false }}"><div style="padding:14px 12px;font:13px Geist,sans-serif;color:#6E717A">No matches</div></sc-if>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+  <sc-if value="{{ toast.show }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute;right:16px;bottom:40px;z-index:40;background:#1A1B20;border:1px solid #2E3037;border-radius:7px;padding:10px 14px;display:flex;align-items:center;gap:10px;box-shadow:0 12px 32px rgba(0,0,0,0.5);font:13px Geist,sans-serif;color:#E8E8E6;max-width:420px">
+      <span style="width:7px;height:7px;border-radius:50%;background:{{ toast.dot }};flex:none"></span>{{ toast.text }}
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  termRef = React.createRef();
+  msgRef = React.createRef();
+  palRef = React.createRef();
+  timers = [];
+  state = this.init();
+
+  init() {
+    const now = Date.now(), m = 60000;
+    this.C = { G: '#6BCB8B', A: '#E3B25A', R: '#E86A5F', B: '#95B4E8', M: '#5A5D66', T1: '#E8E8E6', T2: '#A4A7AE', T3: '#6E717A' };
+    const { G, A, R, M, T3 } = this.C;
+    this.SC = { working: G, waiting: A, failed: R, done: M, paused: T3 };
+    this.SL = { working: 'Working', waiting: 'Waiting for input', failed: 'Failed', done: 'Done', paused: 'Paused' };
+    this.AG = [
+      { name: 'Kiro', short: 'kiro', cmd: t => `kiro --task ${t.key}`, note: 'Spec-driven · default for my-saas', ver: 'v0.9' },
+      { name: 'Claude Code', short: 'claude', cmd: () => 'claude', note: 'Good at refactors and long context', ver: 'v2.1' },
+      { name: 'Codex', short: 'codex', cmd: () => 'codex', note: 'Fast on well-scoped fixes', ver: 'v0.4' },
+      { name: 'Gemini', short: 'gemini', cmd: () => 'gemini', note: 'Large-repo migrations', ver: 'v1.3' }
+    ];
+    const P = (id, repo, lang, head, prefix, setup, test, quiet) => ({ id, repo, lang, head, prefix, setup, test, quiet });
+    this.P = [
+      P('my-saas', 'lumen-labs/my-saas', 'TypeScript', 'main @ 8c1e2f4', 'MS', 'pnpm install — reused 1198, added 6', 'pnpm vitest run', ''),
+      P('api-gateway', 'lumen-labs/api-gateway', 'Go', 'main @ 1f9e7a2', 'AG', 'go mod download — 42 modules cached', 'go test ./...', ''),
+      P('mobile-app', 'lumen-labs/mobile', 'React Native', 'main @ c03d5e1', 'MB', 'npm ci — added 1412 packages', 'npx jest', ''),
+      P('infra', 'lumen-labs/infra', 'Terraform', 'main @ 9ab0c44', 'IN', 'terraform init — providers cached', 'terraform validate', ''),
+      P('design-tokens', 'lumen-labs/tokens', 'TypeScript', 'main @ 2e7f1b0', 'DT', 'pnpm install — reused 212', 'pnpm test', 'Merged #212 "semantic surface tokens" · yesterday'),
+      P('docs-site', 'lumen-labs/docs', 'Astro', 'main @ 6d4c9e3', 'DS', 'pnpm install — reused 640', 'pnpm astro check', 'ana: fix broken anchors in /guides/webhooks · 3d')
+    ];
+    const T = (key, project, title, col, o = {}) => ({ id: key, key, project, title, col, desc: o.desc || '', agent: o.agent || null, st: o.st || null, branch: o.branch || null, path: o.branch ? `~/.wt/${project}/${o.branch.split('/').pop()}` : null, ask: o.ask || null, doneNote: o.doneNote || '', started: o.started ? now - o.started * m : null, last: o.last != null ? now - o.last * m : now, preFiles: o.preFiles || [], behind: o.behind || 0 });
+    const tasks = [
+      T('MS-41', 'my-saas', 'Add password reset', 'backlog', { desc: 'Email link, 30-min single-use token, rate-limited to 5/hour per email.' }),
+      T('MS-44', 'my-saas', 'Improve dashboard load time', 'backlog', { desc: 'p95 is 2.8s on /dashboard. Target under 1s.' }),
+      T('MS-46', 'my-saas', 'Add Stripe webhooks', 'backlog', { desc: 'invoice.paid, customer.subscription.* with idempotency keys.' }),
+      T('MS-47', 'my-saas', 'Rate-limit public API', 'backlog'),
+      T('MS-39', 'my-saas', 'Invoice PDF export', 'ready', { desc: 'Server-rendered; attach to the receipt email.' }),
+      T('MS-40', 'my-saas', 'Migrate to Postgres 16', 'ready', { desc: 'After the infra RDS upgrade lands.' }),
+      T('MS-38', 'my-saas', 'Checkout validation', 'progress', { desc: 'Validate address, card and shipping on client and server. Reject PO boxes for express. Share one zod schema.', agent: 'Kiro', st: 'working', branch: 'feature/checkout', started: 18, last: 0.2,
+        preFiles: [['src/checkout/address.test.ts', '+44', ''], ['src/checkout/validate.ts', '+71', '−18'], ['src/checkout/validate.test.ts', '+22', '−4'], ['src/lib/money.ts', '+4', '−1'], ['package.json', '+2', '−1']] }),
+      T('MS-35', 'my-saas', 'Search ranking', 'progress', { desc: 'Replace trigram similarity with weighted tsvector ranking.', agent: 'Claude Code', st: 'waiting', branch: 'feature/search-ranking', started: 34, last: 7, behind: 3, ask: 'Drop legacy index idx_products_trgm? It’s still used by /admin/search.' }),
+      T('MS-36', 'my-saas', 'Session refresh tokens', 'progress', { desc: 'Rotate refresh tokens on use; revoke the whole family on reuse.', agent: 'Codex', st: 'failed', branch: 'fix/session-refresh', started: 26, last: 4 }),
+      T('MS-33', 'my-saas', 'Transactional emails', 'review', { desc: 'Receipts, password changed, invite accepted. React Email + Postmark.', agent: 'Kiro', st: 'done', branch: 'feature/emails', started: 95, last: 41, behind: 1 }),
+      T('MS-34', 'my-saas', 'Team invites', 'review', { desc: 'Invite by email with a role; links expire after 7 days.', agent: 'Gemini', st: 'done', branch: 'feature/team-invites', started: 130, last: 62 }),
+      T('MS-28', 'my-saas', 'Authentication', 'done', { doneNote: 'Merged #198 · worktree pruned' }),
+      T('MS-30', 'my-saas', 'Email verification', 'done', { doneNote: 'Merged #203 · worktree pruned' }),
+      T('MS-31', 'my-saas', 'Sentry setup', 'done', { doneNote: 'Merged #205 · worktree pruned' }),
+      T('AG-12', 'api-gateway', 'Token-bucket rate limiter', 'progress', { desc: 'Per-key buckets in Redis, 429 with Retry-After.', agent: 'Codex', st: 'working', branch: 'feature/rate-limit', started: 22, last: 1 }),
+      T('AG-14', 'api-gateway', 'gRPC health checks', 'backlog', { desc: 'grpc.health.v1 for each upstream.' }),
+      T('AG-15', 'api-gateway', 'Structured access logs', 'ready', { desc: 'JSON logs with request id, latency, upstream.' }),
+      T('AG-9', 'api-gateway', 'Request ID propagation', 'done', { doneNote: 'Merged #61 · worktree pruned' }),
+      T('MB-20', 'mobile-app', 'expo-router migration', 'progress', { desc: 'Move 19 screens from react-navigation to file-based routes.', agent: 'Gemini', st: 'working', branch: 'feature/expo-router', started: 48, last: 1, behind: 2 }),
+      T('MB-22', 'mobile-app', 'Offline cart', 'backlog', { desc: 'Persist cart in MMKV; sync on reconnect.' }),
+      T('IN-7', 'infra', 'Upgrade RDS to Postgres 16', 'progress', { desc: 'Staging first, then prod in the Sunday window.', agent: 'Claude Code', st: 'waiting', branch: 'chore/rds-pg16', started: 40, last: 32, ask: 'Approve terraform apply on staging? 0 to add, 3 to change, 0 to destroy.' }),
+      T('IN-9', 'infra', 'Rotate staging secrets', 'ready', { desc: 'Move to AWS Secrets Manager rotation.' }),
+      T('DT-4', 'design-tokens', 'Dark theme contrast pass', 'backlog', { desc: 'All text tokens ≥ 4.5:1 on surface-1.' }),
+      T('DS-11', 'docs-site', 'Rewrite webhooks guide', 'backlog', { desc: 'Cover retries, signatures, local testing.' })
+    ];
+    const TI = {
+      'MS-38': [['path', '~/.wt/my-saas/checkout on feature/checkout'], ['$', 'kiro --task MS-38'], ['kiro', 'session 7f3a · spec .kiro/specs/checkout-validation.md'], ['▸', 'Read validate.ts, schema.ts, CheckoutForm.tsx'], ['✎', 'src/checkout/schema.ts', '+48', '−12'], ['✎', 'src/checkout/CheckoutForm.tsx', '+96', '−31'], ['$', 'pnpm vitest run src/checkout'], ['PASS', 'validate.test.ts (14 tests)'], ['FAIL', 'address.test.ts › rejects PO boxes for express shipping'], ['', '  expected false, received true'], ['▸', 'Postal regex misses "P.O. Box" with periods — widening match'], ['✎', 'src/checkout/address.ts', '+6', '−2'], ['$', 'pnpm vitest run src/checkout'], ['PASS', '3 suites · 41 tests · 1.84s'], ['git', 'commit a41c9e2 "validate checkout payload with shared schema"'], ['▸', 'Wiring server-side validation into /api/checkout'], ['✎', 'app/api/checkout/route.ts', '+38', '−9']],
+      'MS-35': [['path', '~/.wt/my-saas/search-ranking on feature/search-ranking'], ['$', 'claude'], ['claude', 'session 2b91'], ['▸', 'Benchmarked ts_rank_cd vs trigram: 38ms → 9ms p50'], ['✎', 'db/migrations/0042_search_tsv.sql', '+61', ''], ['✎', 'src/search/rank.ts', '+44', '−31'], ['✎', 'src/search/query.ts', '+17', '−9'], ['git', 'commit 6fd21a0 "tsvector ranking"'], ['▸', 'idx_products_trgm is now unused by /search'], ['▸', '…but still referenced by /admin/search'], ['?', 'Drop legacy index idx_products_trgm? It’s still used by /admin/search.']],
+      'MS-36': [['path', '~/.wt/my-saas/session-refresh on fix/session-refresh'], ['$', 'codex'], ['codex', 'session 9d44'], ['✎', 'src/auth/refresh.ts', '+31', '−12'], ['✎', 'src/auth/session.ts', '+22', '−9'], ['✎', 'src/auth/refresh.test.ts', '+64', '−4'], ['$', 'pnpm vitest run src/auth'], ['FAIL', 'refresh.test.ts (3 failed)'], ['', '  ✕ rotates token on reuse detection'], ['', '  ✕ revokes family after reuse'], ['', '  ✕ keeps session on parallel refresh'], ['FAIL', 'process exited with code 1']],
+      'MS-33': [['path', '~/.wt/my-saas/emails on feature/emails'], ['$', 'kiro --task MS-33'], ['kiro', 'session 1c07'], ['✎', 'emails/Receipt.tsx', '+142', ''], ['✎', 'emails/PasswordChanged.tsx', '+88', ''], ['✎', 'emails/InviteAccepted.tsx', '+96', ''], ['✎', 'src/lib/mailer.ts', '+61', '−12'], ['$', 'pnpm vitest run'], ['PASS', '9 suites · 86 tests · 3.02s'], ['git', 'commit 0e4b2d9 "transactional emails via postmark"'], ['▸', 'Done. 3 templates, 1 mailer, previews at /dev/emails.']],
+      'MS-34': [['path', '~/.wt/my-saas/team-invites on feature/team-invites'], ['$', 'gemini'], ['gemini', 'session 5a2e'], ['✎', 'src/teams/invites.ts', '+118', '−20'], ['✎', 'app/api/invites/route.ts', '+74', '−8'], ['✎', 'app/(app)/settings/team/page.tsx', '+109', '−16'], ['$', 'pnpm vitest run src/teams'], ['PASS', '4 suites · 52 tests'], ['git', 'commit b7710f1 "team invites with 7-day expiry"'], ['▸', 'Finished. Invites expire after 7 days; resending resets the timer.']],
+      'AG-12': [['path', '~/.wt/api-gateway/rate-limit on feature/rate-limit'], ['$', 'codex'], ['codex', 'session 3f10'], ['✎', 'internal/ratelimit/bucket.go', '+112', ''], ['$', 'go test ./internal/ratelimit/...'], ['PASS', 'ok  internal/ratelimit  0.412s'], ['git', 'commit 2a8c0d1 "in-memory token bucket"'], ['▸', 'Adding Redis-backed store'], ['✎', 'internal/ratelimit/redis.go', '+88', '']],
+      'MB-20': [['path', '~/.wt/mobile-app/expo-router on feature/expo-router'], ['$', 'gemini'], ['gemini', 'session 8e61'], ['▸', 'Migrated 14 of 19 screens'], ['✎', 'app/(tabs)/settings.tsx', '+42', '−60'], ['git', 'commit 91be3f2 "migrate tabs to expo-router"'], ['$', 'npx tsc --noEmit'], ['', 'Found 0 errors.']],
+      'IN-7': [['path', '~/.wt/infra/rds-pg16 on chore/rds-pg16'], ['$', 'claude'], ['claude', 'session 61b0'], ['✎', 'envs/staging/rds.tf', '+4', '−2'], ['✎', 'modules/rds/params.tf', '+11', '−6'], ['git', 'commit d40e7a3 "pg16 parameter group"'], ['$', 'terraform plan -var-file=staging.tfvars'], ['~', 'aws_db_instance.main'], ['', '    engine_version: "15.6" → "16.3"'], ['~', 'aws_db_parameter_group.pg'], ['', 'Plan: 0 to add, 3 to change, 0 to destroy.'], ['?', 'Approve terraform apply on staging?']]
+    };
+    const SI = {
+      'MS-38': { queue: [['▸', 'Server returns 422 with field errors; mapping them to client messages'], ['✎', 'src/lib/errors.ts', '+9', '−3'], ['✎', 'src/checkout/CheckoutForm.tsx', '+14', '−6'], ['$', 'pnpm tsc --noEmit'], ['', 'Found 0 errors.'], ['$', 'pnpm vitest run'], ['PASS', '5 suites · 47 tests · 2.31s'], ['git', 'commit 9b1f3d0 "server-side checkout validation"'], ['▸', 'All acceptance criteria in the spec are met.'], ['DONE']] },
+      'MS-35': { queue: [], yes: [['›', 'yes'], ['✎', 'db/migrations/0043_drop_trgm.sql', '+3', ''], ['✎', 'src/admin/search.ts', '+18', '−22'], ['$', 'pnpm vitest run src/search src/admin'], ['PASS', '2 suites · 19 tests'], ['git', 'commit e1a07c2 "rank with tsvector, drop trigram index"'], ['DONE']], no: [['›', 'no — keep it'], ['▸', 'Keeping idx_products_trgm for /admin/search'], ['$', 'pnpm vitest run src/search'], ['PASS', '1 suite · 12 tests'], ['DONE']] },
+      'MS-36': { queue: [], retry: [['›', 'Tests failed — see output above. Fix and rerun.'], ['▸', 'Reuse detection compares the stored hash to the raw token'], ['✎', 'src/auth/refresh.ts', '+14', '−6'], ['✎', 'src/auth/refresh.test.ts', '+8', '−2'], ['$', 'pnpm vitest run src/auth'], ['PASS', 'refresh.test.ts (11 tests)'], ['git', 'commit 5c3e8aa "fix reuse detection hash compare"'], ['DONE']] },
+      'AG-12': { queue: [['✎', 'internal/ratelimit/redis_test.go', '+64', ''], ['$', 'go test ./internal/ratelimit/...'], ['PASS', 'ok  internal/ratelimit  0.508s'], ['▸', 'Wiring middleware into the router'], ['✎', 'cmd/gateway/main.go', '+12', '−3'], ['✎', 'internal/http/middleware.go', '+41', ''], ['$', 'go test ./...'], ['PASS', 'ok  12 packages'], ['git', 'commit 44a1b9f "redis token bucket with Retry-After"'], ['DONE']] },
+      'MB-20': { queue: [['✎', 'app/(tabs)/orders.tsx', '+38', '−51'], ['✎', 'app/product/[id].tsx', '+29', '−44'], ['▸', 'Migrated 17 of 19 screens'], ['✎', 'app/checkout/index.tsx', '+33', '−47'], ['?', 'Deep links change from lumen:// to lumen-app:// — keep the old scheme as an alias?']],
+        yes: [['›', 'yes, keep the alias'], ['✎', 'app.config.ts', '+6', '−1'], ['▸', 'Migrated 19 of 19 screens'], ['$', 'npx jest'], ['PASS', 'Tests: 118 passed'], ['git', 'commit 7c2a9e0 "expo-router migration"'], ['DONE']],
+        no: [['›', 'no, drop lumen://'], ['▸', 'Migrated 19 of 19 screens'], ['$', 'npx jest'], ['PASS', 'Tests: 118 passed'], ['git', 'commit 7c2a9e0 "expo-router migration"'], ['DONE']] },
+      'IN-7': { queue: [], yes: [['›', 'approve'], ['$', 'terraform apply -var-file=staging.tfvars'], ['', 'aws_db_instance.main: Modifying... [10s elapsed]'], ['', 'aws_db_instance.main: Modifications complete after 6m12s'], ['PASS', 'Apply complete! Resources: 0 added, 3 changed, 0 destroyed.'], ['DONE']], no: [['›', 'reject'], ['▸', 'Apply cancelled. Plan saved to plans/staging.tfplan'], ['DONE']] }
+    };
+    const term = {};
+    Object.keys(TI).forEach(id => {
+      const t = tasks.find(x => x.id === id), n = TI[id].length;
+      term[id] = TI[id].map((a, i) => this.L(a, t.started + (t.last - t.started) * (n === 1 ? 1 : i / (n - 1))));
+    });
+    this.DIFFS = {
+      'src/checkout/address.ts': ['@@ -1,14 +1,18 @@  addressSchema', ' import { z } from "zod";', ' ', '-const PO_BOX = /^po box/i;', '+// Matches "PO Box", "P.O. Box", "Post Office Box", "POB"', '+const PO_BOX = /\\b(p\\.?\\s?o\\.?\\s?(box|b)\\b|post\\s+office\\s+box)/i;', ' ', ' export const addressSchema = z.object({', '   line1: z.string().min(1, "Street address is required"),', '   line2: z.string().optional(),', '   city: z.string().min(1),', '-  postalCode: z.string(),', '+  postalCode: z.string().trim().min(3).max(10),', '   country: z.string().length(2),', ' });', ' ', '+export function allowsExpress(a: Address) {', '+  return !PO_BOX.test(a.line1) && !PO_BOX.test(a.line2 ?? "");', '+}'],
+      'app/api/checkout/route.ts': ['@@ -1,9 +1,19 @@  POST', ' import { NextResponse } from "next/server";', '+import { checkoutSchema } from "@/checkout/schema";', '+import { allowsExpress } from "@/checkout/address";', ' import { createOrder } from "@/orders";', ' ', ' export async function POST(req: Request) {', '-  const body = await req.json();', '-  const order = await createOrder(body);', '+  const parsed = checkoutSchema.safeParse(await req.json());', '+  if (!parsed.success) {', '+    return NextResponse.json({ errors: parsed.error.flatten() }, { status: 422 });', '+  }', '+  const { address, shipping } = parsed.data;', '+  if (shipping === "express" && !allowsExpress(address)) {', '+    return NextResponse.json({ field: "line1", code: "express_po_box" }, { status: 422 });', '+  }', '+  const order = await createOrder(parsed.data);', '   return NextResponse.json({ id: order.id }, { status: 201 });', ' }'],
+      'src/checkout/schema.ts': ['@@ -1,6 +1,15 @@', ' import { z } from "zod";', '+import { addressSchema } from "./address";', ' ', '-export const checkoutSchema = z.object({', '-  email: z.string(),', '-  address: z.any(),', '+export const shippingSchema = z.enum(["standard", "express"]);', '+', '+export const checkoutSchema = z.object({', '+  email: z.string().email("Enter a valid email"),', '+  address: addressSchema,', '+  shipping: shippingSchema,', '+  cardToken: z.string().startsWith("tok_"),', ' });', '+', '+export type Checkout = z.infer<typeof checkoutSchema>;'],
+      'db/migrations/0042_search_tsv.sql': ['@@ -0,0 +1,8 @@', '+ALTER TABLE products ADD COLUMN search_tsv tsvector', '+  GENERATED ALWAYS AS (', "+    setweight(to_tsvector('english', coalesce(name, '')), 'A') ||", "+    setweight(to_tsvector('english', coalesce(description, '')), 'B')", '+  ) STORED;', '+', '+CREATE INDEX CONCURRENTLY idx_products_search_tsv', '+  ON products USING gin (search_tsv);'],
+      'src/auth/refresh.ts': ['@@ -18,8 +18,9 @@  rotateRefreshToken', '   const existing = await db.refreshToken.findUnique({ where: { id } });', '-  if (existing.token !== presented) {', '+  if (!existing) throw new AuthError("unknown_token");', '+  if (existing.hash !== hash(presented)) {', '     await revokeFamily(existing.familyId);', '     throw new AuthError("token_reuse");', '   }', '   return issue(existing.userId, existing.familyId);']
+    };
+    this.BASE = {
+      'my-saas': ['README.md', 'package.json', 'tsconfig.json', 'app/layout.tsx', 'app/(app)/dashboard/page.tsx', 'src/orders/index.ts', '.kiro/specs/checkout-validation.md'],
+      'api-gateway': ['README.md', 'go.mod', 'cmd/gateway/main.go', 'internal/http/router.go'],
+      'mobile-app': ['README.md', 'package.json', 'app.config.ts', 'app/_layout.tsx'],
+      'infra': ['README.md', 'envs/staging/main.tf', 'modules/rds/main.tf'],
+      'design-tokens': ['README.md', 'package.json'], 'docs-site': ['README.md', 'package.json']
+    };
+    this.CONTENT = {
+      'package.json': '{\n  "name": "my-saas",\n  "private": true,\n  "scripts": {\n    "dev": "next dev",\n    "build": "next build",\n    "test": "vitest run",\n    "typecheck": "tsc --noEmit"\n  },\n  "dependencies": {\n    "next": "15.2.0",\n    "react": "19.0.0",\n    "zod": "3.24.1",\n    "stripe": "17.4.0"\n  },\n  "devDependencies": {\n    "typescript": "5.7.2",\n    "vitest": "2.1.8"\n  }\n}',
+      'README.md': '# my-saas\n\nNext.js app + API routes. Postgres via Drizzle.\n\n## Develop\n\n    pnpm install\n    pnpm dev        # http://localhost:3000\n    pnpm test\n\n## Layout\n\n- app/        routes and API handlers\n- src/        domain modules (checkout, auth, orders, search)\n- db/         migrations\n- emails/     React Email templates',
+      '.kiro/specs/checkout-validation.md': '# Checkout validation\n\n## Requirements\n\n1. Validate address, card token and shipping method on the client and the server.\n2. Use one shared zod schema for both.\n3. Reject PO boxes when shipping is express.\n4. Server returns 422 with field-level errors.\n\n## Acceptance\n\n- [x] addressSchema rejects "P.O. Box" variants for express\n- [x] client shows inline field errors\n- [ ] /api/checkout validates with checkoutSchema\n- [ ] error codes map to client messages',
+      'go.mod': 'module github.com/lumen-labs/api-gateway\n\ngo 1.23\n\nrequire (\n\tgithub.com/redis/go-redis/v9 v9.7.0\n\tgoogle.golang.org/grpc v1.69.2\n)',
+      'src/auth/refresh.ts': 'import { db } from "@/db";\nimport { AuthError } from "./errors";\nimport { hash, issue, revokeFamily } from "./tokens";\n\nexport async function rotateRefreshToken(id: string, presented: string) {\n  const existing = await db.refreshToken.findUnique({ where: { id } });\n  if (!existing) throw new AuthError("unknown_token");\n  if (existing.hash !== hash(presented)) {\n    await revokeFamily(existing.familyId);\n    throw new AuthError("token_reuse");\n  }\n  return issue(existing.userId, existing.familyId);\n}'
+    };
+    return {
+      openFiles: {}, activeFile: {}, edits: {}, saved: {}, collapsed: {}, filesChanged: false,
+      shells: { 'MS-38': [
+        { id: 'MS-38-dev', name: 'pnpm dev', running: true, lines: [{ k: 'prompt', text: 'pnpm dev' }, { k: 'dim', text: '> my-saas@0.1.0 dev' }, { k: 'dim', text: '> next dev' }, { k: 'out', text: '' }, { k: 'ok', text: '▲ Next.js 15.2.0' }, { k: 'out', text: '- Local:   http://localhost:3000' }, { k: 'ok', text: '✓ Ready in 1.4s' }, { k: 'out', text: ' ○ Compiling /checkout ...' }, { k: 'ok', text: ' ✓ Compiled /checkout in 812ms' }, { k: 'out', text: ' POST /api/checkout 422 in 38ms' }] },
+        { id: 'MS-38-z1', name: 'zsh', running: false, lines: [] }] },
+      activeTerm: {}, split: false, shellInput: {}, hist: {}, histIdx: {},
+      view: 'dashboard', project: 'my-saas', taskId: 'MS-38', wsTab: 'terminal', tasks, term, scripts: SI,
+      start: null, palette: null, toast: null, focus: 'MS-39', dragOver: null, adding: false, newTitle: '',
+      agentFilter: 'all', wtSel: 'MS-35', stale: [
+        { id: 's1', branch: 'fix/anchors', project: 'docs-site', size: '310 MB', why: 'Merged in #88 eight days ago. No agent, no local changes.' },
+        { id: 's2', branch: 'spike/edge-runtime', project: 'my-saas', size: '0.9 GB', why: 'Created outside Switchyard, not linked to a task. Last commit 12 days ago.' }],
+      selFile: {}, viewed: { 'src/checkout/schema.ts': 1, 'src/checkout/CheckoutForm.tsx': 1, 'src/checkout/validate.ts': 1 },
+      comments: {}, commentAt: null, commentText: '', msg: '', pvPick: false, pvPicked: null, pvMsg: '', pvMain: false, now
+    };
+  }
+
+  L(a, t) { return { tag: a[0], text: a[1] || '', a: a[2] || '', d: a[3] || '', t: t || Date.now() }; }
+  componentDidMount() {
+    this._key = e => this.onKey(e);
+    window.addEventListener('keydown', this._key);
+    this._tick = setInterval(() => this.tick(), 1900);
+    this._clock = setInterval(() => this.setState({ now: Date.now() }), 20000);
+  }
+  componentWillUnmount() { window.removeEventListener('keydown', this._key); clearInterval(this._tick); clearInterval(this._clock); this.timers.forEach(clearTimeout); }
+  shellEls = {};
+  _sh = new WeakMap();
+  componentDidUpdate() { document.querySelectorAll('[data-autoscroll]').forEach(el => { if (this._sh.get(el) !== el.scrollHeight) { el.scrollTop = el.scrollHeight; this._sh.set(el, el.scrollHeight); } }); }
+  shellsOf(s, tid) { return s.shells[tid] || [{ id: tid + '-z1', name: 'zsh', lines: [], running: false }]; }
+  updShell(tid, sid, fn) { this.setState(s => ({ shells: { ...s.shells, [tid]: this.shellsOf(s, tid).map(x => x.id === sid ? { ...x, ...(typeof fn === 'function' ? fn(x) : fn) } : x) } })); }
+  addLines(tid, sid, lns, patch) { this.updShell(tid, sid, x => ({ ...(patch || {}), lines: [...x.lines, ...lns] })); }
+  addShell(tid) {
+    const id = tid + '-z' + Date.now().toString(36);
+    this.setState(s => ({ shells: { ...s.shells, [tid]: [...this.shellsOf(s, tid), { id, name: 'zsh', lines: [], running: false }] }, activeTerm: { ...s.activeTerm, [tid]: id } }));
+    this.later(() => this.shellEls[id] && this.shellEls[id].focus(), 60);
+  }
+  closeShell(tid, sid) { this.setState(s => ({ shells: { ...s.shells, [tid]: this.shellsOf(s, tid).filter(x => x.id !== sid) }, activeTerm: { ...s.activeTerm, [tid]: s.activeTerm[tid] === sid ? 'agent' : s.activeTerm[tid] } })); }
+  allPaths(t) { return [...new Set([...(this.BASE[t.project] || []), ...this.files(t).map(x => x.path)])]; }
+  dirtyFiles(t) { const l = this.state.term[t.id] || [], n = new Set(); for (let i = l.length - 1; i >= 0 && l[i].tag !== 'git'; i--) if (l[i].tag === '✎') n.add(l[i].text); return [...n]; }
+  shellKey(e, tid, sid) {
+    const s = this.state, sh = this.shellsOf(s, tid).find(x => x.id === sid); if (!sh) return;
+    const v = s.shellInput[sid] || '', h = s.hist[sid] || [];
+    if (e.key === 'Enter') { e.preventDefault(); if (sh.running) return; this.runCmd(tid, sid, v); this.setState(st => ({ shellInput: { ...st.shellInput, [sid]: '' }, hist: { ...st.hist, [sid]: v.trim() ? [...h, v.trim()] : h }, histIdx: { ...st.histIdx, [sid]: null } })); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); if (!h.length) return; const cur = s.histIdx[sid]; const i = cur == null ? h.length - 1 : Math.max(0, cur - 1); this.setState(st => ({ histIdx: { ...st.histIdx, [sid]: i }, shellInput: { ...st.shellInput, [sid]: h[i] } })); }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); const cur = s.histIdx[sid]; if (cur == null) return; const i = cur + 1; this.setState(st => ({ histIdx: { ...st.histIdx, [sid]: i >= h.length ? null : i }, shellInput: { ...st.shellInput, [sid]: i >= h.length ? '' : h[i] } })); }
+    else if (e.ctrlKey && e.key.toLowerCase() === 'c') { e.preventDefault(); this.addLines(tid, sid, [{ k: 'dim', text: (v ? v + ' ' : '') + '^C' }], { running: false, name: 'zsh' }); this.setState(st => ({ shellInput: { ...st.shellInput, [sid]: '' } })); }
+    else if (e.ctrlKey && e.key.toLowerCase() === 'l') { e.preventDefault(); this.updShell(tid, sid, { lines: [] }); }
+  }
+  runCmd(tid, sid, raw) {
+    const cmd = raw.trim(), t = this.task(tid), p = this.proj(t.project);
+    const O = (text, k) => ({ text, k: k || 'out' });
+    if (cmd === 'clear') return this.updShell(tid, sid, { lines: [] });
+    this.addLines(tid, sid, [O(cmd, 'prompt')]);
+    if (!cmd) return;
+    const [c0, ...args] = cmd.split(/\s+/), a = args.join(' ');
+    const f = this.files(t), term = this.state.term[tid] || [], leaf = (t.path || '').split('/').pop();
+    const say = (lns, patch) => this.addLines(tid, sid, lns, patch);
+    const ag = this.AG.find(x => x.short === c0);
+    if (ag) return say([O(`${c0}: an agent session is already running in this worktree — use the ${(this.AG.find(x => x.name === t.agent) || ag).short} tab`, 'warn')]);
+    if (c0 === 'help') return say([O(`Try: git status · git log · git diff --stat · git branch · git worktree list · ls · cat <file> · pwd · ${p.test} · pnpm dev · clear`, 'dim')]);
+    if (c0 === 'pwd') return say([O(`/Users/ana/.wt/${t.project}/${leaf}`)]);
+    if (c0 === 'echo') return say([O(a)]);
+    if (c0 === 'exit') return this.closeShell(tid, sid);
+    if (c0 === 'ls') { const top = [...new Set(this.allPaths(t).map(x => x.includes('/') ? x.split('/')[0] + '/' : x))].sort(); return say([O(top.join('    '))]); }
+    if (c0 === 'cat') { const c = this.content(a.replace(/^\.\//, '')); return say(c == null ? [O(`cat: ${a}: No such file or directory`, 'err')] : c.split('\n').map(x => O(x))); }
+    if (c0 === 'git') {
+      const sub = args[0], commits = term.filter(l => l.tag === 'git').map(l => ({ h: l.text.split(' ')[1], m: (l.text.match(/"(.*)"/) || [0, ''])[1] }));
+      if (sub === 'status') { const d = this.dirtyFiles(t); return say([O(`On branch ${t.branch}`), O(`Your branch is ahead of 'main' by ${commits.length} commit${commits.length === 1 ? '' : 's'}.`), O(''), ...(d.length ? [O('Changes not staged for commit:'), ...d.map(x => O(`        modified:   ${x}`, 'err'))] : [O('nothing to commit, working tree clean')])]); }
+      if (sub === 'log') return say(commits.length ? commits.slice().reverse().map(c => O(`${c.h}  ${c.m}`, 'hash')) : [O('fatal: your current branch has no commits yet', 'err')]);
+      if (sub === 'diff') return say([...f.map(x => O(` ${x.path.padEnd(40)} | ${String(x.a + x.d).padStart(4)} ${'+'.repeat(Math.min(12, Math.ceil(x.a / 10)))}${'-'.repeat(Math.min(8, Math.ceil(x.d / 10)))}`)), O(` ${f.length} files changed, ${f.reduce((q, x) => q + x.a, 0)} insertions(+), ${f.reduce((q, x) => q + x.d, 0)} deletions(-)`)]);
+      if (sub === 'branch') return say([O(`* ${t.branch}`, 'ok'), O('  main')]);
+      if (sub === 'pull' || sub === 'fetch') return say([O('Already up to date.')]);
+      if (sub === 'worktree') return say([O(`/Users/ana/code/${t.project}        ${p.head.split(' @ ')[1]} [main]`), O(`/Users/ana/.wt/${t.project}/${leaf}  ${(commits[commits.length - 1] || { h: p.head.split(' @ ')[1] }).h} [${t.branch}]`)]);
+      return say([O(`git ${sub || ''}: not simulated in the prototype — try status, log, diff, branch, worktree list`, 'dim')]);
+    }
+    if (/test|vitest|jest|validate/.test(cmd)) {
+      say([O(`$ ${cmd}`, 'dim')], { running: true });
+      this.later(() => { const te = this.tests(t), n = te && te.label.match(/\d+/); this.addLines(tid, sid, te && !te.ok ? [O(`FAIL  ${n ? n[0] : 'some'} tests failed`, 'err')] : [O(`PASS  ${n ? n[0] + ' tests' : 'all tests'} passed`, 'ok'), O(`Duration  ${(1.2 + Math.random()).toFixed(2)}s`, 'dim')], { running: false }); }, 1400);
+      return;
+    }
+    if (/^(pnpm|npm run|yarn) dev$/.test(cmd) || cmd === 'next dev' || /^go run/.test(cmd)) {
+      say([O(`> ${t.project} dev`, 'dim')], { running: true, name: cmd });
+      this.later(() => this.addLines(tid, sid, p.lang === 'Go' ? [O('gateway listening on :8081', 'ok')] : [O('▲ Next.js 15.2.0', 'ok'), O('- Local:   http://localhost:3002'), O('✓ Ready in 1.3s', 'ok')]), 900);
+      return;
+    }
+    say([O(`zsh: command not found: ${c0}`, 'err')]);
+  }
+  fileIcon(name) {
+    const ext = name.includes('.') ? name.split('.').pop().toLowerCase() : '';
+    const m = { ts: ['TS', '#5B9BD5'], tsx: ['TSX', '#56B6C2'], js: ['JS', '#D7BA4A'], json: ['{ }', '#C9A24A'], md: ['M↓', '#8A8D95'], go: ['GO', '#56B6C2'], mod: ['GO', '#56B6C2'], sql: ['SQL', '#D08A4E'], tf: ['TF', '#9B82D9'], css: ['#', '#C678DD'], yml: ['YML', '#C9A24A'], yaml: ['YML', '#C9A24A'] };
+    return m[ext] || ['·', '#6E717A'];
+  }
+  later(fn, ms) { this.timers.push(setTimeout(fn, ms)); }
+  toast(text, tone) { const id = Date.now(); this.setState({ toast: { text, tone: tone || 'plain', id } }); this.later(() => { if (this.state.toast && this.state.toast.id === id) this.setState({ toast: null }); }, 3200); }
+  task(id) { return this.state.tasks.find(t => t.id === id); }
+  patch(id, p) { this.setState(s => ({ tasks: s.tasks.map(t => t.id === id ? { ...t, ...p } : t) })); }
+  push(id, lines) { this.setState(s => ({ term: { ...s.term, [id]: [...(s.term[id] || []), ...lines.map(a => this.L(a))] } })); }
+  slug(s) { return s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').split('-').slice(0, 3).join('-'); }
+  ago(t) { const d = (this.state.now > t ? this.state.now : Date.now()) - t; if (d < 60000) return 'now'; if (d < 3600000) return Math.round(d / 60000) + 'm'; if (d < 86400000) return Math.round(d / 3600000) + 'h'; return Math.round(d / 86400000) + 'd'; }
+
+  tick() {
+    const s = this.state; let changed = false; const notes = [];
+    const term = { ...s.term }, scripts = { ...s.scripts };
+    const tasks = s.tasks.map(t => {
+      if (t.st !== 'working') return t;
+      const sc = scripts[t.id]; if (!sc || !sc.queue.length || Math.random() < 0.45) return t;
+      const [line, ...rest] = sc.queue; scripts[t.id] = { ...sc, queue: rest }; changed = true;
+      if (line[0] === 'DONE') { notes.push([`${t.agent} finished ${t.title} → Review`, 'done']); return { ...t, st: 'done', col: t.col === 'progress' ? 'review' : t.col, last: Date.now() }; }
+      term[t.id] = [...(term[t.id] || []), this.L(line)];
+      if (line[0] === '?') { notes.push([`${t.agent} needs you · ${t.title}`, 'waiting']); return { ...t, st: 'waiting', ask: line[1], last: Date.now() }; }
+      return { ...t, last: Date.now() };
+    });
+    if (changed) { this.setState({ tasks, term, scripts }); if (notes.length) this.toast(...notes[notes.length - 1]); }
+  }
+  answer(id, kind) {
+    const t = this.task(id), sc = this.state.scripts[id] || { queue: [] };
+    let q = sc[kind] || (kind === 'retry' ? [['›', 'Retry the last step'], ['▸', 'Retrying'], ['DONE']] : [['›', kind === 'yes' ? 'yes' : 'no'], ['▸', 'Continuing'], ['DONE']]);
+    const [first, ...rest] = q;
+    this.push(id, [first]);
+    this.setState(s => ({ scripts: { ...s.scripts, [id]: { ...sc, queue: rest } } }));
+    this.patch(id, { st: 'working', ask: null, last: Date.now() });
+    this.toast(`${t.agent} resumed · ${t.title}`);
+  }
+  send(id, text) {
+    text = (text || '').trim(); if (!text) return;
+    const t = this.task(id); if (!t || !t.agent) return;
+    if (t.st === 'waiting') { const sc = this.state.scripts[id] || {}; const q = (sc.yes || [['DONE']]).slice(1); this.push(id, [['›', text]]); this.setState(s => ({ scripts: { ...s.scripts, [id]: { ...sc, queue: q } } })); this.patch(id, { st: 'working', ask: null }); return; }
+    this.push(id, [['›', text]]);
+    const sc = this.state.scripts[id] || { queue: [] };
+    const short = text.length > 56 ? text.slice(0, 56) + '…' : text;
+    if (t.st === 'done' || t.st === 'failed' || t.st === 'paused') {
+      this.setState(s => ({ scripts: { ...s.scripts, [id]: { ...sc, queue: [['▸', `Picking up: "${short}"`], ['▸', 'Making the change'], ['$', this.proj(t.project).test], ['PASS', 'all tests passing'], ['git', `commit ${this.hex()} "address review feedback"`], ['DONE']] } } }));
+      this.patch(id, { st: 'working', col: t.col === 'review' ? 'progress' : t.col, last: Date.now() });
+    } else {
+      this.setState(s => ({ scripts: { ...s.scripts, [id]: { ...sc, queue: [['▸', `Noted "${short}" — will handle after this step`], ...sc.queue.filter(l => l[0] !== 'DONE'), ['▸', `Handled: "${short}"`], ['DONE']] } } }));
+    }
+  }
+  hex() { return Math.random().toString(16).slice(2, 9); }
+  proj(id) { return this.P.find(p => p.id === id); }
+  go(view, extra) { this.setState({ view, palette: null, pvPick: false, commentAt: null, ...(extra || {}) }); }
+  open(id, tab) { const t = this.task(id); if (!t) return; if (!t.branch) { this.go('board', { project: t.project, focus: id }); return; } this.go('workspace', { taskId: id, project: t.project, wsTab: tab || 'terminal', msg: '' }); }
+  jumpBlocked() { const b = this.state.tasks.filter(t => t.st === 'failed' || t.st === 'waiting').sort((a, b) => a.last - b.last); if (!b.length) return this.toast('No agents need you'); const cur = b.findIndex(t => t.id === this.state.taskId); this.open(b[(cur + 1) % b.length].id); }
+
+  openStart(id) {
+    const t = this.task(id); if (!t) return;
+    if (this.state.start && this.state.start.phase === 'launch') return this.toast('Another task is still launching');
+    const defIdx = t.project === 'my-saas' ? 0 : t.project === 'infra' ? 1 : t.project === 'api-gateway' ? 2 : 3;
+    this.setState({ start: { taskId: id, agent: defIdx, branch: 'feature/' + this.slug(t.title), msg: `Implement ${t.key}: ${t.desc || t.title} Add tests.`, phase: 'config', step: 0, bg: false }, palette: null });
+  }
+  confirmStart() {
+    const st = this.state.start; if (!st || st.phase !== 'config') return;
+    this.setState({ start: { ...st, phase: 'launch', step: 0 } });
+    const dur = [380, 460, 1500, 700, 320]; let acc = 0;
+    dur.forEach((d, i) => { acc += d; this.later(() => { if (!this.state.start) return; this.setState(s => ({ start: { ...s.start, step: i + 1 } })); if (i === dur.length - 1) this.finishStart(); }, acc); });
+  }
+  finishStart() {
+    const st = this.state.start, t = this.task(st.taskId), ag = this.AG[st.agent], p = this.proj(t.project);
+    const leaf = st.branch.split('/').pop(), path = `~/.wt/${t.project}/${leaf}`;
+    const files = t.key === 'MS-41' ? [['src/auth/reset-token.ts', '+58', ''], ['app/api/auth/reset/route.ts', '+46', ''], ['emails/ResetPassword.tsx', '+72', ''], ['src/auth/reset.test.ts', '+91', '']]
+      : p.lang === 'Go' ? [[`internal/${leaf.replace(/-/g, '')}/${leaf.replace(/-/g, '')}.go`, '+84', ''], [`internal/${leaf.replace(/-/g, '')}/${leaf.replace(/-/g, '')}_test.go`, '+52', ''], ['cmd/gateway/main.go', '+6', '−1']]
+      : p.lang === 'Terraform' ? [[`modules/${leaf}/main.tf`, '+40', ''], [`envs/staging/${leaf}.tf`, '+12', '−3']]
+      : [[`src/${leaf}/index.ts`, '+74', ''], [`src/${leaf}/${leaf}.test.ts`, '+48', ''], ['src/lib/config.ts', '+5', '−1']];
+    const queue = [['▸', 'Reading repository structure'], ['▸', `Plan: ${files.length + 2} steps for ${t.key}`], ...files.map(f => ['✎', ...f]), ['$', p.test], ['PASS', `${12 + files.length * 7} tests passing`], ['git', `commit ${this.hex()} "${t.title.toLowerCase()}"`], ['▸', 'Done. Summary above; ready for review.'], ['DONE']];
+    const now = Date.now();
+    this.setState(s => ({
+      tasks: s.tasks.map(x => x.id === t.id ? { ...x, col: 'progress', agent: ag.name, st: 'working', branch: st.branch, path, started: now, last: now, ask: null, behind: 0 } : x),
+      term: { ...s.term, [t.id]: [['path', `${path} on ${st.branch}`], ['$', `git worktree add ${path} -b ${st.branch}`], ['$', p.setup.split(' — ')[0]], ['$', ag.cmd(t)], [ag.short, `session ${this.hex().slice(0, 4)}`], ['›', st.msg]].map(a => this.L(a)) },
+      scripts: { ...s.scripts, [t.id]: { queue } },
+      start: null,
+      ...(st.bg ? {} : { view: 'workspace', taskId: t.id, project: t.project, wsTab: 'terminal' })
+    }));
+    if (st.bg) this.toast(`${ag.name} started on ${t.title}`);
+  }
+  move(id, col) {
+    const t = this.task(id); if (!t || t.col === col) return;
+    if (col === 'progress') { if (t.agent && t.branch) { this.patch(id, { col, st: t.st === 'done' ? 'done' : (t.st || 'paused') }); } else this.openStart(id); return; }
+    if (col === 'review') { if (!t.agent) return this.toast('Start the task first — nothing to review yet'); this.patch(id, { col, st: 'done' }); return this.toast(`${t.title} moved to Review`); }
+    if (col === 'done') { this.patch(id, { col, st: null, agent: null, branch: null, path: null, doneNote: t.branch ? `Merged ${t.branch} · worktree pruned` : 'Closed' }); return this.toast(t.branch ? `Merged ${t.branch} into main · worktree pruned` : `${t.title} closed`, 'done'); }
+    this.patch(id, { col, st: t.agent ? 'paused' : null });
+    if (t.agent) this.toast(`${t.agent} paused · worktree kept`);
+  }
+
+  onKey(e) {
+    const s = this.state, tag = (e.target.tagName || '').toLowerCase(), typing = tag === 'input' || tag === 'textarea', mod = e.metaKey || e.ctrlKey, k = e.key;
+    if (mod && k.toLowerCase() === 'k') { e.preventDefault(); this.setState({ palette: s.palette ? null : { q: '', idx: 0 } }); this.later(() => this.palRef.current && this.palRef.current.focus(), 30); return; }
+    if (k === 'Escape') {
+      if (s.palette) return this.setState({ palette: null });
+      if (s.start) return s.start.phase === 'launch' ? this.setState({ start: { ...s.start, bg: true } }) : this.setState({ start: null });
+      if (s.commentAt) return this.setState({ commentAt: null });
+      if (s.pvPick || s.pvPicked) return this.setState({ pvPick: false, pvPicked: null });
+      if (s.adding) return this.setState({ adding: false });
+      if (typing) e.target.blur();
+      return;
+    }
+    if (s.palette) return;
+    if (s.start) {
+      if (s.start.phase === 'config') {
+        if (!typing && /^[1-4]$/.test(k)) this.setState({ start: { ...s.start, agent: +k - 1 } });
+        if (k === 'Enter' && (mod || !typing)) { e.preventDefault(); this.confirmStart(); }
+      }
+      return;
+    }
+    if (mod && /^[1-3]$/.test(k)) { e.preventDefault(); return this.go(['dashboard', 'agents', 'worktrees'][+k - 1]); }
+    if (mod && k.toLowerCase() === 'j') { e.preventDefault(); return this.jumpBlocked(); }
+    if (mod && k === '.' && s.view === 'workspace') { e.preventDefault(); if (s.wsTab !== 'terminal') this.setState({ wsTab: 'terminal' }); this.later(() => this.msgRef.current && this.msgRef.current.focus(), 30); return; }
+    if (typing || mod) return;
+    if (s.view === 'board') {
+      const cols = ['backlog', 'ready', 'progress', 'review', 'done'].map(c => s.tasks.filter(t => t.project === s.project && t.col === c));
+      let ci = cols.findIndex(c => c.some(t => t.id === s.focus)); if (ci < 0) ci = 0;
+      let ri = Math.max(0, cols[ci].findIndex(t => t.id === s.focus));
+      const setF = (c, r) => { const col = cols[c]; if (col && col.length) this.setState({ focus: col[Math.min(r, col.length - 1)].id }); };
+      if (k === 'j' || k === 'ArrowDown') { e.preventDefault(); setF(ci, ri + 1); }
+      else if (k === 'k' || k === 'ArrowUp') { e.preventDefault(); setF(ci, Math.max(0, ri - 1)); }
+      else if (k === 'l' || k === 'ArrowRight') { e.preventDefault(); let c = ci + 1; while (c < 5 && !cols[c].length) c++; if (c < 5) setF(c, ri); }
+      else if (k === 'h' || k === 'ArrowLeft') { e.preventDefault(); let c = ci - 1; while (c >= 0 && !cols[c].length) c--; if (c >= 0) setF(c, ri); }
+      else if (k === 's') { const t = this.task(s.focus); if (t && (t.col === 'backlog' || t.col === 'ready')) this.openStart(t.id); }
+      else if (k === 'Enter') { const t = this.task(s.focus); if (t && t.branch) this.open(t.id); else if (t && (t.col === 'backlog' || t.col === 'ready')) this.openStart(t.id); }
+      else if (k === 'c') { e.preventDefault(); this.setState({ adding: true, newTitle: '' }); }
+      return;
+    }
+    if (s.view === 'workspace') {
+      const t = this.task(s.taskId);
+      if (t && t.st === 'waiting' && (k === 'y' || k === 'n')) return this.answer(t.id, k === 'y' ? 'yes' : 'no');
+      if (t && t.st === 'failed' && k === 'r') return this.answer(t.id, 'retry');
+      if (k === 't') this.setState({ wsTab: 'terminal' });
+      if (k === 'f') this.setState({ wsTab: 'files' });
+      if (k === 'c') this.setState({ wsTab: 'changes' });
+      if (k === 'p' && s.wsTab === 'preview') this.setState({ pvPick: !s.pvPick });
+      else if (k === 'p') this.setState({ wsTab: 'preview' });
+      return;
+    }
+    if (s.view === 'agents') {
+      const b = s.tasks.filter(t => t.st === 'failed' || t.st === 'waiting').sort((a, b) => a.last - b.last)[0];
+      if (!b) return;
+      if (b.st === 'waiting' && (k === 'y' || k === 'n')) this.answer(b.id, k === 'y' ? 'yes' : 'no');
+      if (b.st === 'failed' && (k === 'r' || k === 'Enter')) this.answer(b.id, 'retry');
+      if (k === 'o') this.open(b.id);
+    }
+  }
+
+  files(t) {
+    const map = new Map();
+    const add = (p, a, d) => { const x = map.get(p) || { path: p, a: 0, d: 0 }; x.a += parseInt((a || '0').replace('+', '')) || 0; x.d += parseInt((d || '0').replace('−', '')) || 0; map.set(p, x); };
+    (t.preFiles || []).forEach(f => add(...f));
+    (this.state.term[t.id] || []).forEach(l => { if (l.tag === '✎') add(l.text, l.a, l.d); });
+    return [...map.values()];
+  }
+  tests(t) {
+    const lines = this.state.term[t.id] || [];
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const l = lines[i]; if (l.tag !== 'PASS' && l.tag !== 'FAIL') continue;
+      const mm = /(\d+) (tests?|passed|failed)/.exec(l.text);
+      if (!mm && !/^ok/.test(l.text) && !/Apply complete/.test(l.text)) continue;
+      return { ok: l.tag === 'PASS', label: (mm ? mm[1] + ' ' : '') + (l.tag === 'PASS' ? '✓' : '✕') };
+    }
+    return null;
+  }
+  act(l, agent) {
+    const base = p => p.split('/').pop();
+    switch (l.tag) {
+      case '✎': return 'Edited ' + base(l.text);
+      case 'PASS': return 'Tests passing';
+      case 'FAIL': return /exited/.test(l.text) ? 'Exited with error' : 'Tests failing';
+      case 'git': return 'Committed ' + l.text.split(' ')[1];
+      case '?': return 'Asked: ' + l.text;
+      case '›': return 'You: ' + (l.text.length > 60 ? l.text.slice(0, 60) + '…' : l.text);
+      case 'path': return 'Worktree ready';
+      case '$': return 'Ran ' + (l.text.length > 34 ? l.text.slice(0, 34) + '…' : l.text);
+      case '▸': return l.text.length > 64 ? l.text.slice(0, 64) + '…' : l.text;
+      default: return this.AG.some(a => a.short === l.tag) ? `${agent || 'Agent'} launched` : '';
+    }
+  }
+  content(path) {
+    if (this.CONTENT[path] != null) return this.CONTENT[path];
+    const d = this.DIFFS[path];
+    if (d && /^@@ -[01],/.test(d[0])) return d.slice(1).filter(l => l[0] !== '-').map(l => l.slice(1)).join('\n');
+    return null;
+  }
+  openFile(tid, path) {
+    this.setState(s => { const of = s.openFiles[tid] || []; return { wsTab: 'files', activeFile: { ...s.activeFile, [tid]: path }, openFiles: { ...s.openFiles, [tid]: of.includes(path) ? of : [...of, path] } }; });
+  }
+  lineColors(tag) {
+    const { G, A, R, B, T1, T2, T3 } = this.C;
+    const m = { '$': [T3, T1], '✎': [B, T1], 'PASS': [G, T2], 'FAIL': [R, T2], '▸': [T3, T2], '?': [A, A], '›': [B, T1], 'git': [T3, T3], '~': [A, T2], '': [T3, T3], 'path': [B, T3] };
+    return m[tag] || [G, T3];
+  }
+
+  renderVals() {
+    const s = this.state, { G, A, R, B, M, T1, T2, T3 } = this.C, SC = this.SC, SL = this.SL;
+    const tasks = s.tasks, cur = this.proj(s.project);
+    const live = tasks.filter(t => t.agent && t.st);
+    const blocked = live.filter(t => t.st === 'failed' || t.st === 'waiting').sort((a, b) => a.last - b.last);
+    const ord = { failed: 0, waiting: 1, working: 2, paused: 3, done: 4 };
+    const V = s.view;
+    const task = this.task(s.taskId);
+    const title = V === 'dashboard' ? 'Projects' : V === 'agents' ? 'Agents' : V === 'worktrees' ? 'Worktrees' : V === 'board' ? s.project : (task ? task.title : '');
+
+    const navDef = [['dashboard', 'Projects', '⌘1'], ['agents', 'Agents', '⌘2', blocked.length], ['worktrees', 'Worktrees', '⌘3']];
+    const nav = navDef.map(([k, label, key, badge]) => ({ label, key, badge: badge ? String(badge) : '', hasBadge: !!badge, bg: V === k ? 'rgba(255,255,255,0.07)' : 'transparent', fg: V === k ? T1 : T2, onClick: () => this.go(k) }));
+    const sbProjects = this.P.map(p => {
+      const pt = tasks.filter(t => t.project === p.id);
+      const ptl = pt.filter(t => t.agent && t.st).sort((a, b) => ord[a.st] - ord[b.st]);
+      const worst = ptl[0];
+      const exp = p.id === s.project;
+      const onP = p.id === s.project && V === 'board';
+      return {
+        name: p.id, count: ptl.length ? String(ptl.length) : '', dot: worst ? SC[worst.st] : '#33363C', expanded: exp && ptl.length > 0,
+        bg: onP ? 'rgba(255,255,255,0.07)' : 'transparent', fg: onP ? T1 : T2, onClick: () => this.go('board', { project: p.id, focus: (pt.find(t => t.col === 'ready') || pt[0] || {}).id }),
+        tasks: ptl.map(t => { const sel = V === 'workspace' && t.id === s.taskId; return { name: t.title, agent: t.st === 'done' ? '✓' : this.AG.find(a => a.name === t.agent).short, dot: SC[t.st], bg: sel ? 'rgba(149,180,232,0.12)' : 'transparent', fg: sel ? T1 : T2, onClick: () => this.open(t.id) }; })
+      };
+    });
+    const sbAgents = [...live].sort((a, b) => ord[a.st] - ord[b.st]).map(t => ({ name: (t.branch || t.key).split('/').pop() + (t.st === 'done' ? ' ✓' : ''), dot: SC[t.st], fg: t.st === 'failed' || t.st === 'waiting' ? SC[t.st] : '#8A8D95', onClick: () => this.open(t.id) }));
+    const statusCtx = V === 'workspace' && task ? `${task.branch || ''}` : V === 'board' ? `${s.project} · ${cur.head}` : `${live.filter(t => t.st === 'working').length} working · ${blocked.length} need you`;
+
+    // dashboard
+    const lastLineOf = t => { const l = s.term[t.id]; return l && l.length ? l[l.length - 1] : null; };
+    const dashNeeds = blocked.slice(0, 3).map(t => ({ agent: t.agent, state: SL[t.st], c: SC[t.st], ago: this.ago(t.last), task: t.title, project: t.project, msg: t.st === 'failed' ? 'Stopped after tests failed. ' + ((lastLineOf(t) || {}).text || '') : 'Asks: ' + t.ask, border: t.st === 'failed' ? 'rgba(232,106,95,0.35)' : 'rgba(227,178,90,0.3)', onClick: () => this.open(t.id) }));
+    const dashProjects = this.P.map(p => {
+      const pt = tasks.filter(t => t.project === p.id), pl = pt.filter(t => t.agent && t.st);
+      const active = pt.filter(t => t.col === 'progress' || t.col === 'review').length, open = pt.filter(t => t.col !== 'done').length;
+      const wt = pt.filter(t => t.branch).length + s.stale.filter(x => x.project === p.id).length;
+      const needs = pl.filter(t => t.st === 'failed' || t.st === 'waiting').length;
+      let latest = null; pl.forEach(t => { const l = lastLineOf(t); if (l && (!latest || l.t > latest.l.t)) latest = { l, t }; });
+      const act = latest ? `${latest.t.agent}: ${this.act(latest.l, latest.t.agent)} · ${latest.t.branch}` : (p.quiet.split(' · ')[0] || 'No recent activity');
+      return { name: p.id, repo: p.repo, lang: p.lang, active: String(active), open: String(open), wt: String(wt), dots: pl.sort((a, b) => ord[a.st] - ord[b.st]).map(t => ({ c: SC[t.st] })), needs: `${needs} need you`, hasNeeds: needs > 0, idle: pl.length === 0, act, ago: latest ? this.ago(latest.l.t) : (p.quiet.split(' · ')[1] || ''), fg: active ? T1 : T2, onClick: () => this.go('board', { project: p.id }) };
+    });
+    const totalWt = tasks.filter(t => t.branch).length + s.stale.length;
+    const dashSummary = `${this.P.length} repos · ${live.length} agents · ${totalWt} worktrees`;
+    const dashNeedsLabel = blocked.length ? `${blocked.length} agent${blocked.length > 1 ? 's' : ''} blocked` : '';
+
+    // board
+    const COLS = [['backlog', 'Backlog'], ['ready', 'Ready'], ['progress', 'In Progress'], ['review', 'Review'], ['done', 'Done']];
+    const mkCard = t => {
+      const active = !!(t.agent && t.st && t.branch && t.col !== 'done');
+      const f = active ? this.files(t) : [], te = active ? this.tests(t) : null, focused = t.id === s.focus;
+      const startable = t.col === 'backlog' || t.col === 'ready';
+      const note = t.st === 'waiting' ? 'Asks: ' + t.ask : t.st === 'failed' ? `Exited 1 after test run · ${this.ago(t.last)} ago` : t.st === 'paused' ? 'Paused · worktree kept' : '';
+      return {
+        key: t.key, title: t.title, desc: (!active && t.col !== 'done') ? t.desc : (t.col === 'done' ? t.doneNote : ''), hasDesc: !active && !!(t.col === 'done' ? t.doneNote : t.desc),
+        active, agent: t.agent || '', stLabel: SL[t.st] || '', dot: SC[t.st] || M, branch: t.branch || '',
+        files: `${f.length} files`, add: '+' + f.reduce((a, x) => a + x.a, 0), del: '−' + f.reduce((a, x) => a + x.d, 0), tests: te ? te.label : '', testsC: te ? (te.ok ? G : R) : T3,
+        hasNote: !!note, note, noteC: t.st === 'failed' ? R : t.st === 'paused' ? T2 : A, noteBg: t.st === 'failed' ? 'rgba(232,106,95,0.08)' : t.st === 'paused' ? 'rgba(255,255,255,0.04)' : 'rgba(227,178,90,0.08)',
+        focused, showStart: focused && startable, showOpen: focused && active, ring: focused ? 'rgba(149,180,232,0.7)' : '#23252B', bg: focused ? '#181A20' : '#16171B', tc: t.col === 'done' ? T2 : T1,
+        onClick: () => { if (active && s.focus === t.id) this.open(t.id); else this.setState({ focus: t.id }); },
+        onDouble: () => active ? this.open(t.id) : startable ? this.openStart(t.id) : null,
+        onStart: e => { e.stopPropagation(); this.openStart(t.id); }, onOpen: e => { e.stopPropagation(); this.open(t.id); },
+        onDragStart: e => { this._drag = t.id; e.dataTransfer.effectAllowed = 'move'; try { e.dataTransfer.setData('text/plain', t.id); } catch (_) { } }
+      };
+    };
+    const pt = tasks.filter(t => t.project === s.project);
+    const columns = COLS.map(([k, name]) => {
+      const cards = pt.filter(t => t.col === k);
+      const agents = cards.filter(t => t.agent && t.st).length;
+      return {
+        name, count: String(cards.length), hint: k === 'progress' && agents ? `${agents} agent${agents > 1 ? 's' : ''}` : k === 'progress' ? 'drop to start' : k === 'done' ? 'merges + prunes' : '',
+        cards: cards.map(mkCard), isBacklog: k === 'backlog', dropBg: s.dragOver === k ? 'rgba(149,180,232,0.06)' : 'transparent', dropRing: s.dragOver === k ? 'rgba(149,180,232,0.35)' : 'transparent',
+        onDragOver: e => { e.preventDefault(); if (s.dragOver !== k) this.setState({ dragOver: k }); },
+        onDragLeave: e => { if (!e.currentTarget.contains(e.relatedTarget)) this.setState({ dragOver: null }); },
+        onDrop: e => { e.preventDefault(); this.setState({ dragOver: null }); if (this._drag) this.move(this._drag, k); this._drag = null; }
+      };
+    });
+    const pl = pt.filter(t => t.agent && t.st);
+    const boardSummary = [`${pl.filter(t => t.st === 'working').length} working`, pl.filter(t => t.st === 'waiting').length ? `${pl.filter(t => t.st === 'waiting').length} need you` : '', pl.filter(t => t.st === 'failed').length ? `${pl.filter(t => t.st === 'failed').length} failed` : ''].filter(Boolean).join(' · ');
+    const addTask = () => {
+      const title = s.newTitle.trim(); if (!title) return this.setState({ adding: false });
+      const nums = tasks.filter(t => t.project === s.project).map(t => +t.key.split('-')[1]);
+      const key = `${cur.prefix}-${Math.max(0, ...nums) + 1}`;
+      this.setState(st => ({ tasks: [{ id: key, key, project: s.project, title, col: 'backlog', desc: '', agent: null, st: null, branch: null, path: null, ask: null, doneNote: '', started: null, last: Date.now(), preFiles: [], behind: 0 }, ...st.tasks], adding: false, newTitle: '', focus: key }));
+    };
+
+    // agents view
+    const lineMini = t => (s.term[t.id] || []).slice(-5).map(l => ({ t: (l.tag && l.tag !== 'path' ? l.tag + ' ' : '') + l.text + (l.a ? '  ' + l.a + ' ' + l.d : ''), c: this.lineColors(l.tag)[l.tag === '✎' || l.tag === '?' || l.tag === 'FAIL' || l.tag === 'PASS' ? 0 : 1] }));
+    const btn = (l, k, primary, fn) => ({ l, k, bg: primary ? T1 : 'transparent', fg: primary ? '#0F1012' : T2, bd: primary ? T1 : '#2E3037', onClick: e => { e.stopPropagation(); fn(); } });
+    const agBlocked = blocked.map(t => ({
+      agent: t.agent, state: SL[t.st], c: SC[t.st], ago: this.ago(t.last), task: t.title, project: t.project, branch: t.branch, lines: lineMini(t),
+      ask: t.st === 'failed' ? `Stopped after tests failed. Send the failure back to ${t.agent}, or open the workspace?` : t.ask,
+      actions: t.st === 'failed' ? [btn(`Send failure to ${t.agent}`, 'R', true, () => this.answer(t.id, 'retry')), btn('Open', 'O', false, () => this.open(t.id))] : [btn('Yes', 'Y', true, () => this.answer(t.id, 'yes')), btn('No', 'N', false, () => this.answer(t.id, 'no')), btn('Open', 'O', false, () => this.open(t.id))],
+      border: t.st === 'failed' ? 'rgba(232,106,95,0.4)' : 'rgba(227,178,90,0.32)', onClick: () => this.open(t.id)
+    }));
+    const agWorking = live.filter(t => t.st === 'working' || t.st === 'paused').map(t => ({ agent: t.agent, ago: this.ago(t.started || t.last), task: t.title, project: t.project, branch: t.branch, lines: lineMini(t).slice(-4), dot: SC[t.st], onClick: () => this.open(t.id) }));
+    const agDone = live.filter(t => t.st === 'done').map(t => { const te = this.tests(t); return { task: t.title, project: t.project, branch: t.branch, agent: t.agent, ago: this.ago(t.last), tests: te ? te.label.replace('✓', 'passing').replace('✕', 'failing') : '—', onClick: () => this.open(t.id), onReview: e => { e.stopPropagation(); this.open(t.id, 'changes'); } }; });
+    const F = s.agentFilter;
+    const agFilters = [['all', 'All', live.length], ['needs', 'Needs you', blocked.length], ['working', 'Working', agWorking.length], ['done', 'Done', agDone.length]].map(([k, l, n]) => ({ l, n: String(n), bg: F === k ? '#23252B' : 'transparent', fg: F === k ? T1 : k === 'needs' && n ? A : T2, onClick: () => this.setState({ agentFilter: k }) }));
+    const showNeeds = (F === 'all' || F === 'needs') && agBlocked.length > 0, showWorking = (F === 'all' || F === 'working') && agWorking.length > 0, showDone = (F === 'all' || F === 'done') && agDone.length > 0;
+    const agEmpty = !showNeeds && !showWorking && !showDone;
+
+    // worktrees
+    const wtTasks = tasks.filter(t => t.branch);
+    const wtSelT = wtTasks.find(t => t.id === s.wtSel) || wtTasks[0];
+    const commitsOf = t => (s.term[t.id] || []).filter(l => l.tag === 'git').length;
+    const dirtyOf = t => { const l = s.term[t.id] || []; let i = l.length - 1, n = new Set(); for (; i >= 0 && l[i].tag !== 'git'; i--) if (l[i].tag === '✎') n.add(l[i].text); return n.size; };
+    const wtGroups = this.P.map(p => {
+      const rows = wtTasks.filter(t => t.project === p.id);
+      return { name: p.id, meta: `${rows.length} worktree${rows.length === 1 ? '' : 's'}`, has: rows.length > 0, rows: rows.map(t => { const d = dirtyOf(t), sel = wtSelT && t.id === wtSelT.id; return { branch: t.branch, path: t.path, task: `${t.key} ${t.title}`, agent: t.agent ? (t.st === 'done' ? `${t.agent} · done` : t.agent) : 'no agent', dot: SC[t.st] || '#33363C', ahead: `↑${commitsOf(t)}`, behind: `↓${t.behind}`, behindC: t.behind ? A : T3, dirty: d ? `${d} modified` : 'clean', dirtyC: d ? A : T3, last: this.ago(t.last), bg: sel ? 'rgba(149,180,232,0.07)' : 'transparent', ring: sel ? 'rgba(149,180,232,0.35)' : 'transparent', onClick: () => this.setState({ wtSel: t.id }), onDouble: () => this.open(t.id) }; }) };
+    }).filter(g => g.has);
+    const stale = s.stale.map(x => ({ ...x, onPrune: () => { this.setState(st => ({ stale: st.stale.filter(y => y.id !== x.id) })); this.toast(`Pruned ${x.branch} · freed ${x.size}`); } }));
+    const hasStale = stale.length > 0;
+    const pruneAll = () => { const n = s.stale.length; this.setState({ stale: [] }); this.toast(`Pruned ${n} worktrees · freed 1.2 GB`); };
+    const wd = wtSelT ? {
+      has: true, key: `${wtSelT.project} · ${wtSelT.key}`, branch: wtSelT.branch, agent: wtSelT.agent ? `${wtSelT.agent} · ${SL[wtSelT.st] || 'Stopped'}` : 'No agent', c: SC[wtSelT.st] || T3,
+      behind: wtSelT.behind > 0, behindMsg: `main has moved ${wtSelT.behind} commit${wtSelT.behind > 1 ? 's' : ''} since this worktree was created.`, rebaseLabel: `Ask ${wtSelT.agent || 'agent'} to rebase`,
+      onRebase: () => { this.send(wtSelT.id, 'Rebase this branch onto main and rerun tests.'); this.patch(wtSelT.id, { behind: 0 }); this.toast(`Sent rebase request to ${wtSelT.agent}`); },
+      onRebaseSelf: () => { this.patch(wtSelT.id, { behind: 0 }); this.toast(`Rebased ${wtSelT.branch} onto main`); },
+      rows: [['Path', wtSelT.path], ['Base', this.proj(wtSelT.project).head], ['vs main', `↑${commitsOf(wtSelT)} ahead · ↓${wtSelT.behind} behind`], ['Changes', dirtyOf(wtSelT) ? `${dirtyOf(wtSelT)} uncommitted` : 'clean'], ['Created', wtSelT.started ? `${this.ago(wtSelT.started)} ago by Start task` : '—']].map(([k, v]) => ({ k, v })),
+      actions: [['Open workspace', '↵', T1, () => this.open(wtSelT.id)], ['Open terminal here', '⌘T', T1, () => this.open(wtSelT.id, 'terminal')], ['Browse files', 'F', T1, () => this.open(wtSelT.id, 'files')], ['Remove worktree', '⌘⌫', R, () => {
+        if (wtSelT.st === 'working') return this.toast(`Pause ${wtSelT.agent} before removing its worktree`);
+        this.patch(wtSelT.id, { branch: null, path: null, agent: null, st: null, col: wtSelT.col === 'done' ? 'done' : 'ready' }); this.toast(`Removed ${wtSelT.path} · branch ${wtSelT.branch} kept`);
+      }]].map(([l, k, c, fn]) => ({ l, k, c, onClick: fn })),
+      foot: wtSelT.agent ? `Removing stops ${wtSelT.agent} and deletes the folder. The branch and its commits are kept.` : 'Removing deletes the folder. The branch is kept.'
+    } : { has: false, rows: [], actions: [] };
+    const wtSummary = `${totalWt} on disk · root ~/.wt`;
+
+    // workspace
+    let ws = { has: false };
+    if (task && V === 'workspace') {
+      const t = task, p = this.proj(t.project), f = this.files(t), te = this.tests(t), lines = s.term[t.id] || [];
+      const agentShort = (this.AG.find(a => a.name === t.agent) || { short: 'agent' }).short;
+      const shells = this.shellsOf(s, t.id);
+      const shellName = (x, i) => x.name === 'zsh' && shells.filter(y => y.name === 'zsh').length > 1 ? `zsh ${shells.filter(y => y.name === 'zsh').indexOf(x) + 1}` : x.name;
+      const colName = (COLS.find(c => c[0] === t.col) || [0, ''])[1];
+      const env = [['Task', t.key, t.title, T1, false], ['Branch', t.branch || '—', `↑${commitsOf(t)} · ↓${t.behind} vs main`, T1, false], ['Worktree', t.path || '—', dirtyOf(t) ? `${dirtyOf(t)} uncommitted` : 'clean', T2, false], ['Agent', t.agent ? `${t.agent} · ${SL[t.st] || ''}` : '—', t.started ? `${this.ago(t.started)} · ${agentShort}` : '', SC[t.st] || T2, true], ['Terminal', `${shells.length + 1} session${shells.length ? 's' : ''}`, [agentShort, ...shells.map(shellName)].join(' · '), T2, false]]
+        .map(([label, v, sub, vc, isAgent], i, arr) => ({ label, v, sub, vc, dot: isAgent ? (SC[t.st] || T3) : T3, fill: isAgent ? (SC[t.st] || 'transparent') : i === 0 ? T3 : 'transparent', line: i === arr.length - 1 ? 'transparent' : '#2E3037' }));
+      const term = lines.map(l => { const [ac, bc] = this.lineColors(l.tag); return { a: l.tag === 'path' ? '~' : l.tag, ac, b: l.tag === 'path' ? l.text : l.text, bc, cA: l.a, cD: l.d }; });
+      const activity = lines.map(l => ({ t: this.act(l, t.agent), m: this.ago(l.t), l })).filter(x => x.t).slice(-10).reverse().map((x, i) => ({ t: x.t, m: x.m, c: x.l.tag === 'PASS' ? G : x.l.tag === 'FAIL' ? R : x.l.tag === '?' ? A : x.l.tag === '›' ? B : i === 0 && t.st === 'working' ? G : T3, tc: i === 0 ? T1 : T2 }));
+      const addT = f.reduce((a, x) => a + x.a, 0), delT = f.reduce((a, x) => a + x.d, 0);
+      // files / editor
+      const fmap = new Map(f.map(x => [x.path, x]));
+      const allPaths = [...new Set([...(this.BASE[t.project] || []), ...f.map(x => x.path)])];
+      const root = { dirs: {}, files: [] };
+      const onlyChanged = !!s.filesChanged;
+      (onlyChanged ? f.map(x => x.path) : allPaths).forEach(pth => { const parts = pth.split('/'); let n = root; parts.slice(0, -1).forEach(pp => { n.dirs[pp] = n.dirs[pp] || { dirs: {}, files: [] }; n = n.dirs[pp]; }); n.files.push(pth); });
+      const withContent = allPaths.filter(pth => this.content(pth) != null);
+      const lastEdit = [...lines].reverse().find(l => l.tag === '✎' && this.content(l.text) != null);
+      const activePath = s.activeFile[t.id] || (lastEdit ? lastEdit.text : withContent[0]) || allPaths[0];
+      const openList = s.openFiles[t.id] && s.openFiles[t.id].length ? s.openFiles[t.id] : [activePath];
+      const ekey = pth => t.id + '|' + pth;
+      const textOf = pth => s.edits[ekey(pth)] != null ? s.edits[ekey(pth)] : this.content(pth);
+      const isDirty = pth => s.edits[ekey(pth)] != null && s.edits[ekey(pth)] !== (s.saved[ekey(pth)] != null ? s.saved[ekey(pth)] : this.content(pth));
+      const explorer = [];
+      const walk = (node, prefix, depth) => {
+        Object.keys(node.dirs).sort().forEach(dn => {
+          const full = prefix ? prefix + '/' + dn : dn, ck = t.id + '|' + full, closed = !!s.collapsed[ck];
+          const mod = f.some(x => x.path.startsWith(full + '/'));
+          const guides = Array.from({ length: depth }, () => ({}));
+          explorer.push({ name: dn, isDir: true, isFile: false, open: !closed, closed, rot: closed ? 'rotate(0deg)' : 'rotate(90deg)', guides, fc: mod ? '#C9A45F' : '#7E818A', fg: T2, bg: 'transparent', sh: 'none', s: mod ? '●' : '', sc: A, ic: '', icC: '', onClick: () => this.setState(st => ({ collapsed: { ...st.collapsed, [ck]: !closed } })) });
+          if (!closed) walk(node.dirs[dn], full, depth + 1);
+        });
+        node.files.sort().forEach(pth => {
+          const fx = fmap.get(pth), sel = pth === activePath, nm = pth.split('/').pop(), [ic, icC] = this.fileIcon(nm);
+          explorer.push({ name: nm, isDir: false, isFile: true, open: false, closed: false, rot: '', guides: Array.from({ length: depth }, () => ({})), fc: '', fg: sel ? T1 : fx ? (fx.d === 0 ? '#9ED9B0' : '#E5C98F') : T2, bg: sel ? 'rgba(149,180,232,0.1)' : 'transparent', sh: sel ? 'inset 2px 0 0 #95B4E8' : 'none', s: fx ? (fx.d === 0 ? 'A' : 'M') : '', sc: fx && fx.d === 0 ? G : A, ic, icC, onClick: () => this.openFile(t.id, pth) });
+        });
+      };
+      walk(root, '', 0);
+      const edTabs = openList.map(pth => ({ name: pth.split('/').pop(), dirty: isDirty(pth), bg: pth === activePath ? '#0C0D0F' : 'transparent', fg: pth === activePath ? T1 : T3, bb: pth === activePath ? '#0C0D0F' : '#1F2126',
+        onClick: () => this.setState(st => ({ activeFile: { ...st.activeFile, [t.id]: pth } })),
+        onClose: e => { e.stopPropagation(); const rest = openList.filter(x => x !== pth); this.setState(st => ({ openFiles: { ...st.openFiles, [t.id]: rest }, activeFile: { ...st.activeFile, [t.id]: pth === activePath ? (rest[rest.length - 1] || '') : activePath } })); } }));
+      const edText = activePath ? textOf(activePath) : null;
+      const edLines = edText != null ? edText.split('\n').length : 0;
+      const afx = fmap.get(activePath);
+      const agentTouched = lastEdit && lastEdit.text === activePath && t.st === 'working';
+      const saveFile = () => {
+        if (!activePath || !isDirty(activePath)) return;
+        const k = ekey(activePath), txt = s.edits[k];
+        this.setState(st => ({ saved: { ...st.saved, [k]: txt } }));
+        if (t.agent && t.st) { this.send(t.id, `I edited ${activePath} by hand — pull it in before your next change.`); this.toast(`Saved ${activePath.split('/').pop()} · ${t.agent} notified`); }
+        else this.toast(`Saved ${activePath.split('/').pop()}`);
+      };
+      const files = {
+        path: t.path || '', rows: explorer, tabs: edTabs.map(x => ({ ...x, ic: this.fileIcon(x.name)[0], icC: this.fileIcon(x.name)[1] })),
+        onlyChanged, chgBg: onlyChanged ? 'rgba(227,178,90,0.12)' : 'transparent', chgFg: onlyChanged ? A : T3, chgBd: onlyChanged ? 'rgba(227,178,90,0.4)' : '#2A2C31', changedN: String(f.length), totalN: String(allPaths.length),
+        onToggleChanged: () => this.setState({ filesChanged: !onlyChanged }),
+        onCollapseAll: () => { const c = { ...s.collapsed }; allPaths.forEach(pth => { const parts = pth.split('/'); for (let i = 1; i < parts.length; i++) c[t.id + '|' + parts.slice(0, i).join('/')] = true; }); this.setState({ collapsed: c }); },
+        onExpandAll: () => { const c = { ...s.collapsed }; Object.keys(c).forEach(k => { if (k.startsWith(t.id + '|')) delete c[k]; }); this.setState({ collapsed: c }); }, hasTabs: edTabs.length > 0,
+        dir: activePath && activePath.includes('/') ? activePath.split('/').slice(0, -1).join('/') + '/' : '', name: activePath ? activePath.split('/').pop() : '',
+        status: afx ? (afx.d === 0 ? 'added by ' + (t.agent || 'agent') : 'modified by ' + (t.agent || 'agent')) : 'unchanged', statusC: afx ? (afx.d === 0 ? G : A) : T3,
+        hasText: edText != null, noText: activePath && edText == null, text: edText || '', gutter: Array.from({ length: edLines }, (_, i) => ({ n: String(i + 1) })), height: (edLines * 20 + 24) + 'px',
+        dirty: activePath ? isDirty(activePath) : false, onSave: saveFile, canDiff: !!afx, onDiff: () => this.setState(st => ({ wsTab: 'changes', selFile: { ...st.selFile, [t.id]: activePath } })),
+        onEdit: e => { const v = e.target.value; this.setState(st => ({ edits: { ...st.edits, [ekey(activePath)]: v } })); },
+        onKey: e => { if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') { e.preventDefault(); saveFile(); } if (e.key === 'Tab') { e.preventDefault(); const el = e.target, a = el.selectionStart, b = el.selectionEnd, v = el.value.slice(0, a) + '  ' + el.value.slice(b); this.setState(st => ({ edits: { ...st.edits, [ekey(activePath)]: v } })); this.later(() => { el.selectionStart = el.selectionEnd = a + 2; }, 0); } },
+        agentTouched, touchedMsg: agentTouched ? `${t.agent} is editing this file. Saving sends your change to ${t.agent} before its next step.` : '',
+        lines: String(edLines)
+      };
+      const wsTabs = [['terminal', 'Terminal', ''], ['files', 'Files', ''], ['changes', 'Changes', String(f.length)], ['preview', 'Preview', '']].map(([k, l, n]) => ({ l, n, fg: s.wsTab === k ? T1 : T2, sh: s.wsTab === k ? 'inset 0 -1px 0 #E8E8E6' : 'none', onClick: () => this.setState({ wsTab: k, pvPick: false }) }));
+      const running = t.st === 'working';
+      const primary = t.col === 'review' ? ['Merge & finish', '⌘⇧M', () => { this.move(t.id, 'done'); this.go('board', { project: t.project }); }] : t.col === 'progress' ? ['Move to Review', '⌘⇧R', () => this.move(t.id, 'review')] : ['Move to In Progress', '', () => this.move(t.id, 'progress')];
+      // changes
+      const selPath = s.selFile[t.id] && f.some(x => x.path === s.selFile[t.id]) ? s.selFile[t.id] : ((f.find(x => this.DIFFS[x.path] && x.path.includes('address')) || f.find(x => this.DIFFS[x.path]) || f[f.length - 1] || {}).path);
+      const tree = []; let lastDir = null;
+      [...f].sort((a, b) => a.path.localeCompare(b.path)).forEach(x => {
+        const parts = x.path.split('/'), dir = parts.length > 1 ? parts.slice(0, -1).join('/') : '.', name = parts[parts.length - 1];
+        if (dir !== lastDir) { tree.push({ s: '', name: dir + '/', a: '', d: '', v: '', pad: '8px', fg: T3, sc: T3, bg: 'transparent', onClick: () => { } }); lastDir = dir; }
+        const sel = x.path === selPath, isNew = x.d === 0;
+        tree.push({ s: isNew ? 'A' : 'M', name, a: '+' + x.a, d: x.d ? '−' + x.d : '', v: s.viewed[x.path] ? '✓' : '', pad: '22px', fg: sel ? T1 : T2, sc: isNew ? G : A, bg: sel ? 'rgba(149,180,232,0.1)' : 'transparent', onClick: () => this.setState(st => ({ selFile: { ...st.selFile, [t.id]: x.path }, commentAt: null })) });
+      });
+      const viewedN = f.filter(x => s.viewed[x.path]).length;
+      const selF = f.find(x => x.path === selPath) || { path: '', a: 0, d: 0 };
+      const raw = this.DIFFS[selPath];
+      const diff = [];
+      if (raw) {
+        let o = 0, n = 0;
+        raw.forEach((ln, idx) => {
+          const k = ln[0]; let oo = '', nn = '', text = ln.slice(1);
+          if (k === '@') { const mm = /-(\d+)(?:,\d+)? \+(\d+)/.exec(ln); o = +mm[1] - 1; n = +mm[2] - 1; text = ln; }
+          else if (k === '+') { n++; nn = n; } else if (k === '-') { o++; oo = o; } else { o++; n++; oo = o; nn = n; }
+          const add = k === '+', del = k === '-', h = k === '@';
+          const ck = selPath + ':' + idx, lineNo = nn || oo;
+          diff.push({ isLine: true, isComment: false, isComposer: false, o: String(oo), n: String(nn), t: text, sign: add ? '+' : del ? '−' : '', bg: add ? 'rgba(107,203,139,0.08)' : del ? 'rgba(232,106,95,0.08)' : h ? 'rgba(149,180,232,0.05)' : 'transparent', edge: add ? 'rgba(107,203,139,0.6)' : del ? 'rgba(232,106,95,0.6)' : 'transparent', sc: add ? G : R, tc: h ? T3 : add || del ? T1 : T2, onClick: h ? () => { } : () => this.setState({ commentAt: { key: ck, line: lineNo, path: selPath }, commentText: '' }) });
+          (s.comments[ck] || []).forEach(c => diff.push({ isLine: false, isComment: true, isComposer: false, cLine: 'L' + lineNo, cText: c.text, cAgent: t.agent || 'Agent', cReply: c.reply, cStatus: c.status }));
+          if (s.commentAt && s.commentAt.key === ck) diff.push({ isLine: false, isComment: false, isComposer: true, cLine: 'L' + lineNo });
+        });
+      }
+      const sendComment = () => {
+        const c = s.commentAt, text = s.commentText.trim(); if (!c || !text) return;
+        const base = c.path.split('/').pop();
+        this.setState(st => ({ comments: { ...st.comments, [c.key]: [...(st.comments[c.key] || []), { text, reply: t.st === 'working' ? 'Queued — will handle after the current step.' : 'Picking this up now.', status: 'queued' }] }, commentAt: null, commentText: '' }));
+        this.send(t.id, `Review comment on ${base}:${c.line} — ${text}`);
+        this.toast(`Comment sent to ${t.agent}`);
+      };
+      const commentCount = Object.keys(s.comments).filter(k => f.some(x => k.startsWith(x.path + ':'))).reduce((a, k) => a + s.comments[k].length, 0);
+      const commits = lines.filter(l => l.tag === 'git').slice(-5).reverse().map(l => ({ h: l.text.split(' ')[1], m: (l.text.match(/"(.*)"/) || [0, ''])[1], t: this.ago(l.t), hc: B }));
+      const dirtyN = dirtyOf(t);
+      if (dirtyN) commits.unshift({ h: '●', m: `uncommitted · ${dirtyN} file${dirtyN > 1 ? 's' : ''}`, t: 'now', hc: A });
+      // preview
+      const pv = s.pvPicked, pick = k => ({ o: pv === k ? '2px solid #5B86D6' : s.pvPick ? '1px dashed rgba(91,134,214,0.7)' : 'none', sel: pv === k, onClick: e => { if (!s.pvPick && !pv) return; e.stopPropagation(); this.setState({ pvPicked: k, pvPick: false, pvMsg: '' }); } });
+      const selectors = { line1: 'input#line1 · ShippingForm.tsx:58', delivery: 'fieldset.delivery · ShippingOptions.tsx:21', err: 'p.field-error · CheckoutForm.tsx:142', pay: 'button.pay · OrderSummary.tsx:77' };
+      const mainMode = s.pvMain;
+      ws = {
+        has: true, key: t.key, title: t.title, desc: t.desc, colName, project: t.project, agent: t.agent || 'No agent', stLabel: SL[t.st] || 'Stopped', stC: SC[t.st] || T3, branch: t.branch,
+        files, isFiles: s.wsTab === 'files', onOpenInFiles: () => this.openFile(t.id, selPath),
+        ...(() => {
+          const activeT = s.activeTerm[t.id] || 'agent', actShell = shells.find(x => x.id === activeT);
+          const split = s.split && shells.length > 0;
+          const paneIds = split ? ['agent', (actShell || shells[0]).id] : [actShell ? actShell.id : 'agent'];
+          const leaf = (t.path || '').split('/').pop(), bleaf = (t.branch || '').split('/').pop(), prompt = `${leaf} ⎇ ${bleaf} ❯ `;
+          const KC = { prompt: T1, out: T2, err: R, ok: G, dim: T3, hash: A, warn: A };
+          const panes = paneIds.map((pid, i) => {
+            if (pid === 'agent') return { isAgent: true, isShell: false, bl: i ? '1px solid #1F2126' : 'none' };
+            const sh = shells.find(x => x.id === pid);
+            return { isAgent: false, isShell: true, bl: i ? '1px solid #1F2126' : 'none', running: !!sh.running, showPrompt: !sh.running, prompt,
+              lines: sh.lines.map(l => ({ pre: l.k === 'prompt' ? prompt : '', text: l.text, c: KC[l.k] || T2 })),
+              input: s.shellInput[pid] || '', onInput: e => { const v = e.target.value; this.setState(st => ({ shellInput: { ...st.shellInput, [pid]: v } })); },
+              onKey: e => this.shellKey(e, t.id, pid), setRef: el => { if (el) this.shellEls[pid] = el; },
+              focus: () => { const el = this.shellEls[pid]; if (el && !String(window.getSelection() || '')) el.focus(); },
+              stopLabel: sh.running ? '● running' : '', foot: sh.running ? `${sh.name} · ⌃C to stop` : '↑ history · ⌃C interrupt · ⌃L clear · type help' };
+          });
+          const termTabs = [{ id: 'agent', name: agentShort, agent: true }, ...shells.map(x => ({ ...x, name: shellName(x) }))].map(x => {
+            const on = paneIds.includes(x.id), dot = x.agent ? (SC[t.st] || T3) : x.running ? G : '';
+            return { name: x.name, hasDot: !!dot, dot, bg: on ? '#1A1C20' : 'transparent', bd: on ? '#2A2C31' : 'transparent', fg: on ? T1 : T3, closable: !x.agent, pre: x.agent ? '◆' : '›', preC: x.agent ? B : T3,
+              onClick: () => this.setState(st => ({ activeTerm: { ...st.activeTerm, [t.id]: x.id } })), onClose: e => { e.stopPropagation(); this.closeShell(t.id, x.id); } };
+          });
+          return { panes, termTabs, onAddShell: () => this.addShell(t.id), splitOn: split, splitFg: split ? T1 : T3, splitBg: split ? '#1A1C20' : 'transparent', canSplit: shells.length > 0,
+            onSplit: () => { if (!shells.length) this.addShell(t.id); this.setState({ split: !s.split }); },
+            termCols: split ? '290px minmax(0,1fr)' : '290px minmax(0,1fr) 260px', showActivity: !split };
+        })(),
+        env, term, activity, tabs: wsTabs, isTerm: s.wsTab === 'terminal', isChanges: s.wsTab === 'changes', isPreview: s.wsTab === 'preview',
+        isWaiting: t.st === 'waiting', isFailed: t.st === 'failed', isDone: t.st === 'done', isPaused: t.st === 'paused', ask: t.ask || '',
+        onYes: () => this.answer(t.id, 'yes'), onNo: () => this.answer(t.id, 'no'), onRetry: () => this.answer(t.id, 'retry'),
+        primaryL: primary[0], primaryK: primary[1], onPrimary: primary[2],
+        pauseL: running ? 'Pause agent' : t.st === 'paused' ? 'Resume agent' : '', hasPause: running || t.st === 'paused', onPause: () => { this.patch(t.id, { st: running ? 'paused' : 'working' }); this.toast(running ? `${t.agent} paused` : `${t.agent} resumed`); },
+        agentShort, sessDot: SC[t.st] || T3,
+        placeholder: t.st === 'working' ? `Message ${t.agent} — it's working; messages queue until the next step` : t.st === 'waiting' ? `Reply to ${t.agent}…` : t.st === 'done' ? `Ask ${t.agent} for a follow-up change…` : `Message ${t.agent || 'agent'}…`,
+        msg: s.msg, onMsg: e => this.setState({ msg: e.target.value }), onMsgKey: e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); this.send(t.id, s.msg); this.setState({ msg: '' }); } },
+        testsL: te ? te.label.replace('✓', 'passing').replace('✕', 'failing') : 'not run', testsC: te ? (te.ok ? G : R) : T3, commitsN: String(commitsOf(t)), agentTime: t.started ? this.ago(t.started).replace('now', '<1m') : '—',
+        nfiles: `${f.length} files`, add: '+' + addT, del: '−' + delT, tree, viewedL: `${viewedN}/${f.length} viewed`, viewedPct: (f.length ? Math.round(viewedN / f.length * 100) : 0) + '%', commits,
+        selDir: selPath ? selPath.split('/').slice(0, -1).join('/') + (selPath.includes('/') ? '/' : '') : '', selName: selPath ? selPath.split('/').pop() : 'No changes yet', selA: '+' + selF.a, selD: selF.d ? '−' + selF.d : '',
+        hasDiff: !!raw, noDiff: !raw && !!selPath, noFiles: !selPath, diff, commentText: s.commentText, onCommentText: e => this.setState({ commentText: e.target.value }),
+        onCommentKey: e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); sendComment(); } }, onSendComment: sendComment, onCancelComment: () => this.setState({ commentAt: null }),
+        isViewed: !!s.viewed[selPath], viewedBtn: s.viewed[selPath] ? 'Viewed ✓' : 'Mark viewed', viewedFg: s.viewed[selPath] ? G : T2,
+        onViewed: () => { if (!selPath) return; const on = !s.viewed[selPath]; const nv = { ...s.viewed, [selPath]: on ? 1 : 0 }; const sorted = [...f].sort((a, b) => a.path.localeCompare(b.path)); const next = on ? sorted.find(x => !nv[x.path]) : null; this.setState({ viewed: nv, ...(next ? { selFile: { ...s.selFile, [t.id]: next.path } } : {}) }); },
+        onNextFile: () => { const sorted = [...f].sort((a, b) => a.path.localeCompare(b.path)); const i = sorted.findIndex(x => x.path === selPath); const nx = sorted[(i + 1) % sorted.length]; if (nx) this.setState({ selFile: { ...s.selFile, [t.id]: nx.path } }); },
+        reviewFoot: commentCount ? `${commentCount} comment${commentCount > 1 ? 's' : ''} sent · ${t.agent} picks up review comments between steps` : 'Click any line to comment. Comments go straight to the agent.',
+        hasPreview: t.id === 'MS-38', noPreview: t.id !== 'MS-38', pvPort: 'localhost:3000', pvPick: s.pvPick, pickBorder: s.pvPick ? '#95B4E8' : 'rgba(149,180,232,0.5)', pickBg: s.pvPick ? 'rgba(149,180,232,0.15)' : 'transparent',
+        onPick: () => this.setState({ pvPick: !s.pvPick, pvPicked: null }),
+        pvBranchBg: mainMode ? 'transparent' : '#23252B', pvBranchFg: mainMode ? T2 : T1, pvMainBg: mainMode ? '#23252B' : 'transparent', pvMainFg: mainMode ? T1 : T2,
+        onPvBranch: () => this.setState({ pvMain: false }), onPvMain: () => this.setState({ pvMain: true, pvPicked: null }),
+        pvPortLabel: mainMode ? 'main · :3001' : 'this worktree · :3000',
+        pvErr: !mainMode, pvLineBorder: mainMode ? '#D6D5D0' : '#C9483C', payBg: mainMode ? '#1C1D20' : '#B9B8B3',
+        pk: { line1: pick('line1'), delivery: pick('delivery'), err: pick('err'), pay: pick('pay') }, pickedSel: pv ? selectors[pv] : '', hasPicked: !!pv,
+        pvMsg: s.pvMsg, onPvMsg: e => this.setState({ pvMsg: e.target.value }),
+        onPvKey: e => { if (e.key === 'Enter' && s.pvMsg.trim()) { e.preventDefault(); this.send(t.id, `[preview ${selectors[pv].split(' · ')[0]}] ${s.pvMsg.trim()}`); this.setState({ pvPicked: null, pvMsg: '' }); this.toast(`Sent to ${t.agent} with screenshot + selector`); } },
+        onStartDev: () => { this.setState({ wsTab: 'terminal' }); this.toast(`Starting ${p.lang === 'Go' ? 'go run ./cmd/gateway' : 'pnpm dev'} in a new terminal`); },
+        pvHint: s.pvPick ? 'Click an element in the page' : 'Reloads on agent edits · last reload 14s ago after route.ts',
+        breadcrumbAgent: t.agent ? `${t.agent} · ${SL[t.st]}` : 'No agent'
+      };
+    }
+
+    // start modal
+    let st = { show: false };
+    if (s.start && !s.start.bg) {
+      const t = this.task(s.start.taskId), p = this.proj(t.project), sel = s.start.agent, leaf = s.start.branch.split('/').pop();
+      const running = live.map(x => x.agent);
+      const steps = [['Create branch', `${s.start.branch} from ${p.head}`], ['Add worktree', `~/.wt/${t.project}/${leaf}`], ['Run setup', p.setup], [`Launch ${this.AG[sel].name}`, `with first message from ${t.key}`], ['Open workspace', '']]
+        .map(([tt, d], i) => { const done = i < s.start.step, run = i === s.start.step; return { g: done ? '✓' : '', t: tt, d, c: done ? G : run ? A : '#3A3C42', fill: done ? G : 'transparent', tc: done || run ? T1 : T3 }; });
+      st = {
+        show: true, isConfig: s.start.phase === 'config', isLaunch: s.start.phase === 'launch', key: t.key, title: t.title, project: t.project, head: p.head, agentName: this.AG[sel].name,
+        agents: this.AG.map((a, i) => { const n = running.filter(x => x === a.name).length; return { name: a.name, note: a.note, meta: `${a.ver} · ${n} running`, n: String(i + 1), bg: i === sel ? 'rgba(149,180,232,0.08)' : 'transparent', ring: i === sel ? 'rgba(149,180,232,0.45)' : 'transparent', fg: i === sel ? T1 : T2, kc: i === sel ? B : T3, onClick: () => this.setState({ start: { ...s.start, agent: i } }) }; }),
+        branch: s.start.branch, onBranch: e => this.setState({ start: { ...s.start, branch: e.target.value.replace(/\s/g, '-') } }),
+        wtPath: `~/.wt/${t.project}/${leaf}`, setup: p.setup.split(' — ')[0], msg: s.start.msg, onMsg: e => this.setState({ start: { ...s.start, msg: e.target.value } }),
+        onStart: () => this.confirmStart(), onCancel: () => this.setState({ start: null }), onBg: () => this.setState({ start: { ...s.start, bg: true } }), stop: e => e.stopPropagation(),
+        steps, elapsed: (s.start.step * 0.6 + 0.4).toFixed(1) + 's'
+      };
+    }
+
+    // palette
+    let pal = { show: false };
+    if (s.palette) {
+      const q = s.palette.q.toLowerCase();
+      const items = [
+        ...[['Go to Projects', '⌘1', () => this.go('dashboard')], ['Go to Agents', '⌘2', () => this.go('agents')], ['Go to Worktrees', '⌘3', () => this.go('worktrees')], ['Jump to next blocked agent', '⌘J', () => this.jumpBlocked()]].map(([l, k, fn]) => ({ l, k, kind: 'Go', fn, dot: 'transparent' })),
+        ...this.P.map(p => ({ l: `Open board · ${p.id}`, k: '', kind: 'Project', fn: () => this.go('board', { project: p.id }), dot: 'transparent' })),
+        ...live.sort((a, b) => ord[a.st] - ord[b.st]).map(t => ({ l: `${t.title} — ${t.agent} · ${SL[t.st]}`, k: '↵', kind: 'Task', fn: () => this.open(t.id), dot: SC[t.st] })),
+        ...tasks.filter(t => t.col === 'backlog' || t.col === 'ready').map(t => ({ l: `Start task · ${t.title}`, k: 'S', kind: t.project, fn: () => this.openStart(t.id), dot: 'transparent' }))
+      ].filter(x => !q || x.l.toLowerCase().includes(q) || x.kind.toLowerCase().includes(q)).slice(0, 10);
+      const idx = Math.min(s.palette.idx, Math.max(0, items.length - 1));
+      pal = {
+        show: true, q: s.palette.q, empty: items.length === 0,
+        items: items.map((x, i) => ({ ...x, bg: i === idx ? 'rgba(255,255,255,0.06)' : 'transparent', fg: i === idx ? T1 : T2, onClick: () => { this.setState({ palette: null }); x.fn(); }, onHover: () => this.setState({ palette: { ...s.palette, idx: i } }) })),
+        onQ: e => this.setState({ palette: { q: e.target.value, idx: 0 } }),
+        onKey: e => {
+          if (e.key === 'ArrowDown') { e.preventDefault(); this.setState({ palette: { ...s.palette, idx: Math.min(idx + 1, items.length - 1) } }); }
+          else if (e.key === 'ArrowUp') { e.preventDefault(); this.setState({ palette: { ...s.palette, idx: Math.max(idx - 1, 0) } }); }
+          else if (e.key === 'Enter' && items[idx]) { e.preventDefault(); this.setState({ palette: null }); items[idx].fn(); }
+        },
+        onClose: () => this.setState({ palette: null }), stop: e => e.stopPropagation()
+      };
+    }
+    const toast = s.toast ? { show: true, text: s.toast.text, dot: s.toast.tone === 'waiting' ? A : s.toast.tone === 'done' ? G : B } : { show: false };
+
+    return {
+      title, nav, sbProjects, sbAgents, statusCtx, openPalette: () => { this.setState({ palette: { q: '', idx: 0 } }); this.later(() => this.palRef.current && this.palRef.current.focus(), 30); },
+      isDash: V === 'dashboard', isBoard: V === 'board', isAgents: V === 'agents', isWt: V === 'worktrees', isWs: V === 'workspace' && ws.has,
+      dashNeeds, hasNeeds: dashNeeds.length > 0, noNeeds: dashNeeds.length === 0, dashNeedsLabel, dashProjects, dashSummary, staleCount: String(s.stale.length), hasStaleDash: s.stale.length > 0, goWt: () => this.go('worktrees'),
+      board: { name: cur.id, repo: cur.repo, head: cur.head, summary: boardSummary || 'no agents running' }, columns,
+      adding: s.adding, notAdding: !s.adding, newTitle: s.newTitle, onNewTitle: e => this.setState({ newTitle: e.target.value }), onNewKey: e => { if (e.key === 'Enter') { e.preventDefault(); addTask(); } }, onAdd: () => this.setState({ adding: true, newTitle: '' }), onAddBlur: () => { if (!s.newTitle.trim()) this.setState({ adding: false }); },
+      agFilters, agBlocked, agWorking, agDone, showNeeds, showWorking, showDone, agEmpty,
+      wtGroups, stale, hasStale, pruneAll, wd, wtSummary, staleSize: stale.length === 2 ? '1.2 GB' : stale.length ? stale[0].size : '',
+      ws, termRef: this.termRef, msgRef: this.msgRef, palRef: this.palRef, st, pal, toast
+    };
+  }
+}
+</script>
+</body>
+</html>

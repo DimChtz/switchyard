@@ -1,0 +1,110 @@
+:root {
+  /* backgrounds */
+  --bg-app: #0f1012;
+  --bg-chrome: #0b0c0e;
+  --bg-panel: #15161a;
+  --bg-panel-2: #131418;
+  --bg-panel-3: #121317;
+  --bg-console: #0c0d0f;
+
+  /* borders */
+  --bd-1: #1f2126;
+  --bd-2: #23252b;
+  --bd-3: #2a2c31;
+  --bd-4: #2e3037;
+  --bd-5: #3a3c43;
+  --bd-row: #1b1d21;
+
+  /* text */
+  --t1: #e8e8e6;
+  --t2: #a4a7ae;
+  --t3: #6e717a;
+  --t4: #5a5d66;
+  --t5: #4e5159;
+
+  /* accents / status */
+  --c-green: #6bcb8b;
+  --c-amber: #e3b25a;
+  --c-red: #e86a5f;
+  --c-blue: #95b4e8;
+  --c-blue-hover: #c3d5f5;
+
+  --font-ui: 'Geist Variable', Geist, system-ui, sans-serif;
+  --font-mono: 'Geist Mono Variable', 'Geist Mono', ui-monospace, monospace;
+  /* The rest of the tokens, and the chosen theme's values, are set by lib/theme.ts (shared/themes.ts). */
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg-app);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+  color: var(--t1);
+}
+
+#root {
+  height: 100%;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+a {
+  color: var(--c-blue);
+  text-decoration: none;
+}
+a:hover {
+  color: var(--c-blue-hover);
+}
+
+textarea,
+input,
+button {
+  font-family: inherit;
+}
+
+button {
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: inherit;
+  padding: 0;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--bd-3);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+@keyframes sy-tip-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+}
+/* A full tab row scrolls sideways (wheel or trackpad) with a hairline bar. */
+.sy-tabstrip::-webkit-scrollbar {
+  height: 2px;
+}
+
+/* Theme effects */
+html.fx-scanlines body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2147483647;
+  background: repeating-linear-gradient(to bottom, transparent 0, transparent 2px, rgba(0, 0, 0, 0.22) 3px, transparent 4px);
+}
+html.fx-glow body {
+  text-shadow: 0 0 5px color-mix(in srgb, var(--t1) 38%, transparent);
+}

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="width:232px;height:100%;background:#0B0C0E;border-right:1px solid #1F2126;display:flex;flex-direction:column;font-family:Geist,system-ui,sans-serif;box-sizing:border-box;color:#A4A7AE">
+  <div style="padding:10px 10px 6px">
+    <div style="display:flex;align-items:center;gap:8px;height:30px;padding:0 10px;border:1px solid #23252B;border-radius:6px;background:#121317;color:#6E717A;font-size:12.5px"><span style="flex:1">Search or run…</span><span style="font:11px 'Geist Mono',monospace">⌘K</span></div>
+  </div>
+  <div style="padding:4px 8px 10px;display:flex;flex-direction:column;gap:1px">
+    <sc-for list="{{ nav }}" as="n" hint-placeholder-count="3">
+      <div style="display:flex;align-items:center;gap:8px;height:28px;padding:0 10px;border-radius:5px;background:{{ n.bg }};color:{{ n.fg }};font-size:13px;cursor:default" style-hover="background:rgba(255,255,255,0.04)">
+        <span style="flex:1">{{ n.label }}</span>
+        <sc-if value="{{ n.hasBadge }}" hint-placeholder-val="{{ false }}"><span style="font:600 10.5px/16px 'Geist Mono',monospace;color:#0B0C0E;background:#E3B25A;border-radius:3px;padding:0 5px">{{ n.badge }}</span></sc-if>
+        <span style="font:11px 'Geist Mono',monospace;color:#4E5159">{{ n.key }}</span>
+      </div>
+    </sc-for>
+  </div>
+  <div style="display:flex;align-items:center;padding:8px 18px 6px;font:500 11px 'Geist Mono',monospace;letter-spacing:0.06em;text-transform:uppercase;color:#5A5D66"><span style="flex:1">Projects</span><span style="font-size:14px;letter-spacing:0">+</span></div>
+  <div style="padding:0 8px;display:flex;flex-direction:column;gap:1px;flex:1;min-height:0">
+    <sc-for list="{{ projects }}" as="p" hint-placeholder-count="6">
+      <div style="display:flex;flex-direction:column">
+        <div style="display:flex;align-items:center;gap:9px;height:28px;padding:0 10px;border-radius:5px;background:{{ p.bg }};color:{{ p.fg }};font-size:13px" style-hover="background:rgba(255,255,255,0.04)">
+          <span style="width:7px;height:7px;border-radius:50%;background:{{ p.dot }};flex:none"></span>
+          <span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.name }}</span>
+          <span style="font:11px 'Geist Mono',monospace;color:#5A5D66">{{ p.count }}</span>
+        </div>
+        <sc-if value="{{ p.expanded }}" hint-placeholder-val="{{ false }}">
+          <div style="margin:2px 0 6px 13px;border-left:1px solid #26282E;padding-left:6px;display:flex;flex-direction:column;gap:1px">
+            <sc-for list="{{ p.tasks }}" as="t" hint-placeholder-count="4">
+              <div style="display:flex;align-items:center;gap:8px;height:26px;padding:0 8px;border-radius:5px;background:{{ t.bg }};color:{{ t.fg }};font-size:12.5px" style-hover="background:rgba(255,255,255,0.04)">
+                <span style="width:6px;height:6px;border-radius:50%;background:{{ t.dot }};flex:none"></span>
+                <span style="flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ t.name }}</span>
+                <span style="font:10.5px 'Geist Mono',monospace;color:{{ t.dot }}">{{ t.agent }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+      </div>
+    </sc-for>
+  </div>
+  <div style="border-top:1px solid #1F2126;padding:10px 18px;display:flex;align-items:center;gap:10px;font-size:12.5px">
+    <span style="width:22px;height:22px;border-radius:50%;background:#23252B;color:#A4A7AE;font:600 10.5px/22px Geist,sans-serif;text-align:center">AR</span>
+    <span style="flex:1;color:#A4A7AE">ana · ~/code</span>
+    <span style="font:11px 'Geist Mono',monospace;color:#4E5159">⌘,</span>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:232,&quot;height&quot;:820},&quot;active&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;projects&quot;,&quot;agents&quot;,&quot;worktrees&quot;,&quot;my-saas&quot;],&quot;default&quot;:&quot;projects&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;task&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const a = this.props.active ?? 'projects', task = this.props.task ?? '';
+    const C = { working: '#6BCB8B', waiting: '#E3B25A', failed: '#E86A5F', done: '#5A5D66', idle: '#33363C' };
+    const bg = k => k === a ? 'rgba(255,255,255,0.07)' : 'transparent';
+    const fg = k => k === a ? '#E8E8E6' : '#A4A7AE';
+    const nav = [
+      { k: 'projects', label: 'Projects', key: '⌘1' },
+      { k: 'agents', label: 'Agents', key: '⌘2', badge: '3' },
+      { k: 'worktrees', label: 'Worktrees', key: '⌘3' }
+    ].map(n => ({ ...n, bg: bg(n.k), fg: fg(n.k), hasBadge: !!n.badge, badge: n.badge || '' }));
+    const tasks = [
+      ['checkout', 'Checkout validation', 'working', 'kiro'],
+      ['search', 'Search ranking', 'waiting', 'claude'],
+      ['session', 'Session refresh tokens', 'failed', 'codex'],
+      ['emails', 'Transactional emails', 'done', '✓'],
+      ['invites', 'Team invites', 'done', '✓']
+    ].map(([k, name, s, ag]) => ({ name, agent: ag, dot: C[s], bg: k === task ? 'rgba(149,180,232,0.12)' : 'transparent', fg: k === task ? '#E8E8E6' : '#A4A7AE' }));
+    const projects = [
+      ['my-saas', 'waiting', '5', true],
+      ['api-gateway', 'working', '1'],
+      ['mobile-app', 'working', '1'],
+      ['infra', 'waiting', '1'],
+      ['design-tokens', 'idle', ''],
+      ['docs-site', 'idle', '']
+    ].map(([name, s, count, exp]) => ({ name, count, dot: C[s], bg: bg(name), fg: fg(name), expanded: !!exp, tasks: exp ? tasks : [] }));
+    return { nav, projects };
+  }
+}
+</script>
+</body>
+</html>

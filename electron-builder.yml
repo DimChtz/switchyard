@@ -1,0 +1,56 @@
+appId: com.switchyard.app
+productName: Switchyard
+copyright: Copyright © 2026 Dimitris
+directories:
+  buildResources: build
+  output: dist
+# Only the built app goes in (electron-builder adds the production node_modules):
+# no sources, tests, design handoff or local files.
+files:
+  - out/**/*
+  - package.json
+  - '!**/*.map'
+# Native parts of the terminal (node-pty) run as separate files - they can't live inside the asar.
+asarUnpack:
+  - '**/node_modules/@lydell/node-pty*/**'
+# Double-clicking a plugin package opens it in Switchyard (which asks to install it).
+fileAssociations:
+  - ext: syplugin
+    name: Switchyard plugin
+    description: Switchyard plugin package
+    role: Viewer
+win:
+  target: nsis
+  executableName: switchyard
+  icon: build/icon.png
+nsis:
+  artifactName: ${name}-${version}-setup.${ext}
+  shortcutName: ${productName}
+  uninstallDisplayName: ${productName}
+  createDesktopShortcut: always
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+mac:
+  target: dmg
+  category: public.app-category.developer-tools
+  icon: build/icon.png
+  # Signed and notarized when the build has an Apple identity (CSC_LINK / APPLE_ID…).
+  hardenedRuntime: true
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+dmg:
+  artifactName: ${name}-${version}.${ext}
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Development
+  icon: build/icon.png
+  maintainer: Dimitris
+  synopsis: Run coding agents in git worktrees, side by side
+npmRebuild: true
+# Updates (Help → Check for updates) need a release channel, e.g. GitHub releases:
+# publish:
+#   provider: github
+#   owner: <your GitHub user or org>
+#   repo: switchyard

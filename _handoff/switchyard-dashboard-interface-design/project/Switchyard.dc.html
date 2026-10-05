@@ -1,0 +1,950 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet data-dc-atomics>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&amp;family=Geist+Mono:wght@400;500;600&amp;display=swap" rel="stylesheet">
+<style>body{margin:0;background:#18181A;font-family:Geist,system-ui,sans-serif;-webkit-font-smoothing:antialiased}a{color:#95B4E8;text-decoration:none}a:hover{color:#C3D5F5}.dv-turn{padding:48px 56px 40px;border-bottom:1px solid rgba(255,255,255,.06)}.dv-thd{display:flex;align-items:baseline;gap:12px;margin:0 0 28px}.dv-tid{font:600 10px 'Geist Mono',monospace;padding:3px 7px;background:#E8E8E6;color:#111;border-radius:4px}.dv-tname{font:600 15px/1.2 Geist,sans-serif;color:#E8E8E6}.dv-opts{display:flex;flex-wrap:wrap;gap:48px 40px;align-items:flex-start}.dv-opt{flex:none;display:flex;flex-direction:column;gap:12px}.dv-oid{font:600 10.5px 'Geist Mono',monospace;padding:3px 7px;background:rgba(255,255,255,.1);color:#E8E8E6;border-radius:4px}.dv-olabel{display:flex;align-items:baseline;gap:10px;font:400 13px/1.3 Geist,sans-serif;color:rgba(255,255,255,.55)}.dv-olabel b{color:#E8E8E6;font-weight:500}.dv-opt:target .dv-oid{background:#95B4E8;color:#111}.dv-next{margin:36px 0 0;font:13px/1.5 Geist,sans-serif;color:rgba(255,255,255,.45)}</style>
+</helmet>
+<section class="dv-turn" id="t2">
+<div class="dv-thd"><a class="dv-tid" href="#t2">2</a><span class="dv-tname">Changes, Worktrees, Preview</span></div>
+<div class="dv-opts">
+
+<!-- 2a Changes -->
+<div class="dv-opt" id="2a">
+<div class="dv-olabel"><a class="dv-oid" href="#2a">2a</a><b>Task workspace — Changes</b> — review the agent's diff; comments on lines go straight back to the agent</div>
+<div style="width:1440px;height:900px;background:#0F1012;display:flex;flex-direction:column;border-radius:10px;overflow:hidden;border:1px solid #2A2C31;color:#E8E8E6;font-family:Geist,system-ui,sans-serif">
+  <div style="height:36px;flex:none;display:flex;align-items:center;gap:8px;padding:0 14px;background:#0B0C0E;border-bottom:1px solid #1F2126;position:relative"><span style="width:12px;height:12px;border-radius:50%;background:#3A3C42"></span><span style="width:12px;height:12px;border-radius:50%;background:#3A3C42"></span><span style="width:12px;height:12px;border-radius:50%;background:#3A3C42"></span><span style="position:absolute;left:0;right:0;text-align:center;font-size:12px;color:#6E717A;pointer-events:none">Switchyard — Checkout validation</span></div>
+  <div style="flex:1;display:flex;min-height:0">
+    <dc-import name="Sidebar" active="" task="checkout" hint-size="232px,100%" style="flex:none;width:232px;height:100%"></dc-import>
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+      <div style="height:48px;flex:none;display:flex;align-items:center;gap:10px;padding:0 20px;border-bottom:1px solid #1F2126">
+        <span style="font-size:13px;color:#6E717A">my-saas</span><span style="color:#3A3C42">/</span><span style="font-size:13px;color:#6E717A">In Progress</span><span style="color:#3A3C42">/</span><span style="font:500 13px Geist,sans-serif">Checkout validation</span>
+        <span style="display:flex;align-items:center;gap:6px;margin-left:10px;font:12px 'Geist Mono',monospace;color:#6E717A"><span style="width:6px;height:6px;border-radius:50%;background:#6BCB8B"></span>Kiro · Working · feature/checkout</span>
+        <div style="flex:1"></div>
+        <div style="height:28px;padding:0 12px;border:1px solid #2A2C31;border-radius:5px;display:flex;align-items:center;gap:10px;font-size:12.5px;color:#A4A7AE">Open in editor<span style="font:11px 'Geist Mono',monospace;color:#5A5D66">⌘E</span></div>
+        <div style="height:28px;padding:0 12px;background:#E8E8E6;color:#0F1012;border-radius:5px;display:flex;align-items:center;gap:10px;font-weight:500;font-size:12.5px">Move to Review<span style="font:11px 'Geist Mono',monospace;color:#5A5D66">⌘⇧R</span></div>
+      </div>
+      <div style="height:38px;flex:none;display:flex;align-items:stretch;gap:20px;padding:0 18px;border-bottom:1px solid #1F2126;font-size:12.5px;background:#0C0D0F">
+        <span style="display:flex;align-items:center;color:#A4A7AE">Terminal</span>
+        <span style="display:flex;align-items:center;gap:6px;color:#E8E8E6;box-shadow:inset 0 -1px 0 #E8E8E6">Changes <span style="font:11px 'Geist Mono',monospace;color:#6E717A">12</span></span>
+        <span style="display:flex;align-items:center;color:#A4A7AE">Preview</span>
+        <span style="display:flex;align-items:center;color:#A4A7AE">Activity</span>
+        <span style="flex:1"></span>
+        <span style="display:flex;align-items:center;gap:6px;font:11.5px 'Geist Mono',monospace;color:#6E717A">
+          <span style="background:#1A1C20;border:1px solid #2A2C31;color:#E8E8E6;border-radius:4px;padding:2px 8px">vs main · 4 commits + uncommitted ▾</span>
+          <span style="display:flex;border:1px solid #2A2C31;border-radius:4px;overflow:hidden"><span style="padding:2px 8px;background:#23252B;color:#E8E8E6">Unified</span><span style="padding:2px 8px">Split</span></span>
+        </span>
+      </div>
+      <div style="flex:1;min-height:0;display:grid;grid-template-columns:292px minmax(0,1fr)">
+        <div style="border-right:1px solid #1F2126;display:flex;flex-direction:column;min-height:0">
+          <div style="padding:12px 14px 8px;display:flex;align-items:center;gap:8px;font:12px 'Geist Mono',monospace;color:#6E717A"><span style="flex:1">12 files <span style="color:#6BCB8B">+384</span> <span style="color:#E86A5F">−91</span></span><span>3/12 viewed</span></div>
+          <div style="margin:0 14px 8px;height:3px;background:#1F2126;border-radius:2px"><div style="width:25%;height:100%;background:#6E717A;border-radius:2px"></div></div>
+          <div style="flex:1;min-height:0;overflow:hidden;padding:0 6px">
+            <sc-for list="{{ tree }}" as="f" hint-placeholder-count="14">
+              <div style="display:flex;align-items:center;gap:8px;height:26px;padding:0 8px 0 {{ f.pad }};border-radius:4px;background:{{ f.bg }};font:12px 'Geist Mono',monospace" style-hover="background:#16171B">
+                <span style="width:10px;color:{{ f.sc }}">{{ f.s }}</span>
+                <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:{{ f.fg }}">{{ f.name }}</span>
+                <span style="color:#6BCB8B">{{ f.a }}</span><span style="color:#E86A5F;min-width:24px;text-align:right">{{ f.d }}</span>
+                <span style="width:12px;text-align:center;color:#6E717A">{{ f.v }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="border-top:1px solid #1F2126;padding:10px 14px;display:flex;flex-direction:column;gap:6px;font:12px 'Geist Mono',monospace;color:#6E717A">
+            <div style="font:500 11px 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#5A5D66;margin-bottom:2px">Commits</div>
+            <sc-for list="{{ commits }}" as="c" hint-placeholder-count="5">
+              <div style="display:flex;gap:10px;white-space:nowrap"><span style="color:{{ c.hc }}">{{ c.h }}</span><span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;color:#A4A7AE;font-family:Geist">{{ c.m }}</span><span style="color:#5A5D66">{{ c.t }}</span></div>
+            </sc-for>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;min-width:0;min-height:0;background:#0C0D0F">
+          <div style="height:40px;flex:none;display:flex;align-items:center;gap:12px;padding:0 16px;border-bottom:1px solid #1F2126;background:#111215">
+            <span style="font:12.5px 'Geist Mono',monospace;color:#6E717A">src/checkout/<span style="color:#E8E8E6">address.ts</span></span>
+            <span style="font:12px 'Geist Mono',monospace;color:#6BCB8B">+6</span><span style="font:12px 'Geist Mono',monospace;color:#E86A5F">−2</span>
+            <span style="font:12px Geist,sans-serif;color:#6E717A">edited by Kiro 11m ago · a41c9e2</span>
+            <span style="flex:1"></span>
+            <span style="font:11.5px 'Geist Mono',monospace;color:#6E717A">select lines + C to comment</span>
+            <span style="height:24px;padding:0 10px;border:1px solid #2A2C31;border-radius:4px;display:flex;align-items:center;gap:8px;font-size:12px;color:#A4A7AE">Viewed<span style="font:10.5px 'Geist Mono',monospace;color:#5A5D66">V</span></span>
+          </div>
+          <div style="flex:1;min-height:0;overflow:hidden;padding:6px 0">
+            <sc-for list="{{ diff }}" as="d" hint-placeholder-count="20">
+              <div style="display:flex;flex-direction:column">
+                <sc-if value="{{ d.isLine }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:grid;grid-template-columns:46px 46px 20px minmax(0,1fr);font:12.5px/21px 'Geist Mono',ui-monospace,monospace;background:{{ d.bg }};box-shadow:inset 2px 0 0 {{ d.edge }}">
+                    <span style="text-align:right;padding-right:10px;color:#4E5159">{{ d.o }}</span>
+                    <span style="text-align:right;padding-right:10px;color:#4E5159">{{ d.n }}</span>
+                    <span style="color:{{ d.sc }}">{{ d.sign }}</span>
+                    <span style="white-space:pre;overflow:hidden;text-overflow:ellipsis;color:{{ d.tc }}">{{ d.t }}</span>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ d.isComment }}" hint-placeholder-val="{{ false }}">
+                  <div style="margin:6px 16px 8px 112px;border:1px solid #2E3037;border-radius:6px;background:#15161A;font-family:Geist,sans-serif;max-width:640px">
+                    <div style="padding:10px 12px;display:flex;flex-direction:column;gap:4px;border-bottom:1px solid #23252B">
+                      <div style="display:flex;gap:8px;font:12px 'Geist Mono',monospace;color:#6E717A"><span style="color:#E8E8E6">ana</span><span>L4</span><span style="flex:1"></span><span style="color:#95B4E8">→ sent to Kiro</span></div>
+                      <div style="font:13px/1.45 Geist,sans-serif;color:#E8E8E6">Add a test for "Post Office Box" and "POB" — address.test.ts only covers "P.O. Box".</div>
+                    </div>
+                    <div style="padding:10px 12px;display:flex;flex-direction:column;gap:4px">
+                      <div style="display:flex;gap:8px;align-items:center;font:12px 'Geist Mono',monospace;color:#6E717A"><span style="width:6px;height:6px;border-radius:50%;background:#6BCB8B"></span><span style="color:#E8E8E6">Kiro</span><span style="flex:1"></span><span>queued · 2m</span></div>
+                      <div style="font:13px/1.45 Geist,sans-serif;color:#A4A7AE">Will add both cases after I finish wiring route.ts.</div>
+                    </div>
+                  </div>
+                </sc-if>
+              </div>
+            </sc-for>
+            <div style="margin:10px 0 0;height:40px;display:flex;align-items:center;gap:12px;padding:0 16px;border-top:1px solid #1F2126;border-bottom:1px solid #1F2126;background:#111215">
+              <span style="color:#5A5D66;font:12px 'Geist Mono',monospace">▸</span>
+              <span style="font:12.5px 'Geist Mono',monospace;color:#6E717A">src/checkout/<span style="color:#E8E8E6">schema.ts</span></span>
+              <span style="font:12px 'Geist Mono',monospace;color:#6BCB8B">+48</span><span style="font:12px 'Geist Mono',monospace;color:#E86A5F">−12</span>
+              <span style="font:12px Geist,sans-serif;color:#6E717A">3 hunks</span>
+            </div>
+          </div>
+          <div style="flex:none;border-top:1px solid #1F2126;background:#111215;padding:10px 16px;display:flex;align-items:center;gap:12px">
+            <span style="font:12.5px Geist,sans-serif;color:#A4A7AE;flex:1">1 comment sent · Kiro picks up review comments between steps</span>
+            <span style="height:28px;padding:0 12px;border:1px solid #2A2C31;border-radius:5px;display:flex;align-items:center;gap:10px;font-size:12.5px;color:#A4A7AE">Discard file<span style="font:11px 'Geist Mono',monospace;color:#5A5D66">⌘⌫</span></span>
+            <span style="height:28px;padding:0 12px;border:1px solid #2A2C31;border-radius:5px;display:flex;align-items:center;gap:10px;font-size:12.5px;color:#E8E8E6">Next file<span style="font:11px 'Geist Mono',monospace;color:#5A5D66">]</span></span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <dc-import name="StatusBar" context="feature/checkout ↑4" hint-size="100%,26px"></dc-import>
+</div>
+</div>
+
+<!-- 2b Worktrees -->
+<div class="dv-opt" id="2b">
+<div class="dv-olabel"><a class="dv-oid" href="#2b">2b</a><b>Worktrees</b> — every environment on disk, what owns it, and what to clean up. Mechanics show up here, and only here.</div>
+<div style="width:1440px;height:900px;background:#0F1012;display:flex;flex-direction:column;border-radius:10px;overflow:hidden;border:1px solid #2A2C31;color:#E8E8E6;font-family:Geist,system-ui,sans-serif">
+  <div style="height:36px;flex:none;display:flex;align-items:center;gap:8px;padding:0 14px;background:#0B0C0E;border-bottom:1px solid #1F2126;position:relative"><span style="width:12px;height:12px;border-radius:50%;background:#3A3C42"></span><span style="width:12px;height:12px;border-radius:50%;background:#3A3C42"></span><span style="width:12px;height:12px;border-radius:50%;background:#3A3C42"></span><span style="position:absolute;left:0;right:0;text-align:center;font-size:12px;color:#6E717A;pointer-events:none">Switchyard — Worktrees</span></div>
+  <div style="flex:1;display:flex;min-height:0">
+    <dc-import name="Sidebar" active="worktrees" hint-size="232px,100%" style="flex:none;width:232px;height:100%"></dc-import>
+    <div style="flex:1;min-width:0;display:grid;grid-template-columns:minmax(0,1fr) 312px">
+      <div style="display:flex;flex-direction:column;padding:24px 28px;gap:16px;min-width:0;overflow:hidden">
+        <div style="display:flex;align-items:center;gap:14px">
+          <div style="font:600 20px Geist,sans-serif;letter-spacing:-0.01em">Worktrees</div>
+          <div style="font:12.5px 'Geist Mono',monospace;color:#6E717A">10 on disk · 4.6 GB · root ~/.wt</div>
+          <div style="flex:1"></div>
+          <div style="display:flex;gap:2px;background:#15161A;border:1px solid #23252B;border-radius:6px;padding:2px;font:12px Geist,sans-serif">
+            <span style="padding:3px 10px;border-radius:4px;background:#23252B;color:#E8E8E6">By project</span>
+            <span style="padding:3px 10px;color:#A4A7AE">By agent</span>
+            <span style="padding:3px 10px;color:#A4A7AE">By size</span>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:2.3fr 1.5fr 1.2fr 0.8fr 0.9fr 0.6fr;gap:16px;padding:0 12px 8px;font:500 11px 'Geist Mono',monospace;letter-spacing:.06em;text-transform:uppercase;color:#5A5D66;border-bottom:1px solid #1F2126">
+          <span>Branch · path</span><span>Task</span><span>Agent</span><span>vs main</span><span>Working tree</span><span style="text-align:right">Last</span>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;margin-top:-8px">
+          <sc-for list="{{ wtGroups }}" as="g" hint-placeholder-count="4">
+            <div style="display:flex;flex-direction:column">
+              <div style="display:flex;align-items:center;gap:10px;height:32px;padding:0 12px;font:500 12.5px Geist,sans-serif;color:#A4A7AE"><span>{{ g.name }}</span><span style="font:11.5px 'Geist Mono',monospace;color:#5A5D66">{{ g.meta }}</span></div>
+              <sc-for list="{{ g.rows }}" as="r" hint-placeholder-count="3">
+                <div style="display:grid;grid-template-columns:2.3fr 1.5fr 1.2fr 0.8fr 0.9fr 0.6fr;gap:16px;align-items:center;min-height:48px;padding:0 12px;border-radius:5px;background:{{ r.bg }};box-shadow:inset 0 0 0 1px {{ r.ring }}" style-hover="background:#15161A">
+                  <div style="display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font:12.5px 'Geist Mono',monospace;color:{{ r.bc }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.branch }}</span><span style="font:11.5px 'Geist Mono',monospace;color:#5A5D66;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.path }}</span></div>
+                  <span style="font:12.5px Geist,sans-serif;color:{{ r.tkc }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.task }}</span>
+                  <span style="display:flex;align-items:center;gap:7px;font:12.5px Geist,sans-serif;color:#A4A7AE"><span style="width:6px;height:6px;border-radius:50%;background:{{ r.dot }};flex:none"></span>{{ r.agent }}</span>
+                  <span style="font:12px 'Geist Mono',monospace;color:#A4A7AE">{{ r.ahead }} <span style="color:{{ r.behindC }}">{{ r.behind }}</span></span>
+                  <span style="font:12px 'Geist Mono',monospace;color:{{ r.dirtyC }}">{{ r.dirty }}</span>
+                  <span style="font:12px 'Geist Mono',monospace;color:#5A5D66;text-align:right">{{ r.last }}</span>
+                </div>
+              </sc-for>
+            </div>
+          </sc-for>
+        </div>
+        <div style="margin-top:4px;border:1px solid #2A2C31;border-radius:6px;background:#131418;display:flex;flex-direction:column">
+          <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid #1F2126">
+            <span style="font:500 13px Geist,sans-serif;color:#E8E8E6">Clean up</span>
+            <span style="font:12px 'Geist Mono',monospace;color:#6E717A">2 worktrees · 1.2 GB</span>
+            <span style="flex:1"></span>
+            <span style="height:26px;padding:0 10px;border:1px solid #2E3037;border-radius:5px;display:flex;align-items:center;gap:8px;font:500 12px Geist,sans-serif;color:#E8E8E6">Prune merged<span style="font:10.5px 'Geist Mono',monospace;color:#5A5D66">⌘⌫</span></span>
+          </div>
+          <sc-for list="{{ stale }}" as="s" hint-placeholder-count="2">
+            <div style="display:grid;grid-template-columns:2.3fr 3.2fr auto;gap:16px;align-items:center;height:42px;padding:0 12px;border-top:1px solid #1B1D21">
+              <div style="display:flex;flex-direction:column;gap:1px;min-width:0"><span style="font:12.5px 'Geist Mono',monospace;color:#A4A7AE">{{ s.branch }}</span><span style="font:11.5px 'Geist Mono',monospace;color:#5A5D66">{{ s.project }} · {{ s.size }}</span></div>
+              <span style="font:12.5px Geist,sans-serif;color:#6E717A">{{ s.why }}</span>
+              <span style="font:12px Geist,sans-serif;color:#A4A7AE">{{ s.action }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="border-left:1px solid #1F2126;padding:22px 20px;display:flex;flex-direction:column;gap:20px;overflow:hidden;background:#0D0E10">
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="font:12px 'Geist Mono',monospace;color:#6E717A">my-saas · MS-35</div>
+          <div style="font:500 14px 'Geist Mono',monospace;color:#E8E8E6">feature/search-ranking</div>
+          <div style="display:flex;align-items:center;gap:7px;font:12.5px Geist,sans-serif;color:#E3B25A"><span style="width:6px;height:6px;border-radius:50%;background:#E3B25A"></span>Claude Code · Waiting for input</div>
+        </div>
+        <div style="border:1px solid rgba(227,178,90,0.3);border-radius:6px;padding:10px 12px;display:flex;flex-direction:column;gap:8px">
+          <div style="font:13px/1.45 Geist,sans-serif;color:#E8E8E6;text-wrap:pretty">main has moved 3 commits since this worktree was created. One touches db/migrations.</div>
+          <div style="display:flex;gap:6px"><span style="height:26px;padding:0 10px;background:#E8E8E6;color:#0F1012;border-radius:5px;display:flex;align-items:center;font:500 12px Geist,sans-serif">Ask Claude to rebase</span><span style="height:26px;padding:0 10px;border:1px solid #2E3037;border-radius:5px;display:flex;align-items:center;font:500 12px Geist,sans-serif;color:#A4A7AE">Rebase myself</span></div>
+        </div>
+        <div style="display:grid;grid-template-columns:78px 1fr;row-gap:9px;column-gap:10px;font:12px 'Geist Mono',monospace;align-items:baseline">
+          <sc-for list="{{ wtDetail }}" as="d" hint-placeholder-count="7">
+            <span style="font-family:Geist,sans-serif;color:#5A5D66">{{ d.k }}</span><span style="color:#A4A7AE;overflow-wrap:anywhere">{{ d.v }}</span>
+          </sc-for>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px">
+          <div style="font:500 11px 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#5A5D66;margin-bottom:4px">Processes</div>
+          <div style="display:flex;gap:10px;font:12px 'Geist Mono',monospace;color:#A4A7AE"><span style="flex:1">claude</span><span style="color:#5A5D66">pid 48213</span></div>
+          <div style="display:flex;gap:10px;font:12px 'Geist Mono',monospace;color:#A4A7AE"><span style="flex:1">zsh</span><span style="color:#5A5D66">pid 48190</span></div>
+        </div>
+        <div style="flex:1"></div>
+        <div style="display:flex;flex-direction:column;gap:1px">
+          <sc-for list="{{ wtActions }}" as="a" hint-placeholder-count="4">
+            <div style="display:flex;align-items:center;height:30px;padding:0 8px;margin:0 -8px;border-radius:5px;font:13px Geist,sans-serif;color:{{ a.c }}" style-hover="background:#16171B"><span style="flex:1">{{ a.l }}</span><span style="font:11px 'Geist Mono',monospace;color:#5A5D66">{{ a.k }}</span></div>
+          </sc-for>
+          <div style="font:11.5px/1.45 Geist,sans-serif;color:#5A5D66;margin-top:6px;text-wrap:pretty">Removing stops Claude and deletes the folder. The branch and its 2 commits are kept.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <dc-import name="StatusBar" context="~/.wt · 4.6 GB" hint-size="100%,26px"></dc-import>
+</div>
+</div>
+
+<!-- 2c Preview -->
+<div class="dv-opt" id="2c">
+<div class="dv-olabel"><a class="dv-oid" href="#2c">2c</a><b>Task workspace — Preview</b> — the worktree's dev server, found automatically. Pick an element to send it to the agent.</div>
+<div style="width:1440px;height:900px;background:#0F1012;display:flex;flex-direction:column;border-radius:10px;overflow:hidden;border:1px solid #2A2C31;color:#E8E8E6;font-family:Geist,system-ui,sans-serif">
+  <div style="height:36px;flex:none;display:flex;align-items:center;gap:8px;padding:0 14px;background:#0B0C0E;border-bottom:1px solid #1F2126;position:relative"><span style="width:12px;height:12px;border-radius:50%;background:#3A3C42"></span><span style="width:12px;height:12px;border-radius:50%;background:#3A3C42"></span><span style="width:12px;height:12px;border-radius:50%;background:#3A3C42"></span><span style="position:absolute;left:0;right:0;text-align:center;font-size:12px;color:#6E717A;pointer-events:none">Switchyard — Checkout validation</span></div>
+  <div style="flex:1;display:flex;min-height:0">
+    <dc-import name="Sidebar" active="" task="checkout" hint-size="232px,100%" style="flex:none;width:232px;height:100%"></dc-import>
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+      <div style="height:48px;flex:none;display:flex;align-items:center;gap:10px;padding:0 20px;border-bottom:1px solid #1F2126">
+        <span style="font-size:13px;color:#6E717A">my-saas</span><span style="color:#3A3C42">/</span><span style="font-size:13px;color:#6E717A">In Progress</span><span style="color:#3A3C42">/</span><span style="font:500 13px Geist,sans-serif">Checkout validation</span>
+        <span style="display:flex;align-items:center;gap:6px;margin-left:10px;font:12px 'Geist Mono',monospace;color:#6E717A"><span style="width:6px;height:6px;border-radius:50%;background:#6BCB8B"></span>Kiro · Working · feature/checkout</span>
+        <div style="flex:1"></div>
+        <div style="height:28px;padding:0 12px;border:1px solid #2A2C31;border-radius:5px;display:flex;align-items:center;gap:10px;font-size:12.5px;color:#A4A7AE">Open in browser<span style="font:11px 'Geist Mono',monospace;color:#5A5D66">⌘⇧B</span></div>
+        <div style="height:28px;padding:0 12px;background:#E8E8E6;color:#0F1012;border-radius:5px;display:flex;align-items:center;gap:10px;font-weight:500;font-size:12.5px">Move to Review<span style="font:11px 'Geist Mono',monospace;color:#5A5D66">⌘⇧R</span></div>
+      </div>
+      <div style="height:38px;flex:none;display:flex;align-items:stretch;gap:20px;padding:0 18px;border-bottom:1px solid #1F2126;font-size:12.5px;background:#0C0D0F">
+        <span style="display:flex;align-items:center;color:#A4A7AE">Terminal</span>
+        <span style="display:flex;align-items:center;gap:6px;color:#A4A7AE">Changes <span style="font:11px 'Geist Mono',monospace;color:#6E717A">12</span></span>
+        <span style="display:flex;align-items:center;color:#E8E8E6;box-shadow:inset 0 -1px 0 #E8E8E6">Preview</span>
+        <span style="display:flex;align-items:center;color:#A4A7AE">Activity</span>
+      </div>
+      <div style="flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) 300px">
+        <div style="display:flex;flex-direction:column;min-width:0">
+          <div style="height:42px;flex:none;display:flex;align-items:center;gap:10px;padding:0 14px;border-bottom:1px solid #1F2126">
+            <span style="display:flex;gap:12px;font:13px 'Geist Mono',monospace;color:#6E717A"><span>←</span><span style="color:#3A3C42">→</span><span>↻</span></span>
+            <div style="flex:1;height:28px;border:1px solid #2A2C31;border-radius:5px;background:#121317;display:flex;align-items:center;gap:10px;padding:0 10px;font:12.5px 'Geist Mono',monospace;min-width:0">
+              <span style="color:#5A5D66">localhost:3000</span><span style="color:#E8E8E6;flex:1">/checkout</span>
+              <span style="color:#6E717A;font-size:11.5px;white-space:nowrap;flex:none">this worktree</span>
+            </div>
+            <span style="display:flex;border:1px solid #2A2C31;border-radius:5px;overflow:hidden;font:12px Geist,sans-serif"><span style="padding:4px 10px;background:#23252B;color:#E8E8E6">This branch</span><span style="padding:4px 10px;color:#A4A7AE">main</span><span style="padding:4px 10px;color:#A4A7AE">Side by side</span></span>
+            <span style="display:flex;border:1px solid #2A2C31;border-radius:5px;overflow:hidden;font:12px 'Geist Mono',monospace"><span style="padding:4px 9px;background:#23252B;color:#E8E8E6">1280</span><span style="padding:4px 9px;color:#A4A7AE">390</span></span>
+            <span style="height:28px;padding:0 10px;border:1px solid rgba(149,180,232,0.5);border-radius:5px;display:flex;align-items:center;gap:8px;font:500 12px Geist,sans-serif;color:#95B4E8">Pick element<span style="font:10.5px 'Geist Mono',monospace;opacity:.7">P</span></span>
+          </div>
+          <div style="flex:1;min-height:0;background:#1A1B1F;padding:18px;display:flex;justify-content:center;overflow:hidden">
+            <div style="width:100%;max-width:820px;background:#FAFAF8;border-radius:4px;color:#1C1D20;font-family:Geist,system-ui,sans-serif;display:flex;flex-direction:column;overflow:hidden;position:relative">
+              <div style="height:52px;flex:none;border-bottom:1px solid #E7E6E1;display:flex;align-items:center;padding:0 28px;gap:10px"><span style="font:600 15px Geist,sans-serif">Lumen</span><span style="flex:1"></span><span style="font-size:13px;color:#6B6C70">Cart · 2 items</span></div>
+              <div style="flex:1;display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:32px;padding:28px">
+                <div style="display:flex;flex-direction:column;gap:14px">
+                  <div style="font:600 20px Geist,sans-serif;letter-spacing:-0.01em">Shipping</div>
+                  <div style="display:flex;flex-direction:column;gap:5px"><span style="font:500 12.5px Geist,sans-serif;color:#45464B">Street address</span><div style="height:38px;border:1px solid #C9483C;border-radius:6px;background:#fff;display:flex;align-items:center;padding:0 12px;font-size:14px">P.O. Box 4412</div></div>
+                  <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:10px">
+                    <div style="display:flex;flex-direction:column;gap:5px"><span style="font:500 12.5px Geist,sans-serif;color:#45464B">City</span><div style="height:38px;border:1px solid #D6D5D0;border-radius:6px;background:#fff;display:flex;align-items:center;padding:0 12px;font-size:14px">Portland</div></div>
+                    <div style="display:flex;flex-direction:column;gap:5px"><span style="font:500 12.5px Geist,sans-serif;color:#45464B">Postal code</span><div style="height:38px;border:1px solid #D6D5D0;border-radius:6px;background:#fff;display:flex;align-items:center;padding:0 12px;font-size:14px">97205</div></div>
+                  </div>
+                  <div style="display:flex;flex-direction:column;gap:6px;margin-top:4px">
+                    <span style="font:500 12.5px Geist,sans-serif;color:#45464B">Delivery</span>
+                    <div style="border:1px solid #D6D5D0;border-radius:6px;background:#fff;display:flex;flex-direction:column">
+                      <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;font-size:14px;border-bottom:1px solid #EDECE8"><span style="width:14px;height:14px;border-radius:50%;border:1.5px solid #B5B4AF;box-sizing:border-box"></span><span style="flex:1">Standard · 4–6 days</span><span style="color:#6B6C70">Free</span></div>
+                      <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;font-size:14px"><span style="width:14px;height:14px;border-radius:50%;border:4px solid #1C1D20;box-sizing:border-box"></span><span style="flex:1">Express · next day</span><span style="color:#6B6C70">$18.00</span></div>
+                    </div>
+                  </div>
+                  <div style="position:relative;outline:2px solid #5B86D6;outline-offset:3px;border-radius:2px;font-size:13px;color:#C9483C">Express delivery isn’t available for PO boxes.
+                    <span style="position:absolute;left:-5px;top:-26px;font:500 11px 'Geist Mono',monospace;background:#5B86D6;color:#fff;border-radius:3px;padding:2px 6px;white-space:nowrap">p.field-error · CheckoutForm.tsx:142</span>
+                  </div>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:12px;border-left:1px solid #E7E6E1;padding-left:28px">
+                  <div style="font:600 15px Geist,sans-serif">Order</div>
+                  <div style="display:flex;font-size:14px"><span style="flex:1">Desk lamp, brass</span><span>$112.00</span></div>
+                  <div style="display:flex;font-size:14px"><span style="flex:1">Linen shade</span><span>$18.00</span></div>
+                  <div style="display:flex;font-size:14px;color:#6B6C70"><span style="flex:1">Express</span><span>$18.00</span></div>
+                  <div style="display:flex;font:600 15px Geist,sans-serif;border-top:1px solid #E7E6E1;padding-top:12px"><span style="flex:1">Total</span><span>$148.00</span></div>
+                  <div style="height:42px;border-radius:6px;background:#B9B8B3;color:#fff;display:flex;align-items:center;justify-content:center;font:500 14px Geist,sans-serif;margin-top:6px">Pay $148.00</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div style="flex:none;margin:0 16px 16px;margin-top:-4px;border:1px solid rgba(149,180,232,0.45);border-radius:6px;background:#121317;padding:10px 12px;display:flex;align-items:center;gap:12px">
+            <span style="font:11.5px 'Geist Mono',monospace;color:#95B4E8;background:rgba(149,180,232,0.1);border-radius:3px;padding:2px 6px">p.field-error</span>
+            <span style="flex:1;font:13px Geist,sans-serif;color:#E8E8E6">Show this under the Express option, not below the form, and disable Pay until it's fixed</span>
+            <span style="font:11px 'Geist Mono',monospace;color:#5A5D66">↵ send to Kiro · includes screenshot + selector</span>
+          </div>
+        </div>
+        <div style="border-left:1px solid #1F2126;display:flex;flex-direction:column;min-height:0">
+          <div style="height:36px;flex:none;display:flex;align-items:stretch;gap:16px;padding:0 16px;border-bottom:1px solid #1F2126;font-size:12.5px">
+            <span style="display:flex;align-items:center;gap:6px;color:#E8E8E6;box-shadow:inset 0 -1px 0 #E8E8E6">Console <span style="font:11px 'Geist Mono',monospace;color:#E3B25A">1</span></span>
+            <span style="display:flex;align-items:center;gap:6px;color:#A4A7AE">Network</span>
+          </div>
+          <div style="flex:1;min-height:0;padding:10px 16px;display:flex;flex-direction:column;gap:8px;overflow:hidden">
+            <sc-for list="{{ pvConsole }}" as="c" hint-placeholder-count="6">
+              <div style="display:flex;gap:8px;font:11.5px/1.5 'Geist Mono',monospace"><span style="color:#5A5D66;flex:none">{{ c.t }}</span><span style="color:{{ c.c }};overflow-wrap:anywhere">{{ c.m }}</span></div>
+            </sc-for>
+          </div>
+          <div style="border-top:1px solid #1F2126;padding:12px 16px;display:flex;flex-direction:column;gap:7px">
+            <div style="font:500 11px 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#5A5D66;margin-bottom:2px">Requests</div>
+            <sc-for list="{{ pvNet }}" as="n" hint-placeholder-count="4">
+              <div style="display:grid;grid-template-columns:40px 1fr auto;gap:8px;font:11.5px 'Geist Mono',monospace"><span style="color:{{ n.c }}">{{ n.s }}</span><span style="color:#A4A7AE;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ n.m }} {{ n.p }}</span><span style="color:#5A5D66">{{ n.ms }}</span></div>
+            </sc-for>
+          </div>
+          <div style="border-top:1px solid #1F2126;padding:12px 16px;font:12px/1.5 Geist,sans-serif;color:#6E717A;text-wrap:pretty">Reloads on Kiro's edits. Last reload 14s ago after <span style="font-family:'Geist Mono';color:#A4A7AE">route.ts</span>.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <dc-import name="StatusBar" context="feature/checkout · :3000" hint-size="100%,26px"></dc-import>
+</div>
+</div>
+
+</div>
+</section>
+<section class="dv-turn" id="t1">
+<div class="dv-thd"><a class="dv-tid" href="#t1">1</a><span class="dv-tname">Switchyard — IA + MVP screens (1440×900)</span></div>
+<div class="dv-opts">
+
+<!-- IA -->
+<div class="dv-opt" id="ia">
+<div class="dv-olabel"><a class="dv-oid" href="#ia">IA</a><b>Information architecture &amp; navigation</b></div>
+<div style="width:1440px;box-sizing:border-box;background:#0F1012;border:1px solid #2A2C31;border-radius:10px;padding:40px 44px;color:#E8E8E6;display:grid;grid-template-columns:1.1fr 1fr 0.9fr;gap:48px">
+  <div style="display:flex;flex-direction:column;gap:18px">
+    <div style="font:500 11px 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#6E717A">Object model</div>
+    <div style="font:500 22px/1.3 Geist,sans-serif;letter-spacing:-0.01em;text-wrap:pretty">A task owns its environment. Everything below it is created, named and cleaned up for you.</div>
+    <div style="display:flex;flex-direction:column;margin-top:6px">
+      <sc-for list="{{ chain }}" as="c" hint-placeholder-count="5">
+        <div style="display:grid;grid-template-columns:18px 96px 1fr;gap:12px;align-items:start">
+          <div style="display:flex;flex-direction:column;align-items:center;align-self:stretch">
+            <span style="width:9px;height:9px;border-radius:50%;border:1.5px solid {{ c.dot }};background:{{ c.fill }};margin-top:5px;flex:none"></span>
+            <span style="flex:1;width:1px;background:{{ c.line }};min-height:22px"></span>
+          </div>
+          <div style="font:500 13px/20px Geist,sans-serif;color:#E8E8E6">{{ c.label }}</div>
+          <div style="padding-bottom:18px"><div style="font:12.5px/20px 'Geist Mono',monospace;color:#A4A7AE">{{ c.eg }}</div><div style="font:12.5px/1.45 Geist,sans-serif;color:#6E717A;margin-top:2px">{{ c.note }}</div></div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:18px">
+    <div style="font:500 11px 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#6E717A">Window</div>
+    <div style="border:1px solid #2E3037;border-radius:6px;height:260px;display:grid;grid-template-columns:78px 1fr;grid-template-rows:14px 1fr 16px;overflow:hidden;font:10.5px 'Geist Mono',monospace;color:#6E717A">
+      <div style="grid-column:1/3;background:#0B0C0E;border-bottom:1px solid #23252B"></div>
+      <div style="background:#0B0C0E;border-right:1px solid #23252B;padding:8px;display:flex;flex-direction:column;gap:5px"><span style="color:#A4A7AE">Sidebar</span><span>Projects</span><span>Agents</span><span>Worktrees</span><span style="margin-top:6px">my-saas</span><span style="padding-left:8px;border-left:1px solid #2E3037">live tasks</span></div>
+      <div style="padding:10px;display:flex;flex-direction:column;gap:6px"><span style="color:#A4A7AE">Main view</span><span>Dashboard · Board · Workspace · Agents</span><div style="flex:1;border:1px dashed #2E3037;border-radius:4px;display:flex;align-items:center;justify-content:center">task workspace: env · terminal · activity</div></div>
+      <div style="grid-column:1/3;background:#0B0C0E;border-top:1px solid #23252B;padding:0 8px;display:flex;align-items:center;gap:10px"><span style="color:#E3B25A">● status bar = agent dock, always visible</span></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px;font:13px/1.5 Geist,sans-serif;color:#A4A7AE">
+      <div><span style="color:#E8E8E6">Sidebar</span> — projects, with the active project's live tasks nested under it. One click from anywhere to any running agent.</div>
+      <div><span style="color:#E8E8E6">Status bar</span> — every agent, colour-coded. Amber and red read first; it answers "what are my agents doing" on every screen.</div>
+      <div><span style="color:#E8E8E6">Board is the control plane</span> — moving a card changes environments: Ready → In Progress starts an agent, Review → Done merges and prunes the worktree.</div>
+    </div>
+  </div>
+  <div style="display:flex;flex-direction:column;gap:18px">
+    <div style="font:500 11px 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#6E717A">Keyboard</div>
+    <div style="display:flex;flex-direction:column;gap:1px">
+      <sc-for list="{{ keys }}" as="k" hint-placeholder-count="8">
+        <div style="display:flex;align-items:center;gap:12px;height:30px;border-bottom:1px solid #1C1E22;font:13px Geist,sans-serif;color:#A4A7AE"><span style="flex:1">{{ k.d }}</span><span style="font:500 11.5px 'Geist Mono',monospace;color:#E8E8E6;background:#1A1C20;border:1px solid #2A2C31;border-radius:4px;padding:1px 6px">{{ k.k }}</span></div>
+      </sc-for>
+    </div>
+    <div style="font:500 11px 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#6E717A;margin-top:10px">Later, not MVP</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px">
+      <span style="font:12px 'Geist Mono',monospace;color:#6E717A;border:1px dashed #2E3037;border-radius:4px;padding:3px 8px">browser preview</span>
+      <span style="font:12px 'Geist Mono',monospace;color:#6E717A;border:1px dashed #2E3037;border-radius:4px;padding:3px 8px">pull requests</span>
+      <span style="font:12px 'Geist Mono',monospace;color:#6E717A;border:1px dashed #2E3037;border-radius:4px;padding:3px 8px">automations</span>
+      <span style="font:12px 'Geist Mono',monospace;color:#6E717A;border:1px dashed #2E3037;border-radius:4px;padding:3px 8px">agent cost / usage</span>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- 1a Dashboard -->
+<div class="dv-opt" id="1a">
+<div class="dv-olabel"><a class="dv-oid" href="#1a">1a</a><b>Projects dashboard</b> — what needs you first, then every repo's live state</div>
+<div style="width:1440px;height:900px;background:#0F1012;display:flex;flex-direction:column;border-radius:10px;overflow:hidden;border:1px solid #2A2C31;color:#E8E8E6;font-family:Geist,system-ui,sans-serif">
+  <div style="height:36px;flex:none;display:flex;align-items:center;gap:8px;padding:0 14px;background:#0B0C0E;border-bottom:1px solid #1F2126;position:relative"><span style="width:12px;height:12px;border-radius:50%;background:#3A3C42"></span><span style="width:12px;height:12px;border-radius:50%;background:#3A3C42"></span><span style="width:12px;height:12px;border-radius:50%;background:#3A3C42"></span><span style="position:absolute;left:0;right:0;text-align:center;font-size:12px;color:#6E717A;pointer-events:none">Switchyard — Projects</span></div>
+  <div style="flex:1;display:flex;min-height:0">
+    <dc-import name="Sidebar" active="projects" hint-size="232px,100%" style="flex:none;width:232px;height:100%"></dc-import>
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;padding:28px 36px;gap:28px;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:14px">
+        <div style="font:600 20px Geist,sans-serif;letter-spacing:-0.01em">Projects</div>
+        <div style="font:12.5px 'Geist Mono',monospace;color:#6E717A">6 repos · 8 agents · 10 worktrees</div>
+        <div style="flex:1"></div>
+        <div style="height:28px;padding:0 12px;border:1px solid #2A2C31;border-radius:5px;display:flex;align-items:center;gap:10px;font-size:12.5px;color:#A4A7AE">Clone repository<span style="font:11px 'Geist Mono',monospace;color:#5A5D66">⌘⇧O</span></div>
+        <div style="height:28px;padding:0 12px;background:#E8E8E6;color:#0F1012;border-radius:5px;display:flex;align-items:center;gap:10px;font-weight:500;font-size:12.5px">Add project<span style="font:11px 'Geist Mono',monospace;color:#5A5D66">⌘N</span></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div style="display:flex;align-items:baseline;gap:10px"><span style="font:500 13px Geist,sans-serif;color:#E3B25A">Needs you</span><span style="font:12px 'Geist Mono',monospace;color:#6E717A">3 agents blocked</span></div>
+        <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px">
+          <sc-for list="{{ needs }}" as="n" hint-placeholder-count="3">
+            <div style="background:#15161A;border:1px solid {{ n.border }};border-radius:6px;padding:14px 16px;display:flex;flex-direction:column;gap:8px" style-hover="background:#191A1F">
+              <div style="display:flex;align-items:center;gap:8px;font:12px 'Geist Mono',monospace"><span style="width:7px;height:7px;border-radius:50%;background:{{ n.c }}"></span><span style="color:{{ n.c }}">{{ n.agent }} · {{ n.state }}</span><span style="flex:1"></span><span style="color:#5A5D66">{{ n.ago }}</span></div>
+              <div style="font:500 14px Geist,sans-serif">{{ n.task }} <span style="color:#6E717A;font-weight:400">· {{ n.project }}</span></div>
+              <div style="font:12.5px/1.45 Geist,sans-serif;color:#A4A7AE;text-wrap:pretty">{{ n.msg }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column">
+        <div style="display:grid;grid-template-columns:2.2fr 0.9fr 0.8fr 1.1fr 3fr;gap:20px;padding:0 16px 8px;font:500 11px 'Geist Mono',monospace;letter-spacing:.06em;text-transform:uppercase;color:#5A5D66;border-bottom:1px solid #1F2126">
+          <span>Project</span><span>Tasks</span><span>Worktrees</span><span>Agents</span><span>Recent activity</span>
+        </div>
+        <sc-for list="{{ projects }}" as="p" hint-placeholder-count="6">
+          <div style="display:grid;grid-template-columns:2.2fr 0.9fr 0.8fr 1.1fr 3fr;gap:20px;align-items:center;padding:0 16px;height:62px;border-bottom:1px solid #1B1D21;border-radius:0" style-hover="background:#141519">
+            <div style="display:flex;flex-direction:column;gap:3px;min-width:0"><span style="font:500 14px Geist,sans-serif;color:{{ p.fg }}">{{ p.name }}</span><span style="font:12px 'Geist Mono',monospace;color:#6E717A;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.repo }} · {{ p.lang }}</span></div>
+            <div style="font:13px 'Geist Mono',monospace;color:#A4A7AE"><span style="color:{{ p.fg }}">{{ p.active }}</span> active <span style="color:#5A5D66">/ {{ p.open }}</span></div>
+            <div style="font:13px 'Geist Mono',monospace;color:#A4A7AE">{{ p.wt }}</div>
+            <div style="display:flex;align-items:center;gap:10px">
+              <div style="display:flex;gap:4px"><sc-for list="{{ p.dots }}" as="d" hint-placeholder-count="2"><span style="width:8px;height:8px;border-radius:50%;background:{{ d.c }}"></span></sc-for></div>
+              <sc-if value="{{ p.hasNeeds }}" hint-placeholder-val="{{ false }}"><span style="font:500 12px 'Geist Mono',monospace;color:#E3B25A">{{ p.needs }} need you</span></sc-if>
+              <sc-if value="{{ p.idle }}" hint-placeholder-val="{{ false }}"><span style="font:12px 'Geist Mono',monospace;color:#5A5D66">idle</span></sc-if>
+            </div>
+            <div style="display:flex;gap:14px;align-items:baseline;min-width:0"><span style="font:13px Geist,sans-serif;color:#A4A7AE;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.act }}</span><span style="font:12px 'Geist Mono',monospace;color:#5A5D66;flex:none">{{ p.ago }}</span></div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="flex:1"></div>
+      <div style="display:flex;gap:16px;font:12px 'Geist Mono',monospace;color:#5A5D66"><span>worktrees on disk · 10 · 4.6 GB</span><span style="color:#A4A7AE">2 to clean up — open Worktrees</span></div>
+    </div>
+  </div>
+  <dc-import name="StatusBar" context="~/code" hint-size="100%,26px"></dc-import>
+</div>
+</div>
+
+<!-- 1b Board -->
+<div class="dv-opt" id="1b">
+<div class="dv-olabel"><a class="dv-oid" href="#1b">1b</a><b>Project board</b> — columns are environment states; active cards carry a task → branch → agent thread</div>
+<div style="width:1440px;height:900px;background:#0F1012;display:flex;flex-direction:column;border-radius:10px;overflow:hidden;border:1px solid #2A2C31;color:#E8E8E6;font-family:Geist,system-ui,sans-serif">
+  <div style="height:36px;flex:none;display:flex;align-items:center;gap:8px;padding:0 14px;background:#0B0C0E;border-bottom:1px solid #1F2126;position:relative"><span style="width:12px;height:12px;border-radius:50%;background:#3A3C42"></span><span style="width:12px;height:12px;border-radius:50%;background:#3A3C42"></span><span style="width:12px;height:12px;border-radius:50%;background:#3A3C42"></span><span style="position:absolute;left:0;right:0;text-align:center;font-size:12px;color:#6E717A;pointer-events:none">Switchyard — my-saas</span></div>
+  <div style="flex:1;display:flex;min-height:0">
+    <dc-import name="Sidebar" active="my-saas" hint-size="232px,100%" style="flex:none;width:232px;height:100%"></dc-import>
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+      <div style="height:56px;flex:none;display:flex;align-items:center;gap:14px;padding:0 20px;border-bottom:1px solid #1F2126">
+        <span style="font:600 16px Geist,sans-serif">my-saas</span>
+        <span style="font:12px 'Geist Mono',monospace;color:#6E717A">lumen-labs/my-saas · main @ 8c1e2f4</span>
+        <div style="display:flex;gap:2px;margin-left:12px;background:#15161A;border:1px solid #23252B;border-radius:6px;padding:2px">
+          <span style="font-size:12.5px;padding:3px 10px;border-radius:4px;background:#23252B;color:#E8E8E6">Board</span>
+          <span style="font-size:12.5px;padding:3px 10px;color:#A4A7AE">List</span>
+          <span style="font-size:12.5px;padding:3px 10px;color:#A4A7AE">Worktrees</span>
+        </div>
+        <div style="flex:1"></div>
+        <span style="font:12px 'Geist Mono',monospace;color:#6E717A">3 agents · 1 needs you · 1 failed</span>
+        <div style="height:28px;padding:0 12px;border:1px solid #2A2C31;border-radius:5px;display:flex;align-items:center;gap:10px;font-size:12.5px;color:#A4A7AE">Filter<span style="font:11px 'Geist Mono',monospace;color:#5A5D66">F</span></div>
+        <div style="height:28px;padding:0 12px;background:#E8E8E6;color:#0F1012;border-radius:5px;display:flex;align-items:center;gap:10px;font-weight:500;font-size:12.5px">New task<span style="font:11px 'Geist Mono',monospace;color:#5A5D66">C</span></div>
+      </div>
+      <div style="flex:1;min-height:0;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;padding:16px 20px">
+        <sc-for list="{{ columns }}" as="col" hint-placeholder-count="5">
+          <div style="display:flex;flex-direction:column;gap:8px;min-width:0">
+            <div style="display:flex;align-items:center;gap:8px;height:24px;padding:0 2px">
+              <span style="font:500 12.5px Geist,sans-serif;color:#E8E8E6">{{ col.name }}</span>
+              <span style="font:12px 'Geist Mono',monospace;color:#5A5D66">{{ col.count }}</span>
+              <span style="flex:1"></span>
+              <span style="font:11px 'Geist Mono',monospace;color:#5A5D66">{{ col.hint }}</span>
+            </div>
+            <sc-for list="{{ col.cards }}" as="card" hint-placeholder-count="3">
+              <div style="background:{{ card.bg }};border:1px solid {{ card.ring }};border-radius:6px;padding:11px 12px;display:flex;flex-direction:column;gap:9px" style-hover="border-color:#3A3C43">
+                <div style="display:flex;gap:8px;align-items:baseline"><span style="font:500 13px/1.35 Geist,sans-serif;color:{{ card.tc }};flex:1;text-wrap:pretty">{{ card.title }}</span><span style="font:11px 'Geist Mono',monospace;color:#5A5D66">{{ card.key }}</span></div>
+                <sc-if value="{{ card.hasDesc }}" hint-placeholder-val="{{ false }}"><div style="font:12px/1.45 Geist,sans-serif;color:#7E818A;text-wrap:pretty">{{ card.desc }}</div></sc-if>
+                <sc-if value="{{ card.active }}" hint-placeholder-val="{{ false }}">
+                  <div style="margin-left:3px;border-left:1px solid #2E3037;padding-left:10px;display:flex;flex-direction:column;gap:5px">
+                    <div style="display:flex;align-items:center;gap:7px;font:12px Geist,sans-serif"><span style="width:7px;height:7px;border-radius:50%;background:{{ card.dot }};margin-left:-14px;box-shadow:0 0 0 3px {{ card.bg }}"></span><span style="color:#E8E8E6">{{ card.agent }}</span><span style="color:{{ card.dot }}">{{ card.stLabel }}</span></div>
+                    <div style="font:11.5px 'Geist Mono',monospace;color:#A4A7AE;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ card.branch }}</div>
+                    <div style="display:flex;gap:8px;font:11.5px 'Geist Mono',monospace;color:#6E717A"><span>{{ card.files }}</span><span style="color:#6BCB8B">{{ card.add }}</span><span style="color:#E86A5F">{{ card.del }}</span><span style="flex:1"></span><span style="color:{{ card.testsC }}">{{ card.tests }}</span></div>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ card.hasNote }}" hint-placeholder-val="{{ false }}"><div style="font:12px/1.4 Geist,sans-serif;color:{{ card.noteC }};background:{{ card.noteBg }};border-radius:4px;padding:6px 8px;text-wrap:pretty">{{ card.note }}</div></sc-if>
+                <sc-if value="{{ card.focused }}" hint-placeholder-val="{{ false }}"><div style="display:flex;gap:12px;font:11.5px 'Geist Mono',monospace;color:#95B4E8"><span>S start with agent</span><span style="color:#5A5D66">↵ open</span></div></sc-if>
+              </div>
+            </sc-for>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+  <dc-import name="StatusBar" context="my-saas · main" hint-size="100%,26px"></dc-import>
+</div>
+</div>
+
+<!-- 1c Workspace -->
+<div class="dv-opt" id="1c">
+<div class="dv-olabel"><a class="dv-oid" href="#1c">1c</a><b>Task workspace</b> — environment chain on the left, the agent's terminal centre, events on the right</div>
+<div style="width:1440px;height:900px;background:#0F1012;display:flex;flex-direction:column;border-radius:10px;overflow:hidden;border:1px solid #2A2C31;color:#E8E8E6;font-family:Geist,system-ui,sans-serif">
+  <div style="height:36px;flex:none;display:flex;align-items:center;gap:8px;padding:0 14px;background:#0B0C0E;border-bottom:1px solid #1F2126;position:relative"><span style="width:12px;height:12px;border-radius:50%;background:#3A3C42"></span><span style="width:12px;height:12px;border-radius:50%;background:#3A3C42"></span><span style="width:12px;height:12px;border-radius:50%;background:#3A3C42"></span><span style="position:absolute;left:0;right:0;text-align:center;font-size:12px;color:#6E717A;pointer-events:none">Switchyard — Checkout validation</span></div>
+  <div style="flex:1;display:flex;min-height:0">
+    <dc-import name="Sidebar" active="" task="checkout" hint-size="232px,100%" style="flex:none;width:232px;height:100%"></dc-import>
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column">
+      <div style="height:48px;flex:none;display:flex;align-items:center;gap:10px;padding:0 20px;border-bottom:1px solid #1F2126">
+        <span style="font-size:13px;color:#6E717A">my-saas</span><span style="color:#3A3C42">/</span><span style="font-size:13px;color:#6E717A">In Progress</span><span style="color:#3A3C42">/</span><span style="font:500 13px Geist,sans-serif">Checkout validation</span>
+        <div style="flex:1"></div>
+        <div style="height:28px;padding:0 12px;border:1px solid #2A2C31;border-radius:5px;display:flex;align-items:center;gap:10px;font-size:12.5px;color:#A4A7AE">Open in editor<span style="font:11px 'Geist Mono',monospace;color:#5A5D66">⌘E</span></div>
+        <div style="height:28px;padding:0 12px;border:1px solid #2A2C31;border-radius:5px;display:flex;align-items:center;gap:10px;font-size:12.5px;color:#A4A7AE">Pause agent<span style="font:11px 'Geist Mono',monospace;color:#5A5D66">⌃C</span></div>
+        <div style="height:28px;padding:0 12px;background:#E8E8E6;color:#0F1012;border-radius:5px;display:flex;align-items:center;gap:10px;font-weight:500;font-size:12.5px">Move to Review<span style="font:11px 'Geist Mono',monospace;color:#5A5D66">⌘⇧R</span></div>
+      </div>
+      <div style="flex:1;min-height:0;display:grid;grid-template-columns:300px minmax(0,1fr) 264px">
+        <div style="border-right:1px solid #1F2126;padding:20px;display:flex;flex-direction:column;gap:22px;overflow:hidden">
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="font:12px 'Geist Mono',monospace;color:#6E717A">MS-38 · In Progress</div>
+            <div style="font:600 19px/1.25 Geist,sans-serif;letter-spacing:-0.01em">Checkout validation</div>
+            <div style="font:13px/1.5 Geist,sans-serif;color:#A4A7AE;text-wrap:pretty">Validate address, card and shipping on client and server. Reject PO boxes for express. Share one zod schema.</div>
+          </div>
+          <div style="display:flex;flex-direction:column">
+            <div style="font:500 11px 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#5A5D66;margin-bottom:12px">Environment</div>
+            <sc-for list="{{ env }}" as="e" hint-placeholder-count="5">
+              <div style="display:grid;grid-template-columns:14px 1fr;gap:10px">
+                <div style="display:flex;flex-direction:column;align-items:center">
+                  <span style="width:8px;height:8px;border-radius:50%;border:1.5px solid {{ e.dot }};background:{{ e.fill }};margin-top:4px;flex:none"></span>
+                  <span style="flex:1;width:1px;background:{{ e.line }}"></span>
+                </div>
+                <div style="padding-bottom:12px;min-width:0">
+                  <div style="display:flex;gap:8px;align-items:baseline"><span style="font:11.5px Geist,sans-serif;color:#6E717A;width:62px;flex:none">{{ e.label }}</span><span style="font:12.5px 'Geist Mono',monospace;color:{{ e.vc }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ e.v }}</span></div>
+                  <div style="font:11.5px 'Geist Mono',monospace;color:#5A5D66;margin-left:70px;margin-top:1px">{{ e.sub }}</div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:2px;min-height:0">
+            <div style="display:flex;font:500 11px 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#5A5D66;margin-bottom:8px"><span style="flex:1">Changes</span><span style="letter-spacing:0;text-transform:none">12 files <span style="color:#6BCB8B">+384</span> <span style="color:#E86A5F">−91</span></span></div>
+            <sc-for list="{{ files }}" as="f" hint-placeholder-count="6">
+              <div style="display:flex;gap:8px;align-items:center;height:24px;font:12px 'Geist Mono',monospace;border-radius:4px;padding:0 6px;margin:0 -6px" style-hover="background:#16171B">
+                <span style="color:{{ f.sc }};width:10px">{{ f.s }}</span>
+                <span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:#A4A7AE"><span style="color:#5A5D66">{{ f.dir }}</span>{{ f.name }}</span>
+                <span style="color:#6BCB8B">{{ f.a }}</span><span style="color:#E86A5F;width:28px;text-align:right">{{ f.d }}</span>
+              </div>
+            </sc-for>
+            <div style="font:12px 'Geist Mono',monospace;color:#5A5D66;padding-top:4px">+6 more · view all in Changes</div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;min-width:0;background:#0C0D0F">
+          <div style="height:38px;flex:none;display:flex;align-items:stretch;gap:20px;padding:0 18px;border-bottom:1px solid #1F2126;font-size:12.5px">
+            <span style="display:flex;align-items:center;color:#E8E8E6;box-shadow:inset 0 -1px 0 #E8E8E6">Terminal</span>
+            <span style="display:flex;align-items:center;gap:6px;color:#A4A7AE">Changes <span style="font:11px 'Geist Mono',monospace;color:#6E717A">12</span></span>
+            <span style="display:flex;align-items:center;gap:6px;color:#5A5D66">Preview <span style="font:10.5px 'Geist Mono',monospace;border:1px dashed #2E3037;border-radius:3px;padding:0 4px">later</span></span>
+            <span style="flex:1"></span>
+            <span style="display:flex;align-items:center;gap:6px;font:11.5px 'Geist Mono',monospace;color:#6E717A">
+              <span style="background:#1A1C20;border:1px solid #2A2C31;color:#E8E8E6;border-radius:4px;padding:2px 8px;display:flex;gap:6px;align-items:center"><span style="width:6px;height:6px;border-radius:50%;background:#6BCB8B"></span>kiro</span>
+              <span style="padding:2px 8px">zsh</span><span style="padding:2px 8px">pnpm dev :3000</span><span style="padding:2px 6px">+</span>
+            </span>
+          </div>
+          <div style="flex:1;min-height:0;padding:16px 20px;display:flex;flex-direction:column;gap:1px;font:12.5px/19px 'Geist Mono',ui-monospace,monospace;overflow:hidden">
+            <sc-for list="{{ term }}" as="l" hint-placeholder-count="18">
+              <div style="display:flex;gap:10px;min-height:19px">
+                <span style="width:38px;flex:none;color:{{ l.ac }};white-space:pre">{{ l.a }}</span>
+                <span style="flex:1;min-width:0;color:{{ l.bc }};white-space:pre;overflow:hidden;text-overflow:ellipsis">{{ l.b }}</span>
+                <span style="color:#6BCB8B">{{ l.cA }}</span><span style="color:#E86A5F;width:30px;text-align:right">{{ l.cD }}</span>
+              </div>
+            </sc-for>
+            <div style="display:flex;gap:10px"><span style="width:38px"></span><span style="width:8px;height:16px;background:#6BCB8B;opacity:.8;margin-top:2px"></span></div>
+          </div>
+          <div style="flex:none;margin:0 16px 16px;border:1px solid #2A2C31;border-radius:6px;background:#121317;padding:10px 12px;display:flex;align-items:center;gap:12px">
+            <span style="font:12.5px 'Geist Mono',monospace;color:#6BCB8B">›</span>
+            <span style="flex:1;font:13px Geist,sans-serif;color:#5A5D66">Message Kiro — it's working; messages queue until the next step</span>
+            <span style="font:11px 'Geist Mono',monospace;color:#5A5D66">↵ send · ⌘. focus</span>
+          </div>
+        </div>
+        <div style="border-left:1px solid #1F2126;padding:20px 18px;display:flex;flex-direction:column;gap:14px;overflow:hidden">
+          <div style="font:500 11px 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#5A5D66">Activity</div>
+          <div style="display:flex;flex-direction:column">
+            <sc-for list="{{ activity }}" as="a" hint-placeholder-count="8">
+              <div style="display:grid;grid-template-columns:12px 1fr;gap:10px">
+                <div style="display:flex;flex-direction:column;align-items:center"><span style="width:7px;height:7px;border-radius:50%;background:{{ a.c }};margin-top:5px;flex:none"></span><span style="flex:1;width:1px;background:#23252B"></span></div>
+                <div style="padding-bottom:14px"><div style="font:12.5px/1.4 Geist,sans-serif;color:{{ a.tc }};text-wrap:pretty">{{ a.t }}</div><div style="font:11px 'Geist Mono',monospace;color:#5A5D66;margin-top:2px">{{ a.m }}</div></div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="flex:1"></div>
+          <div style="border-top:1px solid #1F2126;padding-top:14px;display:flex;flex-direction:column;gap:6px;font:12px 'Geist Mono',monospace;color:#6E717A">
+            <div style="display:flex"><span style="flex:1">Tests</span><span style="color:#6BCB8B">41 passing</span></div>
+            <div style="display:flex"><span style="flex:1">Typecheck</span><span style="color:#A4A7AE">clean</span></div>
+            <div style="display:flex"><span style="flex:1">Agent time</span><span style="color:#A4A7AE">18m 04s</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <dc-import name="StatusBar" context="feature/checkout ↑4" hint-size="100%,26px"></dc-import>
+</div>
+</div>
+
+<!-- 1d Agents -->
+<div class="dv-opt" id="1d">
+<div class="dv-olabel"><a class="dv-oid" href="#1d">1d</a><b>Multi-agent overview</b> — sorted by who's blocked; answer from the tile without opening the task</div>
+<div style="width:1440px;height:900px;background:#0F1012;display:flex;flex-direction:column;border-radius:10px;overflow:hidden;border:1px solid #2A2C31;color:#E8E8E6;font-family:Geist,system-ui,sans-serif">
+  <div style="height:36px;flex:none;display:flex;align-items:center;gap:8px;padding:0 14px;background:#0B0C0E;border-bottom:1px solid #1F2126;position:relative"><span style="width:12px;height:12px;border-radius:50%;background:#3A3C42"></span><span style="width:12px;height:12px;border-radius:50%;background:#3A3C42"></span><span style="width:12px;height:12px;border-radius:50%;background:#3A3C42"></span><span style="position:absolute;left:0;right:0;text-align:center;font-size:12px;color:#6E717A;pointer-events:none">Switchyard — Agents</span></div>
+  <div style="flex:1;display:flex;min-height:0">
+    <dc-import name="Sidebar" active="agents" hint-size="232px,100%" style="flex:none;width:232px;height:100%"></dc-import>
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;padding:24px 28px;gap:18px;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:16px">
+        <div style="font:600 20px Geist,sans-serif;letter-spacing:-0.01em">Agents</div>
+        <div style="display:flex;gap:2px;background:#15161A;border:1px solid #23252B;border-radius:6px;padding:2px;font:12px Geist,sans-serif">
+          <span style="padding:3px 10px;border-radius:4px;background:#23252B;color:#E8E8E6">All <span style="font-family:'Geist Mono';color:#6E717A">8</span></span>
+          <span style="padding:3px 10px;color:#E3B25A">Needs you <span style="font-family:'Geist Mono'">3</span></span>
+          <span style="padding:3px 10px;color:#A4A7AE">Working <span style="font-family:'Geist Mono';color:#6E717A">3</span></span>
+          <span style="padding:3px 10px;color:#A4A7AE">Done <span style="font-family:'Geist Mono';color:#6E717A">2</span></span>
+        </div>
+        <div style="flex:1"></div>
+        <span style="font:11.5px 'Geist Mono',monospace;color:#5A5D66">J/K move · ↵ open · Y/N answer · R reply</span>
+      </div>
+      <div style="display:flex;align-items:baseline;gap:10px;margin-top:4px"><span style="font:500 13px Geist,sans-serif;color:#E3B25A">Needs you</span><span style="font:12px 'Geist Mono',monospace;color:#5A5D66">oldest first</span></div>
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px">
+        <sc-for list="{{ blocked }}" as="t" hint-placeholder-count="3">
+          <div style="background:#15161A;border:1px solid {{ t.border }};border-radius:7px;display:flex;flex-direction:column;overflow:hidden;box-shadow:{{ t.shadow }}">
+            <div style="padding:12px 14px 10px;display:flex;flex-direction:column;gap:6px">
+              <div style="display:flex;align-items:center;gap:8px;font:12px 'Geist Mono',monospace"><span style="width:7px;height:7px;border-radius:50%;background:{{ t.c }}"></span><span style="color:#E8E8E6">{{ t.agent }}</span><span style="color:{{ t.c }}">{{ t.state }}</span><span style="flex:1"></span><span style="color:#5A5D66">{{ t.ago }}</span></div>
+              <div style="font:500 14.5px Geist,sans-serif">{{ t.task }}</div>
+              <div style="font:11.5px 'Geist Mono',monospace;color:#6E717A">{{ t.project }} · {{ t.branch }}</div>
+            </div>
+            <div style="background:#0C0D0F;border-top:1px solid #1F2126;border-bottom:1px solid #1F2126;padding:10px 14px;font:11.5px/18px 'Geist Mono',monospace;height:110px;box-sizing:border-box;overflow:hidden">
+              <sc-for list="{{ t.lines }}" as="l" hint-placeholder-count="5"><div style="color:{{ l.c }};white-space:pre;overflow:hidden;text-overflow:ellipsis">{{ l.t }}</div></sc-for>
+            </div>
+            <div style="padding:12px 14px;display:flex;flex-direction:column;gap:10px">
+              <div style="font:13px/1.45 Geist,sans-serif;color:#E8E8E6;text-wrap:pretty">{{ t.ask }}</div>
+              <div style="display:flex;gap:6px">
+                <sc-for list="{{ t.actions }}" as="b" hint-placeholder-count="3">
+                  <span style="height:26px;padding:0 10px;border-radius:5px;display:flex;align-items:center;gap:8px;font:500 12px Geist,sans-serif;background:{{ b.bg }};color:{{ b.fg }};border:1px solid {{ b.bd }}">{{ b.l }}<span style="font:10.5px 'Geist Mono',monospace;opacity:.6">{{ b.k }}</span></span>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display:flex;align-items:baseline;gap:10px;margin-top:6px"><span style="font:500 13px Geist,sans-serif;color:#A4A7AE">Working</span></div>
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px">
+        <sc-for list="{{ working }}" as="t" hint-placeholder-count="3">
+          <div style="background:#131418;border:1px solid #23252B;border-radius:7px;display:flex;flex-direction:column;overflow:hidden">
+            <div style="padding:12px 14px 10px;display:flex;align-items:center;gap:8px">
+              <span style="width:7px;height:7px;border-radius:50%;background:#6BCB8B"></span>
+              <span style="font:500 13.5px Geist,sans-serif;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ t.task }}</span>
+              <span style="font:11.5px 'Geist Mono',monospace;color:#6E717A">{{ t.agent }} · {{ t.ago }}</span>
+            </div>
+            <div style="padding:0 14px 12px;font:11.5px 'Geist Mono',monospace;color:#5A5D66">{{ t.project }} · {{ t.branch }}</div>
+            <div style="background:#0C0D0F;border-top:1px solid #1F2126;padding:10px 14px;font:11.5px/18px 'Geist Mono',monospace;height:92px;box-sizing:border-box;overflow:hidden">
+              <sc-for list="{{ t.lines }}" as="l" hint-placeholder-count="4"><div style="color:{{ l.c }};white-space:pre;overflow:hidden;text-overflow:ellipsis">{{ l.t }}</div></sc-for>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display:flex;flex-direction:column;margin-top:6px">
+        <div style="font:500 13px Geist,sans-serif;color:#A4A7AE;margin-bottom:6px">Done — ready for review</div>
+        <sc-for list="{{ done }}" as="d" hint-placeholder-count="2">
+          <div style="display:grid;grid-template-columns:16px 1.6fr 1.4fr 1fr 1fr auto;gap:14px;align-items:center;height:40px;border-top:1px solid #1B1D21;font:12.5px Geist,sans-serif" style-hover="background:#141519">
+            <span style="color:#6BCB8B;font-family:'Geist Mono'">✓</span>
+            <span style="color:#E8E8E6">{{ d.task }}</span>
+            <span style="font:12px 'Geist Mono',monospace;color:#6E717A">{{ d.project }} · {{ d.branch }}</span>
+            <span style="font:12px 'Geist Mono',monospace;color:#A4A7AE">{{ d.agent }} · {{ d.ago }}</span>
+            <span style="font:12px 'Geist Mono',monospace;color:#6BCB8B">{{ d.tests }}</span>
+            <span style="font:12px Geist,sans-serif;color:#A4A7AE">Review changes <span style="font:11px 'Geist Mono',monospace;color:#5A5D66">↵</span></span>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+  <dc-import name="StatusBar" context="8 agents" hint-size="100%,26px"></dc-import>
+</div>
+</div>
+
+<!-- 1e Start task -->
+<div class="dv-opt" id="1e">
+<div class="dv-olabel"><a class="dv-oid" href="#1e">1e</a><b>Start task</b> — press S on a card (or drag to In Progress). One decision: which agent. Keys 1–4 work here.</div>
+<div style="width:1440px;height:900px;background:#0F1012;display:flex;flex-direction:column;border-radius:10px;overflow:hidden;border:1px solid #2A2C31;color:#E8E8E6;font-family:Geist,system-ui,sans-serif;position:relative">
+  <div style="height:36px;flex:none;display:flex;align-items:center;gap:8px;padding:0 14px;background:#0B0C0E;border-bottom:1px solid #1F2126;position:relative"><span style="width:12px;height:12px;border-radius:50%;background:#3A3C42"></span><span style="width:12px;height:12px;border-radius:50%;background:#3A3C42"></span><span style="width:12px;height:12px;border-radius:50%;background:#3A3C42"></span><span style="position:absolute;left:0;right:0;text-align:center;font-size:12px;color:#6E717A;pointer-events:none">Switchyard — my-saas</span></div>
+  <div style="flex:1;display:flex;min-height:0">
+    <dc-import name="Sidebar" active="my-saas" hint-size="232px,100%" style="flex:none;width:232px;height:100%"></dc-import>
+    <div style="flex:1;min-width:0;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;padding:72px 20px 16px">
+      <sc-for list="{{ columns }}" as="col" hint-placeholder-count="5">
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div style="font:500 12.5px Geist,sans-serif;height:24px">{{ col.name }} <span style="font:12px 'Geist Mono';color:#5A5D66">{{ col.count }}</span></div>
+          <sc-for list="{{ col.cards }}" as="card" hint-placeholder-count="3"><div style="background:#16171B;border:1px solid #23252B;border-radius:6px;padding:11px 12px;font:500 13px Geist,sans-serif;height:{{ card.h }}">{{ card.title }}</div></sc-for>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+  <dc-import name="StatusBar" context="my-saas · main" hint-size="100%,26px"></dc-import>
+  <div style="position:absolute;inset:36px 0 26px 0;background:rgba(6,7,8,0.62);display:flex;align-items:flex-start;justify-content:center;padding-top:96px">
+    <div style="width:620px;background:#15161A;border:1px solid #2E3037;border-radius:10px;box-shadow:0 24px 64px rgba(0,0,0,0.55);display:flex;flex-direction:column;overflow:hidden">
+      <div style="padding:18px 20px 14px;display:flex;flex-direction:column;gap:4px;border-bottom:1px solid #23252B">
+        <div style="display:flex;font:12px 'Geist Mono',monospace;color:#6E717A"><span style="flex:1">Start task · MS-41</span><span>esc</span></div>
+        <div style="font:600 18px Geist,sans-serif;letter-spacing:-0.01em">Add password reset</div>
+      </div>
+      <div style="padding:14px 12px 6px;display:flex;flex-direction:column;gap:2px">
+        <div style="font:500 11px 'Geist Mono',monospace;letter-spacing:.08em;text-transform:uppercase;color:#5A5D66;padding:0 8px 8px">Agent</div>
+        <sc-for list="{{ agents }}" as="g" hint-placeholder-count="4">
+          <div onClick="{{ g.pick }}" style="display:grid;grid-template-columns:22px 1fr auto;gap:12px;align-items:center;padding:9px 10px;border-radius:6px;background:{{ g.bg }};box-shadow:inset 0 0 0 1px {{ g.ring }};cursor:pointer" style-hover="background:#1B1D22">
+            <span style="font:500 11.5px 'Geist Mono',monospace;color:{{ g.kc }};text-align:center;border:1px solid #2E3037;border-radius:4px;line-height:18px">{{ g.n }}</span>
+            <div style="display:flex;flex-direction:column;gap:1px"><span style="font:500 13.5px Geist,sans-serif;color:{{ g.fg }}">{{ g.name }}</span><span style="font:12px Geist,sans-serif;color:#6E717A">{{ g.note }}</span></div>
+            <span style="font:11.5px 'Geist Mono',monospace;color:#5A5D66">{{ g.meta }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="margin:10px 20px 0;border:1px solid #23252B;border-radius:6px;background:#111215;padding:10px 12px;display:grid;grid-template-columns:78px 1fr auto;row-gap:6px;column-gap:12px;font:12.5px 'Geist Mono',monospace;align-items:baseline">
+        <span style="color:#5A5D66;font-family:Geist">Branch</span><span style="color:#E8E8E6">feature/password-reset</span><span style="color:#5A5D66;font-size:11px">edit ⌘B</span>
+        <span style="color:#5A5D66;font-family:Geist">From</span><span style="color:#A4A7AE">main @ 8c1e2f4</span><span></span>
+        <span style="color:#5A5D66;font-family:Geist">Worktree</span><span style="color:#A4A7AE">~/.wt/my-saas/password-reset</span><span></span>
+        <span style="color:#5A5D66;font-family:Geist">Setup</span><span style="color:#A4A7AE">pnpm install · cp .env.local</span><span style="color:#5A5D66;font-size:11px">from switchyard.toml</span>
+      </div>
+      <div style="margin:10px 20px 0;display:flex;flex-direction:column;gap:6px">
+        <div style="font:12px Geist,sans-serif;color:#6E717A">First message to {{ agentName }} <span style="color:#5A5D66">— prefilled from the task</span></div>
+        <div style="border:1px solid #23252B;border-radius:6px;padding:10px 12px;font:13px/1.5 Geist,sans-serif;color:#A4A7AE;min-height:58px;text-wrap:pretty">Implement MS-41: email reset link with a 30-minute single-use token, rate-limited to 5 requests/hour per email. Reuse the mailer from feature/emails. Add tests.</div>
+      </div>
+      <div style="margin-top:16px;padding:12px 20px;border-top:1px solid #23252B;background:#121317;display:flex;align-items:center;gap:10px">
+        <span style="flex:1;font:12px Geist,sans-serif;color:#6E717A">Creates worktree + branch, runs setup, launches {{ agentName }}, opens the workspace.</span>
+        <span style="height:30px;padding:0 12px;border:1px solid #2A2C31;border-radius:5px;display:flex;align-items:center;font-size:12.5px;color:#A4A7AE">Cancel</span>
+        <span style="height:30px;padding:0 14px;background:#E8E8E6;color:#0F1012;border-radius:5px;display:flex;align-items:center;gap:10px;font-weight:500;font-size:12.5px">Start with {{ agentName }}<span style="font:11px 'Geist Mono',monospace;color:#5A5D66">⌘↵</span></span>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- 1f Launching -->
+<div class="dv-opt" id="1f">
+<div class="dv-olabel"><a class="dv-oid" href="#1f">1f</a><b>Start task — launching</b> — the same sheet shows each step; workspace opens itself when the agent is up</div>
+<div style="width:620px;background:#15161A;border:1px solid #2E3037;border-radius:10px;display:flex;flex-direction:column;overflow:hidden;color:#E8E8E6;font-family:Geist,system-ui,sans-serif">
+  <div style="padding:18px 20px 14px;display:flex;flex-direction:column;gap:4px;border-bottom:1px solid #23252B">
+    <div style="display:flex;font:12px 'Geist Mono',monospace;color:#6E717A"><span style="flex:1">Starting · MS-41 · Kiro</span><span>3.1s</span></div>
+    <div style="font:600 18px Geist,sans-serif;letter-spacing:-0.01em">Add password reset</div>
+  </div>
+  <div style="padding:18px 20px 8px;display:flex;flex-direction:column">
+    <sc-for list="{{ steps }}" as="s" hint-placeholder-count="5">
+      <div style="display:grid;grid-template-columns:16px 1fr auto;gap:12px">
+        <div style="display:flex;flex-direction:column;align-items:center"><span style="width:14px;height:14px;border-radius:50%;border:1.5px solid {{ s.c }};background:{{ s.fill }};color:#0F1012;font:600 9px/14px 'Geist Mono',monospace;text-align:center;box-sizing:border-box;line-height:11px;flex:none">{{ s.g }}</span><span style="flex:1;width:1px;background:#2A2C31;min-height:10px"></span></div>
+        <div style="padding-bottom:14px;min-width:0"><div style="font:13.5px Geist,sans-serif;color:{{ s.tc }}">{{ s.t }}</div><div style="font:12px 'Geist Mono',monospace;color:#6E717A;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ s.d }}</div></div>
+        <span style="font:11.5px 'Geist Mono',monospace;color:#5A5D66">{{ s.time }}</span>
+      </div>
+    </sc-for>
+  </div>
+  <div style="padding:12px 20px;border-top:1px solid #23252B;background:#121317;display:flex;align-items:center;gap:10px">
+    <span style="flex:1;font:12px Geist,sans-serif;color:#6E717A">Card moved to In Progress. Workspace opens when Kiro is ready.</span>
+    <span style="height:30px;padding:0 12px;border:1px solid #2A2C31;border-radius:5px;display:flex;align-items:center;gap:10px;font-size:12.5px;color:#A4A7AE">Keep in background<span style="font:11px 'Geist Mono',monospace;color:#5A5D66">esc</span></span>
+  </div>
+</div>
+</div>
+
+</div>
+<p class="dv-next">Try next: "make the workspace terminal full-width with the env chain as a header strip" · "show the Changes tab of <a class="dv-oid" href="#1c">1c</a>" · "a compact board density"</p>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { agent: 0 };
+  componentDidMount() {
+    this._k = e => { const n = +e.key; if (n >= 1 && n <= 4 && !e.metaKey) this.setState({ agent: n - 1 }); };
+    window.addEventListener('keydown', this._k);
+  }
+  componentWillUnmount() { window.removeEventListener('keydown', this._k); }
+  renderVals() {
+    const G = '#6BCB8B', A = '#E3B25A', R = '#E86A5F', B = '#95B4E8', M = '#5A5D66', T1 = '#E8E8E6', T2 = '#A4A7AE', T3 = '#6E717A';
+    const S = { working: G, waiting: A, failed: R, done: M };
+    const chain = [
+      ['Project', 'my-saas → lumen-labs/my-saas', 'A repo on disk. Holds the board.'],
+      ['Task', 'MS-38 Checkout validation', 'The unit of work. Lives on the board.'],
+      ['Environment', '⎇ feature/checkout · ~/.wt/my-saas/checkout', 'Branch + worktree, created when the task starts.'],
+      ['Agent session', 'Kiro · Working · 18m', 'One agent per task, running inside the worktree.'],
+      ['Surfaces', 'Terminal · Changes · Activity · Preview*', 'Ways to watch and steer the session.']
+    ].map(([label, eg, note], i, arr) => ({ label, eg, note, dot: i === 3 ? G : '#6E717A', fill: i === 3 ? G : 'transparent', line: i === arr.length - 1 ? 'transparent' : '#2E3037' }));
+    const keys = [['Command palette', '⌘K'], ['Projects / Agents / Worktrees', '⌘1 ⌘2 ⌘3'], ['Start task with agent', 'S'], ['Open task workspace', '↵'], ['Move focus on board', 'H J K L'], ['Jump to next blocked agent', '⌘J'], ['Message focused agent', '⌘.'], ['Move card right / left', '⌘⇧→ ←']].map(([d, k]) => ({ d, k }));
+
+    const needs = [
+      { agent: 'Codex', state: 'Failed', c: R, ago: '4m', task: 'Session refresh tokens', project: 'my-saas', msg: 'Exited 1 — 3 tests failing in refresh.test.ts after token rotation change.' },
+      { agent: 'Claude Code', state: 'Waiting', c: A, ago: '7m', task: 'Search ranking', project: 'my-saas', msg: 'Asks: drop legacy index idx_products_trgm? Still referenced by /admin/search.' },
+      { agent: 'Claude Code', state: 'Waiting', c: A, ago: '32m', task: 'Upgrade RDS to Postgres 16', project: 'infra', msg: 'Asks: approve terraform apply on staging — 0 add, 3 change, 0 destroy.' }
+    ].map(n => ({ ...n, border: n.c === R ? 'rgba(232,106,95,0.35)' : 'rgba(227,178,90,0.3)' }));
+    const projects = [
+      { name: 'my-saas', repo: 'lumen-labs/my-saas', lang: 'TypeScript', active: 5, open: 14, wt: 6, dots: [G, A, R, M, M], needs: 2, act: 'Kiro edited app/api/checkout/route.ts on feature/checkout', ago: '2m' },
+      { name: 'api-gateway', repo: 'lumen-labs/api-gateway', lang: 'Go', active: 1, open: 9, wt: 1, dots: [G], needs: 0, act: 'Codex: go test ./internal/ratelimit/... ok (0.41s)', ago: '6m' },
+      { name: 'mobile-app', repo: 'lumen-labs/mobile', lang: 'React Native', active: 1, open: 11, wt: 1, dots: [G], needs: 0, act: 'Gemini migrated 14 of 19 screens to expo-router', ago: '11m' },
+      { name: 'infra', repo: 'lumen-labs/infra', lang: 'Terraform', active: 1, open: 4, wt: 1, dots: [A], needs: 1, act: 'Claude waiting on terraform apply approval (staging)', ago: '32m' },
+      { name: 'design-tokens', repo: 'lumen-labs/tokens', lang: 'TypeScript', active: 0, open: 3, wt: 0, dots: [], needs: 0, act: 'Merged #212 "semantic surface tokens" into main', ago: 'yesterday' },
+      { name: 'docs-site', repo: 'lumen-labs/docs', lang: 'Astro', active: 0, open: 6, wt: 1, dots: [], needs: 0, act: 'ana: fix broken anchors in /guides/webhooks', ago: '3d' }
+    ].map(p => ({ ...p, dots: p.dots.map(c => ({ c })), hasNeeds: p.needs > 0, idle: p.dots.length === 0, fg: p.active ? T1 : T2 }));
+
+    const card = o => ({
+      key: o.key, title: o.title, desc: o.desc || '', hasDesc: !!o.desc, active: !!o.agent, agent: o.agent || '', stLabel: o.stLabel || '',
+      dot: S[o.st] || M, branch: o.branch || '', files: o.files || '', add: o.add || '', del: o.del || '', tests: o.tests || '', testsC: o.testsC || T3,
+      hasNote: !!o.note, note: o.note || '', noteC: o.noteC || A, noteBg: o.noteC === R ? 'rgba(232,106,95,0.08)' : 'rgba(227,178,90,0.08)',
+      focused: !!o.focused, ring: o.focused ? B : '#23252B', bg: o.focused ? '#181A20' : '#16171B', tc: o.done ? T2 : T1, h: o.h || 'auto'
+    });
+    const columns = [
+      { name: 'Backlog', hint: '', cards: [
+        { key: 'MS-41', title: 'Add password reset', desc: 'Email link, 30-min single-use token, rate-limited.' },
+        { key: 'MS-44', title: 'Improve dashboard load time', desc: 'p95 is 2.8s on /dashboard. Target under 1s.' },
+        { key: 'MS-46', title: 'Add Stripe webhooks', desc: 'invoice.paid, customer.subscription.*' },
+        { key: 'MS-47', title: 'Rate-limit public API' }] },
+      { name: 'Ready', hint: '', cards: [
+        { key: 'MS-39', title: 'Invoice PDF export', desc: 'Server-rendered; attach to receipt email.', focused: true },
+        { key: 'MS-40', title: 'Migrate to Postgres 16', desc: 'After infra RDS upgrade lands.' }] },
+      { name: 'In Progress', hint: '3 agents', cards: [
+        { key: 'MS-38', title: 'Checkout validation', agent: 'Kiro', stLabel: 'Working', st: 'working', branch: 'feature/checkout', files: '12 files', add: '+384', del: '−91', tests: '41 ✓', testsC: G },
+        { key: 'MS-35', title: 'Search ranking', agent: 'Claude Code', stLabel: 'Waiting', st: 'waiting', branch: 'feature/search-ranking', files: '5 files', add: '+122', del: '−40', note: 'Asks: drop legacy trigram index?' },
+        { key: 'MS-36', title: 'Session refresh tokens', agent: 'Codex', stLabel: 'Failed', st: 'failed', branch: 'fix/session-refresh', files: '7 files', add: '+210', del: '−66', tests: '3 ✕', testsC: R, note: 'Exited 1 after test run · 4m ago', noteC: R }] },
+      { name: 'Review', hint: '', cards: [
+        { key: 'MS-33', title: 'Transactional emails', agent: 'Kiro', stLabel: 'Done', st: 'done', branch: 'feature/emails', files: '9 files', add: '+540', del: '−12', tests: '86 ✓', testsC: G },
+        { key: 'MS-34', title: 'Team invites', agent: 'Gemini', stLabel: 'Done', st: 'done', branch: 'feature/team-invites', files: '6 files', add: '+301', del: '−44', tests: '52 ✓', testsC: G }] },
+      { name: 'Done', hint: 'this week', cards: [
+        { key: 'MS-28', title: 'Authentication', desc: 'Merged #198 · worktree pruned', done: true },
+        { key: 'MS-30', title: 'Email verification', desc: 'Merged #203 · worktree pruned', done: true },
+        { key: 'MS-31', title: 'Sentry setup', desc: 'Merged #205 · worktree pruned', done: true }] }
+    ].map(c => ({ ...c, count: String(c.cards.length), cards: c.cards.map(x => card({ ...x, h: x.agent ? '112px' : (x.desc ? '64px' : 'auto') })) }));
+
+    const env = [
+      ['Task', 'MS-38', 'Checkout validation', T1],
+      ['Branch', 'feature/checkout', '↑4 ↓0 vs main', T1],
+      ['Worktree', '~/.wt/my-saas/checkout', '12 modified · 1 untracked', T2],
+      ['Agent', 'Kiro · Working', '18m · session 7f3a', G],
+      ['Terminal', '3 sessions', 'kiro · zsh · pnpm dev :3000', T2]
+    ].map(([label, v, sub, vc], i, arr) => ({ label, v, sub, vc, dot: i === 3 ? G : '#6E717A', fill: i === 3 ? G : (i === 0 ? '#6E717A' : 'transparent'), line: i === arr.length - 1 ? 'transparent' : '#2E3037' }));
+    const files = [
+      ['M', 'src/checkout/', 'schema.ts', '+48', '−12'], ['M', 'src/checkout/', 'CheckoutForm.tsx', '+96', '−31'],
+      ['M', 'src/checkout/', 'validate.ts', '+71', '−18'], ['M', 'src/checkout/', 'address.ts', '+6', '−2'],
+      ['A', 'src/checkout/', 'address.test.ts', '+44', ''], ['M', 'app/api/checkout/', 'route.ts', '+38', '−9']
+    ].map(([s, dir, name, a, d]) => ({ s, dir, name, a, d, sc: s === 'A' ? G : A }));
+    const L = (a, ac, b, bc, cA, cD) => ({ a: a || '', ac: ac || T3, b: b || '', bc: bc || T2, cA: cA || '', cD: cD || '' });
+    const term = [
+      L('~/.wt', B, 'my-saas/checkout  on feature/checkout', T3),
+      L('$', T3, 'kiro --task MS-38', T1),
+      L(),
+      L('kiro', G, 'session 7f3a · spec .kiro/specs/checkout-validation.md', T3),
+      L('▸', T3, 'Read validate.ts, schema.ts, CheckoutForm.tsx'),
+      L('✎', B, 'src/checkout/schema.ts', T1, '+48', '−12'),
+      L('✎', B, 'src/checkout/CheckoutForm.tsx', T1, '+96', '−31'),
+      L('$', T3, 'pnpm vitest run src/checkout', T1),
+      L('PASS', G, 'validate.test.ts (14 tests)'),
+      L('FAIL', R, 'address.test.ts › rejects PO boxes for express shipping'),
+      L('', T3, '  expected false, received true', T3),
+      L('▸', T3, 'Postal regex misses "P.O. Box" with periods — widening match'),
+      L('✎', B, 'src/checkout/address.ts', T1, '+6', '−2'),
+      L('$', T3, 'pnpm vitest run src/checkout', T1),
+      L('PASS', G, '3 suites · 41 tests · 1.84s'),
+      L('git', T3, 'commit a41c9e2  "validate checkout payload with shared schema"', T3),
+      L('▸', T3, 'Wiring server-side validation into /api/checkout', T1),
+      L('✎', B, 'app/api/checkout/route.ts', T1, '+38', '−9')
+    ];
+    const activity = [
+      ['Editing app/api/checkout/route.ts', 'now', G, T1],
+      ['Committed a41c9e2', '2m', T3, T2],
+      ['Tests passing · 41', '6m', G, T2],
+      ['Tests failing · address.test.ts', '9m', R, T2],
+      ['Edited 2 files', '12m', T3, T2],
+      ['Read spec checkout-validation.md', '17m', T3, T2],
+      ['Kiro launched in worktree', '18m', T3, T2],
+      ['Worktree + branch created from main', '18m', T3, T2]
+    ].map(([t, m, c, tc]) => ({ t, m, c, tc }));
+
+    const btn = (l, k, primary) => ({ l, k, bg: primary ? T1 : 'transparent', fg: primary ? '#0F1012' : T2, bd: primary ? T1 : '#2E3037' });
+    const ln = (t, c) => ({ t, c: c || T2 });
+    const blocked = [
+      { agent: 'Codex', state: 'Failed', c: R, ago: '4m', task: 'Session refresh tokens', project: 'my-saas', branch: 'fix/session-refresh',
+        lines: [ln('$ pnpm vitest run src/auth', T3), ln('FAIL refresh.test.ts (3 failed)', R), ln('  ✕ rotates token on reuse detection', T2), ln('  ✕ revokes family after reuse', T2), ln('process exited with code 1', R)],
+        ask: 'Stopped after tests failed. Send the failure back or take over?', actions: [btn('Send failure to Codex', '↵', true), btn('Open', 'O'), btn('Retry', 'R')] },
+      { agent: 'Claude Code', state: 'Waiting', c: A, ago: '7m', task: 'Search ranking', project: 'my-saas', branch: 'feature/search-ranking',
+        lines: [ln('▸ Benchmarked ts_rank_cd vs trigram: 38ms → 9ms'), ln('✎ db/migrations/0042_search_tsv.sql  +61', B), ln('▸ idx_products_trgm now unused by /search'), ln('  …still referenced by /admin/search', A), ln('? awaiting input', A)],
+        ask: 'Drop legacy index idx_products_trgm? It’s still used by /admin/search.', actions: [btn('Yes', 'Y', true), btn('No', 'N'), btn('Reply…', 'R')] },
+      { agent: 'Claude Code', state: 'Waiting', c: A, ago: '32m', task: 'Upgrade RDS to Postgres 16', project: 'infra', branch: 'chore/rds-pg16',
+        lines: [ln('$ terraform plan -var-file=staging.tfvars', T3), ln('~ aws_db_instance.main', A), ln('    engine_version: "15.6" → "16.3"'), ln('~ aws_db_parameter_group.pg'), ln('Plan: 0 to add, 3 to change, 0 to destroy.', T1)],
+        ask: 'Approve terraform apply on staging?', actions: [btn('Approve', 'Y', true), btn('Reject', 'N'), btn('View plan', 'O')] }
+    ].map(t => ({ ...t, border: t.c === R ? 'rgba(232,106,95,0.4)' : 'rgba(227,178,90,0.32)', shadow: 'none' }));
+    const working = [
+      { agent: 'Kiro', ago: '18m', task: 'Checkout validation', project: 'my-saas', branch: 'feature/checkout', lines: [ln('PASS 3 suites · 41 tests', G), ln('git commit a41c9e2', T3), ln('▸ Wiring server-side validation'), ln('✎ app/api/checkout/route.ts  +38 −9', B)] },
+      { agent: 'Codex', ago: '6m', task: 'Token-bucket rate limiter', project: 'api-gateway', branch: 'feature/rate-limit', lines: [ln('$ go test ./internal/ratelimit/...', T3), ln('ok   internal/ratelimit  0.412s', G), ln('▸ Adding Redis-backed store'), ln('✎ internal/ratelimit/redis.go  +88', B)] },
+      { agent: 'Gemini', ago: '11m', task: 'expo-router migration', project: 'mobile-app', branch: 'feature/expo-router', lines: [ln('▸ Migrated 14 of 19 screens'), ln('✎ app/(tabs)/settings.tsx  +42 −60', B), ln('$ npx tsc --noEmit', T3), ln('Found 0 errors.', G)] }
+    ];
+    const done = [
+      { task: 'Transactional emails', project: 'my-saas', branch: 'feature/emails', agent: 'Kiro', ago: '41m', tests: '86 passing' },
+      { task: 'Team invites', project: 'my-saas', branch: 'feature/team-invites', agent: 'Gemini', ago: '1h', tests: '52 passing' }
+    ];
+
+    const ag = [
+      ['Kiro', 'Spec-driven · default for my-saas', 'v0.9 · 1 running'],
+      ['Claude Code', 'Last used here 2h ago', 'v2.1 · 2 running'],
+      ['Codex', 'Last used here yesterday', 'v0.4 · 2 running'],
+      ['Gemini CLI', 'Last used here 3d ago', 'v1.3 · 1 running']
+    ];
+    const sel = this.state.agent;
+    const agents = ag.map(([name, note, meta], i) => ({ name, note, meta, n: String(i + 1), bg: i === sel ? 'rgba(149,180,232,0.08)' : 'transparent', ring: i === sel ? 'rgba(149,180,232,0.45)' : 'transparent', fg: i === sel ? T1 : T2, kc: i === sel ? B : T3, pick: () => this.setState({ agent: i }) }));
+    const steps = [
+      ['✓', 'Created branch', 'feature/password-reset from main @ 8c1e2f4', '0.1s', 'done'],
+      ['✓', 'Added worktree', '~/.wt/my-saas/password-reset', '0.4s', 'done'],
+      ['', 'Running setup', 'pnpm install — resolved 1204, reused 1198, added 6', '2.6s', 'run'],
+      ['', 'Launch Kiro', 'with first message from MS-41', '', 'todo'],
+      ['', 'Open workspace', '', '', 'todo']
+    ].map(([g, t, d, time, s]) => ({ g, t, d, time, c: s === 'done' ? G : s === 'run' ? A : '#3A3C42', fill: s === 'done' ? G : 'transparent', tc: s === 'todo' ? T3 : T1 }));
+    const tree = [
+      ['d', 'app/api/checkout', '', '', ''], ['M', 'route.ts', '+38', '−9', ''],
+      ['d', 'src/checkout', '', '', ''], ['M', 'address.ts', '+6', '−2', '', true], ['A', 'address.test.ts', '+44', '', ''],
+      ['M', 'CheckoutForm.tsx', '+96', '−31', '✓'], ['M', 'schema.ts', '+48', '−12', '✓'], ['A', 'schema.test.ts', '+38', '', ''],
+      ['M', 'validate.ts', '+71', '−18', '✓'], ['M', 'validate.test.ts', '+22', '−4', ''],
+      ['d', 'src/lib', '', '', ''], ['M', 'money.ts', '+4', '−1', ''], ['M', 'errors.ts', '+9', '−3', ''],
+      ['d', '.', '', '', ''], ['M', 'package.json', '+2', '−1', ''], ['?', '.kiro/specs/checkout-validation.md', '+6', '', '']
+    ].map(([s, name, a, d, v, sel]) => s === 'd'
+      ? { s: '', name: name + '/', a: '', d: '', v: '', pad: '8px', fg: T3, sc: T3, bg: 'transparent' }
+      : { s, name, a, d, v, pad: '22px', fg: sel ? T1 : T2, sc: s === 'A' ? G : s === '?' ? T3 : A, bg: sel ? 'rgba(149,180,232,0.1)' : 'transparent' });
+    const commits = [['●', 'uncommitted · route.ts', 'now', A], ['a41c9e2', 'validate checkout payload with shared schema', '2m'], ['3e0b771', 'reject PO boxes for express', '9m'], ['c92d140', 'extract addressSchema', '14m'], ['77af0e3', 'add spec checkout-validation', '17m']]
+      .map(([h, m, t, hc]) => ({ h, m, t, hc: hc || B }));
+    const D = (k, o, n, t) => {
+      if (k === 'c') return { isLine: false, isComment: true };
+      const add = k === '+', del = k === '-', h = k === '@';
+      return { isLine: true, isComment: false, o: o || '', n: n || '', t, sign: add ? '+' : del ? '−' : '',
+        bg: add ? 'rgba(107,203,139,0.08)' : del ? 'rgba(232,106,95,0.08)' : h ? 'rgba(149,180,232,0.05)' : 'transparent',
+        edge: add ? 'rgba(107,203,139,0.6)' : del ? 'rgba(232,106,95,0.6)' : 'transparent',
+        sc: add ? G : R, tc: h ? T3 : add || del ? T1 : T2 };
+    };
+    const diff = [
+      D('@', '', '', '@@ -1,14 +1,18 @@  addressSchema'),
+      D(' ', 1, 1, 'import { z } from "zod";'),
+      D(' ', 2, 2, ''),
+      D('-', 3, '', 'const PO_BOX = /^po box/i;'),
+      D('+', '', 3, '// Matches "PO Box", "P.O. Box", "Post Office Box", "POB"'),
+      D('+', '', 4, 'const PO_BOX = /\\b(p\\.?\\s?o\\.?\\s?(box|b)\\b|post\\s+office\\s+box)/i;'),
+      D('c'),
+      D(' ', 4, 5, ''),
+      D(' ', 5, 6, 'export const addressSchema = z.object({'),
+      D(' ', 6, 7, '  line1: z.string().min(1, "Street address is required"),'),
+      D(' ', 7, 8, '  line2: z.string().optional(),'),
+      D(' ', 8, 9, '  city: z.string().min(1),'),
+      D('-', 9, '', '  postalCode: z.string(),'),
+      D('+', '', 10, '  postalCode: z.string().trim().min(3).max(10),'),
+      D(' ', 10, 11, '  country: z.string().length(2),'),
+      D(' ', 11, 12, '});'),
+      D(' ', 12, 13, ''),
+      D('+', '', 14, 'export function allowsExpress(a: Address) {'),
+      D('+', '', 15, '  return !PO_BOX.test(a.line1) && !PO_BOX.test(a.line2 ?? "");'),
+      D('+', '', 16, '}')
+    ];
+    const wr = (branch, path, task, agent, st, ahead, behind, dirty, last, sel) => ({
+      branch, path, task, agent, dot: S[st] || '#33363C', ahead, behind, behindC: behind === '↓0' ? T3 : A, dirty, dirtyC: dirty === 'clean' ? T3 : A, last,
+      bc: task ? T1 : T2, tkc: task ? T2 : T3, bg: sel ? 'rgba(149,180,232,0.07)' : 'transparent', ring: sel ? 'rgba(149,180,232,0.35)' : 'transparent' });
+    const wtGroups = [
+      { name: 'my-saas', meta: '5 worktrees · 2.9 GB', rows: [
+        wr('feature/checkout', '~/.wt/my-saas/checkout', 'MS-38 Checkout validation', 'Kiro', 'working', '↑4', '↓0', '12 modified', 'now'),
+        wr('feature/search-ranking', '~/.wt/my-saas/search-ranking', 'MS-35 Search ranking', 'Claude Code', 'waiting', '↑2', '↓3', '5 modified', '7m', true),
+        wr('fix/session-refresh', '~/.wt/my-saas/session-refresh', 'MS-36 Session refresh tokens', 'Codex', 'failed', '↑3', '↓0', '7 modified', '4m'),
+        wr('feature/emails', '~/.wt/my-saas/emails', 'MS-33 Transactional emails', 'Kiro · done', 'done', '↑6', '↓1', 'clean', '41m'),
+        wr('feature/team-invites', '~/.wt/my-saas/team-invites', 'MS-34 Team invites', 'Gemini · done', 'done', '↑5', '↓0', 'clean', '1h')] },
+      { name: 'api-gateway', meta: '1 · 180 MB', rows: [wr('feature/rate-limit', '~/.wt/api-gateway/rate-limit', 'AG-12 Token-bucket rate limiter', 'Codex', 'working', '↑2', '↓0', '3 modified', '6m')] },
+      { name: 'mobile-app', meta: '1 · 0.9 GB', rows: [wr('feature/expo-router', '~/.wt/mobile/expo-router', 'MB-20 expo-router migration', 'Gemini', 'working', '↑7', '↓2', '19 modified', '11m')] },
+      { name: 'infra', meta: '1 · 40 MB', rows: [wr('chore/rds-pg16', '~/.wt/infra/rds-pg16', 'IN-7 Upgrade RDS to Postgres 16', 'Claude Code', 'waiting', '↑1', '↓0', '2 modified', '32m')] }
+    ];
+    const stale = [
+      { branch: 'fix/anchors', project: 'docs-site', size: '310 MB', why: 'Merged in #88 eight days ago. No agent, no local changes.', action: 'Prune' },
+      { branch: 'spike/edge-runtime', project: 'my-saas', size: '0.9 GB', why: 'Made outside Switchyard, not linked to a task. Last commit 12 days ago.', action: 'Link to task…' }
+    ];
+    const wtDetail = [['Path', '~/.wt/my-saas/search-ranking'], ['Base', 'main @ 5d2a9b0'], ['vs main', '↑2 ahead · ↓3 behind'], ['Changes', '5 modified · 0 untracked'], ['Upstream', 'origin/feature/search-ranking · pushed 20m'], ['Disk', '598 MB (node_modules shared)'], ['Created', 'today 09:12 by Start task']].map(([k, v]) => ({ k, v }));
+    const wtActions = [['Open terminal here', '⌘T', T1], ['Open in editor', '⌘E', T1], ['Reveal in Finder', '⌘⇧R', T2], ['Remove worktree', '⌘⌫', R]].map(([l, k, c]) => ({ l, k, c }));
+    const pvConsole = [
+      ['12:41:08', '[vite] hmr update /app/api/checkout/route.ts', T3],
+      ['12:41:09', '[vite] page reload', T3],
+      ['12:41:22', 'POST /api/checkout 422 → { field: "line1", code: "express_po_box" }', T2],
+      ['12:41:22', 'Warning: Each child in a list should have a unique "key" prop. Check the render method of ShippingOptions.', A],
+      ['12:41:30', '[checkout] validation errors: 1', T2]
+    ].map(([t, m, c]) => ({ t, m, c }));
+    const pvNet = [['422', 'POST', '/api/checkout', '38ms', A], ['200', 'GET', '/api/cart', '12ms', G], ['200', 'GET', '/api/shipping-rates', '64ms', G], ['200', 'GET', '/_next/static/…/page.js', '4ms', G]]
+      .map(([s, m, p, ms, c]) => ({ s, m, p, ms, c }));
+    return { tree, commits, diff, wtGroups, stale, wtDetail, wtActions, pvConsole, pvNet, chain, keys, needs, projects, columns, env, files, term, activity, blocked, working, done, agents, agentName: ag[sel][0], steps };
+  }
+}
+</script>
+</body>
+</html>
