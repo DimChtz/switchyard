@@ -34,7 +34,7 @@ Switchyard runs the agent's own CLI, so install and sign in to the ones you want
 - **Git** on `PATH`.
 - At least one supported **agent CLI** on `PATH`.
 - Optional: the **GitHub CLI** (`gh`), signed in, for pull requests and checks.
-- To build from source: **Node.js 20.19+ or 22.12+** and npm.
+- To build from source: **Node.js 22.13+** (`.nvmrc` pins 24 for nvm) and npm. `.npmrc` sets `engine-strict`, so `npm install` refuses an older Node.
 
 Windows, macOS and Linux are supported. The terminal uses prebuilt `node-pty` binaries, so no C++ build tools are needed.
 

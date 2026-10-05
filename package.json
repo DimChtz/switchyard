@@ -21,6 +21,9 @@
     "release:mac": "electron-vite build && electron-builder --mac --publish always",
     "release:linux": "electron-vite build && electron-builder --linux --publish always"
   },
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/DimChtz/switchyard.git"
