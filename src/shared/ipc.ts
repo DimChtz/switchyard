@@ -24,7 +24,8 @@ export const IPC = {
   logOpenDir: 'log:openDir',
   updatesCheck: 'updates:check',
   updatesInstall: 'updates:install',
-  updatesReady: 'updates:ready',
+  updatesState: 'updates:state',
+  updatesStatus: 'updates:status',
 
   dialogPickFolder: 'dialog:pickFolder',
   dialogSaveText: 'dialog:saveText',

@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useAppStore } from '../store/AppStore'
 import { useHover } from '../lib/useHover'
 import { clearNotices, markRead, useNotices } from '../lib/notices'
+import { actOnUpdate, useUpdate } from '../lib/updates'
 import { shortcut } from '../lib/shortcuts'
 import type { Notice } from '@shared/types'
 
@@ -19,7 +20,8 @@ const COLOR: Record<Notice['kind'], string> = {
   'agent-question': 'var(--c-amber)',
   team: 'var(--c-amber)',
   limit: 'var(--c-blue)',
-  pr: 'var(--c-amber)'
+  pr: 'var(--c-amber)',
+  update: 'var(--c-green)'
 }
 
 function ago(ts: number): string {
@@ -76,6 +78,7 @@ function NoticePanel({ onClose }: { onClose: () => void }): React.JSX.Element {
   const ref = useRef<HTMLDivElement>(null)
   // What was unread when it opened stays marked as new while it's open.
   const [fresh] = useState(() => new Set(notices.filter((n) => !n.read).map((n) => n.id)))
+  const update = useUpdate()
 
   // Seen once it's open.
   useEffect(() => markRead(), [])
@@ -96,6 +99,13 @@ function NoticePanel({ onClose }: { onClose: () => void }): React.JSX.Element {
   }, [onClose])
 
   const openTask = (n: Notice): void => {
+    // A new version: install it (or get it), while it's the one waiting.
+    if (n.kind === 'update') {
+      onClose()
+      if (update && n.text.includes(update.version)) actOnUpdate(update)
+      else dispatch({ type: 'TOAST', text: 'That update is installed, or a newer one replaced it.' })
+      return
+    }
     if (n.kind === 'spend' || n.kind === 'team') {
       dispatch({ type: 'NAV', view: n.kind === 'spend' ? 'usage' : 'team' })
       return onClose()

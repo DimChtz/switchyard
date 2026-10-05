@@ -57,6 +57,7 @@ import type {
   AgentToolRequest,
   RewindResult,
   Task,
+  UpdateState,
   WorktreeStatus
 } from '@shared/types'
 
@@ -103,11 +104,13 @@ const api = {
   updates: {
     check: (): Promise<{ message: string }> => ipcRenderer.invoke(IPC.updatesCheck),
     install: (): Promise<void> => ipcRenderer.invoke(IPC.updatesInstall),
-    /** An update was downloaded (its version); it installs on quit. */
-    onReady: (cb: (version: string) => void): (() => void) => {
-      const handler = (_e: Electron.IpcRendererEvent, v: string): void => cb(v)
-      ipcRenderer.on(IPC.updatesReady, handler)
-      return () => ipcRenderer.removeListener(IPC.updatesReady, handler)
+    /** What there is: an update ready to install, or one to download by hand; null when there's none (yet). */
+    status: (): Promise<UpdateState | null> => ipcRenderer.invoke(IPC.updatesStatus),
+    /** An update was downloaded (it installs on quit, or now), or is out to download by hand. */
+    onState: (cb: (state: UpdateState) => void): (() => void) => {
+      const handler = (_e: Electron.IpcRendererEvent, s: UpdateState): void => cb(s)
+      ipcRenderer.on(IPC.updatesState, handler)
+      return () => ipcRenderer.removeListener(IPC.updatesState, handler)
     }
   },
   /** Plugins (<userData>/plugins; Settings → Plugins). */

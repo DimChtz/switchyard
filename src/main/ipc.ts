@@ -111,6 +111,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.storeKeyHigh, () => store.keyHigh())
   ipcMain.handle(IPC.updatesCheck, () => updates.checkNow())
   ipcMain.handle(IPC.updatesInstall, () => updates.installNow())
+  ipcMain.handle(IPC.updatesStatus, () => updates.status())
   updates.startUpdates()
   ipcMain.on(IPC.logWrite, (_e, level: string, scope: string, message: string, detail?: string) =>
     level === 'error' ? log.error(scope, message, detail) : log.warn(scope, message, detail)

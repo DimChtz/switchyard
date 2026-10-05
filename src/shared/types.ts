@@ -483,7 +483,15 @@ export interface ThemesState {
   dir: string
 }
 
-export type NoticeKind = 'waiting' | 'permission' | 'failed' | 'done' | 'tests-passed' | 'tests-failed' | 'finished' | 'pr-merged' | 'spend' | 'review-reply' | 'agent-question' | 'team' | 'limit' | 'pr'
+export type NoticeKind = 'waiting' | 'permission' | 'failed' | 'done' | 'tests-passed' | 'tests-failed' | 'finished' | 'pr-merged' | 'spend' | 'review-reply' | 'agent-question' | 'team' | 'limit' | 'pr' | 'update'
+
+/** A new version of Switchyard: downloaded and ready to install, or out (to download by hand - a Mac build that can't install it itself). */
+export interface UpdateState {
+  kind: 'ready' | 'available'
+  version: string
+  /** Its release page. */
+  url: string
+}
 
 /** Something that happened that you'd want to know about: the notification center's entries. */
 export interface Notice {

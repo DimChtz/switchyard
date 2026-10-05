@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useReducer, useRef } from 'react'
 import { addNotice as recordNotice, loadNotices } from '../lib/notices'
+import { startUpdateWatch } from '../lib/updates'
 import type { Action, AppState } from './types'
 import { initialState, reducer } from './reducer'
 import { agentSessionId, killTaskSessions, projectEnv, runCommandSession, setupSessionId, startAgent, testsSessionId } from '../lib/agentControl'
@@ -431,8 +432,8 @@ ${u.ask}` : ''}`, task.id, actions)
     return window.api.base.onChanged((statuses) => dispatch({ type: 'BASE_STATUS', statuses }))
   }, [dispatch])
 
-  // An update was downloaded (the installed app): it goes in when Switchyard quits.
-  useEffect(() => window.api.updates.onReady((v) => dispatch({ type: 'TOAST', text: `Switchyard ${v} is downloaded - it installs when you quit.`, tone: 'done' })), [dispatch])
+  // A new version (the installed app): the status bar, the bell and - in the background - the system say so.
+  useEffect(() => startUpdateWatch(), [])
 
   // The pull request loop: open PRs' checks and reviews, every two minutes,
   // for every task that has one (not only the one on screen) - a merge,
