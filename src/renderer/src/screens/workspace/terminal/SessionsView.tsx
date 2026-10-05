@@ -58,7 +58,7 @@ export function SessionsView({ task, layout, chrome }: { task: Task; layout: Lay
       </PanelHeader>
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '0 8px 12px', display: 'flex', flexDirection: 'column', gap: 1 }}>
         <Head>Agent</Head>
-        {row('agent', task.agentKind ? agentShort(task.agentKind) : 'Agent', task.agentKind ? statusLabel(task.st) || 'stopped' : 'none', '◆', 'var(--c-blue)', task.agentKind ? statusColor(task.st) : undefined)}
+        {row('agent', task.agentKind ? agentShort(task.agentKind) : 'Agent', task.agentKind ? statusLabel(task) || 'stopped' : 'none', '◆', 'var(--c-blue)', task.agentKind ? statusColor(task.st) : undefined)}
         <Head>Terminals</Head>
         {hasSetup ? row('setup', 'setup', 'launch setup', '›', 'var(--t3)') : null}
         {t ? row('tests', 'tests', t.status === 'running' ? 'running' : t.status, '›', 'var(--t3)', t.status === 'running' ? 'var(--c-amber)' : t.status === 'passed' ? 'var(--c-green)' : 'var(--c-red)') : null}

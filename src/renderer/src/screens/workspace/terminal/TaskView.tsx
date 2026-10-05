@@ -98,7 +98,7 @@ export function TaskView({ task, project, chrome }: { task: Task; project: Proje
       v: taskRoot(task) ?? '—',
       sub: !task.worktreePath ? 'not created' : (isMulti(task) ? `${reposOf(task).length} repos · ` : '') + (wt ? `${wt.ahead} commit${wt.ahead === 1 ? '' : 's'} · ${wt.dirty ? `${wt.dirty} uncommitted` : 'clean'}` : '…')
     },
-    { label: 'Agent', v: task.agentKind ? `${agentShort(task.agentKind)} · ${statusLabel(task.st) || 'stopped'}` : '—', sub: task.startedAt ? `started ${timeAgo(task.startedAt)} ago` : '', agent: true },
+    { label: 'Agent', v: task.agentKind ? `${agentShort(task.agentKind)} · ${statusLabel(task) || 'stopped'}` : '—', sub: task.startedAt ? `started ${timeAgo(task.startedAt)} ago` : '', agent: true },
     { label: 'Terminal', v: `${shells.length + (task.agentKind ? 1 : 0)} session${shells.length + (task.agentKind ? 1 : 0) === 1 ? '' : 's'}`, sub: devPort ? `dev server on :${devPort}` : [agentShort(task.agentKind), ...shells.map((s) => s.name)].filter(Boolean).join(' · ') }
   ]
 

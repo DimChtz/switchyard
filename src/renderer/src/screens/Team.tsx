@@ -66,7 +66,7 @@ export function Team(): React.JSX.Element {
                 key={t.id}
                 task={t}
                 label={`${t.key} ${t.title}`}
-                sub={[agentShort(t.agentKind), statusLabel(t.st)].filter(Boolean).join(' · ')}
+                sub={[agentShort(t.agentKind), statusLabel(t)].filter(Boolean).join(' · ')}
                 count={messages.filter((m) => m.from === t.id || m.to === t.id).length}
                 active={who === t.id}
                 onClick={() => {

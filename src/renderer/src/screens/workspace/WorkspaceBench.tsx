@@ -104,7 +104,7 @@ function Bench({ task, project }: { task: Task; project: Project }): React.JSX.E
   const showing = focused?.a ?? ''
 
   const meta = (id: TabId): TabMeta | null => {
-    if (id === 'agent') return { label: agent || 'Agent', ic: '◆', icColor: 'var(--c-blue)', dot: task.agentKind ? statusColor(task.st) : undefined, tip: task.agentKind ? `${agent} session · ${statusLabel(task.st) || 'stopped'}` : 'No agent on this task' }
+    if (id === 'agent') return { label: agent || 'Agent', ic: '◆', icColor: 'var(--c-blue)', dot: task.agentKind ? statusColor(task.st) : undefined, tip: task.agentKind ? `${agent} session · ${statusLabel(task) || 'stopped'}` : 'No agent on this task' }
     if (id === 'setup') return { label: 'setup', ic: '›', icColor: 'var(--t3)', tip: 'The launch setup’s output' }
     if (id === 'tests') {
       const t = task.lastTest

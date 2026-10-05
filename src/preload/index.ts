@@ -179,6 +179,8 @@ const api = {
     removeWorktree: (repoPath: string, worktreePath: string, force?: boolean): Promise<void> =>
       ipcRenderer.invoke(IPC.gitRemoveWorktree, repoPath, worktreePath, force),
     pruneWorktrees: (repoPath: string): Promise<void> => ipcRenderer.invoke(IPC.gitPruneWorktrees, repoPath),
+    /** Whether a folder is (still) a git checkout - a task's worktree can be deleted outside Switchyard. */
+    isCheckout: (path: string): Promise<boolean> => ipcRenderer.invoke(IPC.gitIsCheckout, path),
     worktreeStatus: (worktreePath: string, baseBranch: string): Promise<WorktreeStatus> =>
       ipcRenderer.invoke(IPC.gitWorktreeStatus, worktreePath, baseBranch),
     log: (worktreePath: string, limit?: number): Promise<{ hash: string; message: string; date: string }[]> =>
@@ -210,8 +212,11 @@ const api = {
     prDetails: (worktreePath: string, ref: string): Promise<PrDetails | null> => ipcRenderer.invoke(IPC.gitPrDetails, worktreePath, ref),
     unpushed: (worktreePath: string, branch: string, baseBranch: string): Promise<number> =>
       ipcRenderer.invoke(IPC.gitUnpushed, worktreePath, branch, baseBranch),
-    closeWithPr: (repoPath: string, worktreePath: string, branch: string, baseBranch: string, merged: boolean): Promise<void> =>
-      ipcRenderer.invoke(IPC.gitCloseWithPr, repoPath, worktreePath, branch, baseBranch, merged),
+    closeWithPr: (repoPath: string, worktreePath: string, branch: string, baseBranch: string, merged: boolean, prRef?: string): Promise<void> =>
+      ipcRenderer.invoke(IPC.gitCloseWithPr, repoPath, worktreePath, branch, baseBranch, merged, prRef),
+    /** Why the task can't close through its pull request without losing work, or null when it can. */
+    closeCheck: (worktreePath: string, branch: string, baseBranch: string, prRef?: string): Promise<string | null> =>
+      ipcRenderer.invoke(IPC.gitCloseCheck, worktreePath, branch, baseBranch, prRef),
     pruneStaleNow: (): Promise<string[]> => ipcRenderer.invoke(IPC.worktreesPruneNow),
     onPruned: (cb: (pruned: string[]) => void): (() => void) => {
       const handler = (_e: Electron.IpcRendererEvent, pruned: string[]): void => cb(pruned)

@@ -9,6 +9,7 @@ import * as checkpoints from './checkpoints'
 import * as inbox from './inbox'
 import { beforeTool } from './coedit'
 import * as repoMap from './repoMap'
+import { closingQuestion } from '@shared/closingQuestion'
 
 // Agent CLIs are interactive TUIs, not structured event streams, so status is
 // inferred from their terminal output:
@@ -192,7 +193,8 @@ export function fromHook(taskId: string, ev: HookEvent): Record<string, unknown>
       // The files as the turn left them.
       checkpoints.turnEnded(taskId, { said: ev.last_assistant_message?.trim().slice(0, 1500) || null, lastSent: ptyService.takeLastSent(id), transcript: w.session?.transcript })
       const said = ev.last_assistant_message ? oneLine(ev.last_assistant_message, 200) : null
-      return emit(w, { ...base, st: 'waiting', askKind: 'input', ask: null, activity: said })
+      // Ending on a question, it asked you something; otherwise it finished and the next message is yours.
+      return emit(w, { ...base, st: 'waiting', askKind: 'input', ask: closingQuestion(ev.last_assistant_message), activity: said })
     }
   }
 }

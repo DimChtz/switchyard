@@ -6,7 +6,7 @@ import { agentShort } from '../lib/derive'
 import { WorkspaceBench } from './workspace/WorkspaceBench'
 import { Button, IconButton, Menu, confirm, type MenuAnchor } from '../components/ui'
 import { taskMenuItems } from '../lib/menus'
-import { attachRepo, commitMessageFor, finishWithPr, mergeTask, openPullRequest, pushTask, reviewReady, taskDirty } from '../lib/taskActions'
+import { attachRepo, commitMessageFor, finishGone, finishWithPr, freshPr, mergeTask, openPullRequest, pushTask, recreateWorktree, reviewReady, taskDirty } from '../lib/taskActions'
 import { checkoutsOf, repoDir, reposOf } from '../lib/multiRepo'
 import { useHover } from '../lib/useHover'
 import type { Project, PullRequest, RemoteInfo, Task } from '@shared/types'
@@ -125,18 +125,31 @@ function WorkspaceBody({ task, project }: { task: Task; project: Project }): Rea
   )
 
   const primary = useCallback((): void => {
+    // Its pull request was merged on GitHub (in Review or still In Progress): it closes out.
+    if (hasWorktree && task.pr?.state === 'MERGED' && (task.col === 'progress' || task.col === 'review')) {
+      setBusy('finish')
+      finishWithPr(task, project, dispatch, state.projects).finally(() => setBusy(null))
+      return
+    }
     if (task.col === 'progress') {
       reviewReady(task).then((ok) => ok && dispatch({ type: 'PRIMARY_ACTION', taskId: task.id }))
       return
     }
     if (task.col === 'review') {
-      if (task.pr?.state === 'MERGED') {
-        setBusy('finish')
-        finishWithPr(task, project, dispatch, state.projects).finally(() => setBusy(null))
+      if (!hasWorktree) return dispatch({ type: 'TOAST', text: 'This task has no worktree to merge.' })
+      if (!task.pr) {
+        run('merge')
         return
       }
-      if (!hasWorktree) return dispatch({ type: 'TOAST', text: 'This task has no worktree to merge.' })
-      run('merge')
+      // Merged on GitHub since the last look: no merging here as well.
+      const go = async (): Promise<void> => {
+        setBusy('finish')
+        const pr = await freshPr(task, dispatch)
+        if (pr?.state === 'MERGED') await finishWithPr({ ...task, pr }, project, dispatch, state.projects)
+        setBusy(null)
+        if (pr?.state !== 'MERGED') await run('merge')
+      }
+      go().catch(() => setBusy(null))
       return
     }
     if (task.col === 'backlog' || task.col === 'ready') dispatch({ type: 'PRIMARY_ACTION', taskId: task.id })
@@ -147,14 +160,15 @@ function WorkspaceBody({ task, project }: { task: Task; project: Project }): Rea
     const onKey = (e: KeyboardEvent): void => {
       if (!(e.metaKey || e.ctrlKey) || !e.shiftKey || state.start || state.palette || state.filePreview) return
       const k = e.key.toLowerCase()
-      if ((k === 'r' && task.col === 'progress') || (k === 'm' && task.col === 'review')) {
+      // (Not once its PR is merged: the button finishes the task then, and these keys don't say that.)
+      if (task.pr?.state !== 'MERGED' && ((k === 'r' && task.col === 'progress') || (k === 'm' && task.col === 'review'))) {
         e.preventDefault()
         primary()
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [primary, task.col, state.start, state.palette, state.filePreview])
+  }, [primary, task.col, task.pr?.state, state.start, state.palette, state.filePreview])
 
   const merged = task.pr?.state === 'MERGED'
   const primaryLabel =
@@ -162,16 +176,16 @@ function WorkspaceBody({ task, project }: { task: Task; project: Project }): Rea
         ? 'Merging…'
         : busy === 'finish'
           ? 'Finishing…'
-          : task.col === 'progress'
-            ? 'Move to Review'
-            : task.col === 'review'
-              ? merged
-                ? 'Finish · PR merged'
-                : 'Merge & finish'
-              : task.col === 'done'
-                ? null
-                : 'Start with agent'
-  const primaryKey = busy ? undefined : task.col === 'progress' ? '⇧⌘R' : task.col === 'review' && !merged ? '⇧⌘M' : undefined
+          : merged && hasWorktree && (task.col === 'progress' || task.col === 'review')
+            ? 'Finish · PR merged'
+            : task.col === 'progress'
+              ? 'Move to Review'
+              : task.col === 'review'
+                ? 'Merge & finish'
+                : task.col === 'done'
+                  ? null
+                  : 'Start with agent'
+  const primaryKey = busy || merged ? undefined : task.col === 'progress' ? '⇧⌘R' : task.col === 'review' ? '⇧⌘M' : undefined
 
   // Pull request: for a pushed-able task branch on a remote.
   const canPr = !!remote && hasWorktree && (task.col === 'review' || task.col === 'progress')
@@ -255,7 +269,7 @@ function WorkspaceBody({ task, project }: { task: Task; project: Project }): Rea
           ) : null}
           <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: task.agentKind ? statusColor(task.st) : 'var(--t3)', flex: 'none' }}>
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: task.agentKind ? statusColor(task.st) : 'var(--t4)' }} />
-            {task.agentKind ? `${agentShort(task.agentKind)} · ${statusLabel(task.st) || 'stopped'}` : 'No agent'}
+            {task.agentKind ? `${agentShort(task.agentKind)} · ${statusLabel(task) || 'stopped'}` : 'No agent'}
           </span>
         </span>
         <LayoutButtons task={task} />
@@ -388,6 +402,8 @@ function TaskAlerts({ task }: { task: Task }): React.JSX.Element | null {
   const { dispatch } = useAppStore()
   const conflicts = conflictsOf(useConflicts(), task.id)
   const lines: React.ReactNode[] = []
+  const [gone, recheckGone] = useWorktreeGone(task)
+  if (gone) lines.push(<GoneLine key="gone" task={task} onRecreated={recheckGone} />)
   if (conflicts.length) lines.push(<ConflictsLine key="conflicts" task={task} />)
   if (task.sleeping) {
     const s = task.sleeping
@@ -404,6 +420,50 @@ function TaskAlerts({ task }: { task: Task }): React.JSX.Element | null {
   if (task.pr && task.pr.state !== 'MERGED' && task.pr.state !== 'CLOSED') lines.push(<PrLine key="pr" task={task} />)
   if (!lines.length) return null
   return <div style={{ flex: 'none', display: 'flex', flexDirection: 'column', borderBottom: '1px solid var(--bd-1)', background: 'var(--bg-panel)' }}>{lines}</div>
+}
+
+/** The task's worktree folder was deleted outside Switchyard (checked on opening, and when the window comes back to front). */
+function useWorktreeGone(task: Task): [boolean, () => void] {
+  const [gone, setGone] = useState(false)
+  const [n, setN] = useState(0)
+  const path = task.worktreePath
+  useEffect(() => {
+    setGone(false)
+    if (!path || task.col === 'done') return
+    let cancelled = false
+    const check = (): void => {
+      window.api.git
+        .isCheckout(path)
+        .then((ok) => !cancelled && setGone(!ok))
+        .catch(() => {})
+    }
+    check()
+    window.addEventListener('focus', check)
+    return () => {
+      cancelled = true
+      window.removeEventListener('focus', check)
+    }
+  }, [path, task.col, n])
+  return [gone, () => setN((x) => x + 1)]
+}
+
+/** No worktree any more: its work can't go on here - finish the task, or check the branch out again. */
+function GoneLine({ task, onRecreated }: { task: Task; onRecreated: () => void }): React.JSX.Element {
+  const { state, dispatch } = useAppStore()
+  const [busy, setBusy] = useState(false)
+  const project = state.projects.find((p) => p.id === task.projectId)
+  const act = (work: (p: Project) => Promise<boolean>): void => {
+    if (busy || !project) return
+    setBusy(true)
+    work(project).finally(() => setBusy(false))
+  }
+  return (
+    <AlertLine color="var(--c-red)" icon="⚠" title={task.worktreePath ?? undefined}>
+      This task&apos;s worktree folder isn&apos;t there any more{task.pr?.state === 'MERGED' ? ` · PR #${task.pr.number ?? ''} is merged` : ''}
+      <AlertAction onClick={() => act((p) => finishGone(task, p, dispatch, state.projects))}>{busy ? 'working…' : 'finish task'}</AlertAction>
+      {task.pr?.state === 'MERGED' ? null : <AlertAction onClick={() => act((p) => recreateWorktree(task, p, dispatch).then((ok) => (ok && onRecreated(), ok)))}>recreate worktree</AlertAction>}
+    </AlertLine>
+  )
 }
 
 // When each task's review comments last went to its agent (this run): only newer ones go next time.

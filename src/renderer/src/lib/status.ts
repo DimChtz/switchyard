@@ -33,9 +33,24 @@ export function statusColor(st: AgentStatus): string {
   return STATUS_COLOR[st]
 }
 
-export function statusLabel(st: AgentStatus): string {
-  if (!st) return ''
-  return STATUS_LABEL[st]
+type AskState = { st: AgentStatus; askKind?: 'permission' | 'input' | null; ask?: string | null }
+
+/**
+ * A status in words. Given the task (not only its status), a waiting agent
+ * says why: it needs an approval, it asked a question, or it just finished
+ * its turn and the next message is yours.
+ */
+export function statusLabel(s: AgentStatus | AskState): string {
+  const t: AskState = s !== null && typeof s === 'object' ? s : { st: s }
+  if (!t.st) return ''
+  if (t.st === 'waiting' && t.askKind === 'permission') return 'needs approval'
+  if (t.st === 'waiting' && t.askKind === 'input') return t.ask ? 'has a question' : 'finished its turn'
+  return STATUS_LABEL[t.st]
+}
+
+/** What a waiting agent wants, as a sentence after its name ("Claude Code finished its turn"). */
+export function waitingText(askKind: AskState['askKind'], ask: string | null | undefined): string {
+  return askKind === 'permission' ? 'needs your approval' : ask ? 'has a question' : 'finished its turn'
 }
 
 export function timeAgo(ts: number, now = Date.now()): string {

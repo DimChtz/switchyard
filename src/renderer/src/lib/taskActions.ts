@@ -153,13 +153,20 @@ export async function pushTask(task: Task, dispatch: Dispatch, commitFirst = fal
 export async function finishWithPr(task: Task, project: Project, dispatch: Dispatch, projects: Project[] = [project]): Promise<boolean> {
   if (!task.worktreePath || !task.branch || !task.pr) return false
   const merged = task.pr.state === 'MERGED'
+  const others = worktreesOf(task, projects).slice(1)
   try {
+    // Nothing is stopped or removed until every worktree can go without losing work.
+    for (const w of [...others, { project, path: task.worktreePath }]) {
+      const pr = w.project.id === project.id ? task.pr : task.repoPrs?.[w.project.id]
+      const refused = await window.api.git.closeCheck(w.path, task.branch, baseOf(task, w.project), pr?.url)
+      if (refused) throw new Error(others.length ? `${w.project.name}: ${refused}` : refused)
+    }
     await killTaskSessions(task.id)
     // The other repositories' worktrees go too; a branch goes once its own pull request is merged
     // (one still open, or not known, keeps its branch).
-    for (const w of worktreesOf(task, projects).slice(1))
-      await window.api.git.closeWithPr(w.project.repoPath, w.path, task.branch, baseOf(task, w.project), task.repoPrs?.[w.project.id]?.state === 'MERGED')
-    await window.api.git.closeWithPr(project.repoPath, task.worktreePath, task.branch, baseOf(task, project), merged)
+    for (const w of others)
+      await window.api.git.closeWithPr(w.project.repoPath, w.path, task.branch, baseOf(task, w.project), task.repoPrs?.[w.project.id]?.state === 'MERGED', task.repoPrs?.[w.project.id]?.url)
+    await window.api.git.closeWithPr(project.repoPath, task.worktreePath, task.branch, baseOf(task, project), merged, task.pr.url)
     if (task.taskDir) await window.api.git.removeTaskDir(task.taskDir)
     const n = task.pr.number ? `#${task.pr.number}` : ''
     dispatch({
@@ -171,6 +178,87 @@ export async function finishWithPr(task: Task, project: Project, dispatch: Dispa
     return true
   } catch (err) {
     dispatch({ type: 'TOAST', text: `Could not finish: ${errText(err)}` })
+    return false
+  }
+}
+
+/**
+ * The task's pull request as GitHub has it now (merged or closed on the
+ * website since the last check, say); the task is updated when it changed.
+ * The last known state when GitHub can't be asked.
+ */
+export async function freshPr(task: Task, dispatch: Dispatch): Promise<Task['pr']> {
+  if (!task.pr || !task.worktreePath) return task.pr ?? null
+  const now = await window.api.git.prStatus(task.worktreePath, task.pr.url).catch(() => null)
+  if (!now) return task.pr
+  const pr = { url: now.url, number: now.number, state: now.state }
+  if (now.state !== task.pr.state) dispatch({ type: 'SET_TASK_PR', taskId: task.id, pr })
+  return pr
+}
+
+/**
+ * Done, for a started task (dropped on Done, or the workspace's finish): a
+ * pull request merged on GitHub - checked right now, not as of the last
+ * look - closes it out; an open one stays; without one the branch is merged
+ * here. Leftover changes need a decision first.
+ */
+export async function finishTask(task: Task, project: Project, prefs: Prefs, dispatch: Dispatch, projects: Project[] = [project]): Promise<boolean> {
+  const pr = await freshPr(task, dispatch)
+  if (pr?.state === 'MERGED') return finishWithPr({ ...task, pr }, project, dispatch, projects)
+  if (pr) {
+    dispatch({ type: 'OPEN_TASK', taskId: task.id })
+    dispatch({
+      type: 'TOAST',
+      text: pr.state === 'CLOSED' ? `PR #${pr.number ?? ''} was closed without merging - reopen it, or delete the task.` : `PR #${pr.number ?? ''} is still open - merge it on GitHub, or Merge & finish here.`
+    })
+    return false
+  }
+  const dirty = await taskDirty(task, projects)
+  if (dirty > 0) {
+    dispatch({ type: 'OPEN_TASK', taskId: task.id, tab: 'changes' })
+    dispatch({ type: 'TOAST', text: `${task.key} has ${dirty} uncommitted change${dirty > 1 ? 's' : ''} - commit or discard them, then Merge & finish.` })
+    return false
+  }
+  return mergeTask(task, project, prefs, dispatch, false, projects)
+}
+
+/**
+ * Done, for a task whose worktree folder was deleted outside Switchyard:
+ * through its pull request when it has one (merged: the branch goes too);
+ * otherwise git forgets the worktree and the branch stays - nothing of the
+ * work that's committed is lost.
+ */
+export async function finishGone(task: Task, project: Project, dispatch: Dispatch, projects: Project[] = [project]): Promise<boolean> {
+  const pr = await freshPr(task, dispatch)
+  if (pr) return finishWithPr({ ...task, pr }, project, dispatch, projects)
+  try {
+    await killTaskSessions(task.id)
+    for (const c of checkoutsOf(task, projects)) await window.api.git.pruneWorktrees(c.project.repoPath)
+    if (task.taskDir) await window.api.git.removeTaskDir(task.taskDir).catch(() => {})
+    dispatch({
+      type: 'FINISH_TASK',
+      taskId: task.id,
+      note: `Worktree was gone · branch ${task.branch ?? ''} kept`,
+      toast: `${task.key} is done - its branch ${task.branch ?? ''} is kept.`
+    })
+    return true
+  } catch (err) {
+    dispatch({ type: 'TOAST', text: `Could not finish: ${errText(err)}` })
+    return false
+  }
+}
+
+/** Checks the task's branch out again where its worktree was (from the base branch when the branch is gone too). */
+export async function recreateWorktree(task: Task, project: Project, dispatch: Dispatch): Promise<boolean> {
+  if (!task.worktreePath || !task.branch) return false
+  try {
+    await window.api.git.pruneWorktrees(project.repoPath)
+    await window.api.git.addWorktree(project.repoPath, task.worktreePath, task.branch, baseOf(task, project))
+    if (project.copyFiles?.length) await window.api.git.copyIntoWorktree(project.repoPath, task.worktreePath, project.copyFiles).catch(() => [])
+    dispatch({ type: 'TOAST', text: `Recreated ${task.key}'s worktree on ${task.branch}.`, tone: 'done' })
+    return true
+  } catch (err) {
+    dispatch({ type: 'TOAST', text: `Could not recreate the worktree: ${errText(err)}` })
     return false
   }
 }

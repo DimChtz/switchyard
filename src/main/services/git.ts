@@ -203,7 +203,7 @@ export async function removeWorktree(repoPath: string, worktreePath: string, for
 /** Undo a task worktree: remove it and its branch (either may be '' to skip it). */
 export async function discardWorktree(repoPath: string, worktreePath: string, branch: string): Promise<void> {
   const git = gitAt(repoPath)
-  if (worktreePath) await git.raw(['worktree', 'remove', worktreePath, '--force'])
+  if (worktreePath) await dropWorktree(repoPath, worktreePath)
   if (branch) await git.raw(['branch', '-D', branch]).catch(() => {})
 }
 
@@ -232,7 +232,7 @@ export async function mergeAndPrune(repoPath: string, worktreePath: string, bran
   else await mergeIn(holder.path, branch, baseBranch, message)
   if (!prune) return
   // Checked clean above - --force only gets ignored files (node_modules, .env) out of the way.
-  await main.raw(['worktree', 'remove', worktreePath, '--force'])
+  await dropWorktree(repoPath, worktreePath)
   await main.raw(['branch', '-d', branch]).catch(() => {})
 }
 
@@ -654,7 +654,8 @@ export async function unpushedCount(worktreePath: string, branch: string, baseBr
     return Number((await git.raw(['rev-list', '--count', `origin/${branch}..HEAD`])).trim()) || 0
   } catch {
     try {
-      return Number((await git.raw(['rev-list', '--count', `${baseBranch}..HEAD`])).trim()) || 0
+      // Never pushed - or deleted on origin after its PR was merged: what origin's base doesn't have.
+      return Number((await git.raw(['rev-list', '--count', `origin/${baseBranch}..HEAD`]).catch(() => git.raw(['rev-list', '--count', `${baseBranch}..HEAD`]))).trim()) || 0
     } catch {
       return 0
     }
@@ -662,18 +663,130 @@ export async function unpushedCount(worktreePath: string, branch: string, baseBr
 }
 
 /**
- * Closes out a task whose work lives on in a pull request: removes the
- * worktree (only when clean and everything is pushed) and, once the PR is
- * merged, the local branch too.
+ * Commits in the worktree that exist nowhere else - not on origin's copy of
+ * the branch, and not in the pull request. After a merge on GitHub the
+ * branch is often deleted there (and a fetch --prune drops origin/<branch>),
+ * and a squash or rebase merge leaves the base without these very commits:
+ * so the PR's head commit is what counts, then origin's base branch - never
+ * the local base, which hasn't seen the merge yet.
  */
-export async function closeWithPr(repoPath: string, worktreePath: string, branch: string, baseBranch: string, merged: boolean): Promise<void> {
+async function unpublishedCount(worktreePath: string, branch: string, baseBranch: string, prRef?: string): Promise<number> {
+  const git = gitAt(worktreePath)
+  const count = async (range: string, paths: string[] = []): Promise<number | null> =>
+    git
+      .raw(['rev-list', '--count', range, ...(paths.length ? ['--', ...paths] : [])])
+      .then((out) => Number(out.trim()) || 0)
+      .catch(() => null)
+  const onOrigin = await count(`origin/${branch}..HEAD`)
+  if (onOrigin !== null) return onOrigin
+  if (prRef && (await hasGh())) {
+    const head = await gh(['pr', 'view', prRef, '--json', 'headRefOid'], worktreePath)
+      .then((out) => (JSON.parse(out) as { headRefOid?: string }).headRefOid ?? null)
+      .catch(() => null)
+    if (head) {
+      // HEAD is the PR's head (or behind it): all of it is in the PR.
+      const inPr = await git
+        .raw(['merge-base', '--is-ancestor', 'HEAD', head])
+        .then(() => true)
+        .catch(() => false)
+      if (inPr) return 0
+      const after = await count(`${head}..HEAD`)
+      if (after !== null) return after
+    }
+  }
+  // Without GitHub to ask: origin's base, fresh. Every file the branch changed
+  // reads the same there - it's merged (squashed or rebased: other commits).
+  await withTimeout(gitAt(worktreePath, { network: true }).fetch('origin', baseBranch), 15_000).catch(() => {})
+  const missing = await notIn(git, `origin/${baseBranch}`)
+  if (missing && !missing.length) return 0
+  // The commits behind the files that differ (a squash merge took the rest).
+  if (missing) return (await count(`origin/${baseBranch}..HEAD`, missing)) || 1
+  return (await count(`origin/${baseBranch}..HEAD`)) ?? (await count(`${baseBranch}..HEAD`)) ?? 0
+}
+
+/** The files HEAD changed (since it left `ref`'s history) that don't read the same in `ref`; null when it can't tell. */
+async function notIn(git: ReturnType<typeof gitAt>, ref: string): Promise<string[] | null> {
+  try {
+    const base = (await git.raw(['merge-base', 'HEAD', ref])).trim()
+    const files = (await git.raw(['diff', '--name-only', '-z', base, 'HEAD'])).split('\0').filter(Boolean)
+    if (!files.length) return []
+    return (await git.raw(['diff', '--name-only', '-z', 'HEAD', ref, '--', ...files])).split('\0').filter(Boolean)
+  } catch {
+    return null
+  }
+}
+
+/**
+ * Whether a task can close out through its pull request without losing
+ * work: an error message when it can't (uncommitted changes, commits that
+ * aren't anywhere else), null when it can. A worktree that's already gone
+ * has nothing to lose.
+ */
+export async function closeCheck(worktreePath: string, branch: string, baseBranch: string, prRef?: string): Promise<string | null> {
+  if (!(await isWorktree(worktreePath))) return null
   const dirty = (await gitAt(worktreePath).status()).files.length
-  if (dirty > 0) throw new Error(`The worktree has ${dirty} uncommitted change${dirty > 1 ? 's' : ''} - commit and push them, or discard them, first.`)
-  const unpushed = await unpushedCount(worktreePath, branch, baseBranch)
-  if (unpushed > 0) throw new Error(`${unpushed} commit${unpushed > 1 ? 's aren\'t' : ' isn\'t'} pushed yet - push first.`)
+  if (dirty > 0) return `The worktree has ${dirty} uncommitted change${dirty > 1 ? 's' : ''} - commit and push them, or discard them, first.`
+  const unpushed = await unpublishedCount(worktreePath, branch, baseBranch, prRef)
+  if (unpushed > 0) return `${unpushed} commit${unpushed > 1 ? "s aren't" : " isn't"} in the pull request - push ${unpushed > 1 ? 'them' : 'it'} first.`
+  return null
+}
+
+/**
+ * Closes out a task whose work lives on in a pull request: removes the
+ * worktree (only when clean and everything is in the PR) and, once the PR
+ * is merged, the local branch too.
+ */
+export async function closeWithPr(repoPath: string, worktreePath: string, branch: string, baseBranch: string, merged: boolean, prRef?: string): Promise<void> {
+  const refused = await closeCheck(worktreePath, branch, baseBranch, prRef)
+  if (refused) throw new Error(refused)
+  await dropWorktree(repoPath, worktreePath)
+  if (merged) await gitAt(repoPath).raw(['branch', '-D', branch]).catch(() => {})
+}
+
+/** A folder that's a git checkout (a worktree has a .git file). */
+export async function isWorktree(path: string): Promise<boolean> {
+  return fs
+    .access(join(path, '.git'))
+    .then(() => true)
+    .catch(() => false)
+}
+
+/**
+ * Removes a worktree that was checked to be safe to remove. On Windows a
+ * process that just stopped can hold the folder a moment longer, so it's
+ * tried again; a worktree already gone (or half-removed by an earlier try)
+ * is cleaned up rather than failing on it.
+ */
+async function dropWorktree(repoPath: string, worktreePath: string): Promise<void> {
   const main = gitAt(repoPath)
-  await main.raw(['worktree', 'remove', worktreePath, '--force'])
-  if (merged) await main.raw(['branch', '-D', branch]).catch(() => {})
+  // Only a folder git knows as this repository's worktree is ever deleted.
+  const same = (p: string): boolean => p.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase() === worktreePath.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+  const registered = (await listWorktrees(repoPath).catch(() => [])).some((w) => !w.isMain && same(w.path))
+  if (!registered) {
+    await main.raw(['worktree', 'prune']).catch(() => {})
+    return
+  }
+  for (let i = 1; ; i++) {
+    try {
+      if (await isWorktree(worktreePath)) await main.raw(['worktree', 'remove', worktreePath, '--force'])
+      break
+    } catch (err) {
+      if (!(await isWorktree(worktreePath))) break
+      if (i >= 5) throw err
+      await new Promise((r) => setTimeout(r, 400 * i))
+    }
+  }
+  // What git left behind (a half-removed folder), and its record of the worktree.
+  for (let i = 1; ; i++) {
+    try {
+      await fs.rm(worktreePath, { recursive: true, force: true })
+      break
+    } catch (err) {
+      if (i >= 5) throw new Error(`The worktree is removed from git, but its folder is still in use: ${worktreePath}`, { cause: err })
+      await new Promise((r) => setTimeout(r, 400 * i))
+    }
+  }
+  await main.raw(['worktree', 'prune']).catch(() => {})
 }
 
 /**

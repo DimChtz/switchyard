@@ -115,6 +115,7 @@ export function taskArgs(task: Pick<Task, 'agentKind' | 'model' | 'planFirst'>):
 export function askText(task: Task): string {
   if (task.st === 'failed') return task.ask ?? 'The agent exited with an error.'
   if (task.askKind === 'permission') return task.ask ?? 'Waiting for your approval.'
+  if (task.ask) return `Asks: ${task.ask}`
   // With Claude Code's hooks, the activity is its last message.
   return task.activity ? `Finished its turn: ${task.activity}` : 'Finished its turn - waiting for your next message.'
 }

@@ -11,7 +11,7 @@ import type { BadgeTone } from '@shared/plugins'
 import { useTaskBadges } from '../lib/plugins'
 import { Button, Menu, TipNote, TipTitle, Tooltip, confirm, useContextMenu, type MenuAnchor, type MenuItem } from '../components/ui'
 import { taskMenuItems } from '../lib/menus'
-import { finishWithPr, mergeTask, reviewReady, taskDirty } from '../lib/taskActions'
+import { finishTask, reviewReady } from '../lib/taskActions'
 import { criteriaDone } from '../lib/criteria'
 import { keyLabel } from '../lib/keys'
 import { shortcut } from '../lib/shortcuts'
@@ -83,9 +83,11 @@ function Card({ task, focused, cost }: { task: Task; focused: boolean; cost: num
             text:
               task.askKind === 'permission'
                 ? `Asks: ${task.ask ?? 'approval needed'}`
-                : task.activity
-                  ? `Done its turn: ${task.activity}`
-                  : 'Waiting for your next message',
+                : task.ask
+                  ? `Asks: ${task.ask}`
+                  : task.activity
+                    ? `Finished its turn: ${task.activity}`
+                    : 'Finished its turn - your move',
             color: 'var(--c-amber)',
             bg: 'color-mix(in srgb, var(--c-amber) 8%, transparent)'
           }
@@ -271,7 +273,7 @@ function Card({ task, focused, cost }: { task: Task; focused: boolean; cost: num
           <div style={{ display: 'flex', alignItems: 'center', gap: 7, font: '12px var(--font-ui)' }}>
             <span style={{ width: 7, height: 7, borderRadius: '50%', background: statusColor(task.st) }} />
             <span style={{ color: 'var(--t1)' }}>{agentShort(task.agentKind)}</span>
-            <span style={{ color: statusColor(task.st) }}>{statusLabel(task.st)}</span>
+            <span style={{ color: statusColor(task.st) }}>{statusLabel(task)}</span>
           </div>
           <div
             style={{
@@ -594,22 +596,7 @@ function ColumnCell({
   // Dropping a started task on Done really finishes it: merged (or through
   // its pull request). Leftover changes need a decision first.
   const finishFromBoard = async (task: Task, project: Project): Promise<void> => {
-    if (task.pr?.state === 'MERGED') {
-      await finishWithPr(task, project, dispatch, state.projects)
-      return
-    }
-    if (task.pr) {
-      dispatch({ type: 'OPEN_TASK', taskId: task.id })
-      dispatch({ type: 'TOAST', text: `PR #${task.pr.number ?? ''} is still open - merge it on GitHub, or Merge & finish here.` })
-      return
-    }
-    const dirty = await taskDirty(task, state.projects)
-    if (dirty > 0) {
-      dispatch({ type: 'OPEN_TASK', taskId: task.id, tab: 'changes' })
-      dispatch({ type: 'TOAST', text: `${task.key} has ${dirty} uncommitted change${dirty > 1 ? 's' : ''} - commit or discard them, then Merge & finish.` })
-      return
-    }
-    await mergeTask(task, project, prefsFor(state, project.id), dispatch, false, state.projects)
+    await finishTask(task, project, prefsFor(state, project.id), dispatch, state.projects)
   }
 
   return (

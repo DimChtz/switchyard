@@ -334,7 +334,7 @@ function AgentDot({
   return (
     <div
       onClick={onOpen}
-      title={`${task.key} · ${task.title}\n${agentShort(task.agentKind)} ${statusLabel(task.st)} · on ${target}\nClick to open its terminal`}
+      title={`${task.key} · ${task.title}\n${agentShort(task.agentKind)} ${statusLabel(task)} · on ${target}\nClick to open its terminal`}
       style={{ position: 'absolute', left: cx, top: cy, transform: flip ? 'translate(calc(-100% + 6px), -50%)' : 'translate(-6px, -50%)', flexDirection: flip ? 'row-reverse' : 'row', transition: 'left .7s ease, top .7s ease, opacity .3s', display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer', opacity: dim ? 0.3 : 1, zIndex: 2, pointerEvents: 'auto' }}
     >
       <span style={{ position: 'relative', width: 12, height: 12, flex: 'none' }}>
@@ -459,7 +459,7 @@ function LegendRow({ a, task, color, active, dim, onEnter, onLeave, onZoom, onOp
       </div>
       <span />
       <div style={{ font: '11.5px var(--font-ui)', color: 'var(--t3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-        <span style={{ color: statusColor(task.st) }}>{agentShort(task.agentKind)} {statusLabel(task.st)}</span> · {a.files.length} {a.files.length === 1 ? 'file' : 'files'}
+        <span style={{ color: statusColor(task.st) }}>{agentShort(task.agentKind)} {statusLabel(task)}</span> · {a.files.length} {a.files.length === 1 ? 'file' : 'files'}
         {now ? ` · ${a.tool ? `${a.tool} ` : 'on '}${now}` : ''}
       </div>
     </div>

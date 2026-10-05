@@ -184,6 +184,7 @@ export function registerIpcHandlers(): void {
     git.removeWorktree(repoPath, worktreePath, force)
   )
   ipcMain.handle(IPC.gitPruneWorktrees, (_e, repoPath: string) => git.pruneWorktrees(repoPath))
+  ipcMain.handle(IPC.gitIsCheckout, (_e, path: string) => git.isWorktree(path))
   ipcMain.handle(IPC.gitWorktreeStatus, (_e, worktreePath: string, baseBranch: string) =>
     git.getWorktreeStatus(worktreePath, baseBranch)
   )
@@ -218,9 +219,10 @@ export function registerIpcHandlers(): void {
   )
   ipcMain.handle(IPC.gitPrStatus, (_e, worktreePath: string, ref: string) => git.prStatus(worktreePath, ref))
   ipcMain.handle(IPC.gitUnpushed, (_e, worktreePath: string, branch: string, baseBranch: string) => git.unpushedCount(worktreePath, branch, baseBranch))
-  ipcMain.handle(IPC.gitCloseWithPr, (_e, repoPath: string, worktreePath: string, branch: string, baseBranch: string, merged: boolean) =>
-    git.closeWithPr(repoPath, worktreePath, branch, baseBranch, merged)
+  ipcMain.handle(IPC.gitCloseWithPr, (_e, repoPath: string, worktreePath: string, branch: string, baseBranch: string, merged: boolean, prRef?: string) =>
+    git.closeWithPr(repoPath, worktreePath, branch, baseBranch, merged, prRef)
   )
+  ipcMain.handle(IPC.gitCloseCheck, (_e, worktreePath: string, branch: string, baseBranch: string, prRef?: string) => git.closeCheck(worktreePath, branch, baseBranch, prRef))
   ipcMain.handle(IPC.worktreesPruneNow, () => cleanup.pruneStale(true))
   cleanup.startCleanup()
 

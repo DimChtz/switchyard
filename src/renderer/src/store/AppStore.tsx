@@ -22,7 +22,7 @@ interface Made {
 import { AGENTS } from '@shared/constants'
 import { errText } from '../lib/errors'
 import { inParens, setUserBindings } from '../lib/shortcuts'
-import { clock, wakeAt } from '../lib/status'
+import { clock, waitingText, wakeAt } from '../lib/status'
 import { prefsFor } from '../lib/projectPrefs'
 import { baseFor, parentFinished } from '@shared/stack'
 import { knowTasks } from '../lib/stack'
@@ -98,7 +98,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }): R
         const u = action.update
         if (u.st === 'failed') addNotice({ ...base, kind: 'failed', text: `${name} failed`, detail: u.ask ?? null })
         else if (u.st === 'waiting')
-          addNotice({ ...base, kind: u.askKind === 'permission' ? 'permission' : 'waiting', text: u.askKind === 'permission' ? `${name} needs your approval` : `${name} is waiting for you`, detail: u.ask ?? u.activity ?? null })
+          addNotice({ ...base, kind: u.askKind === 'permission' ? 'permission' : 'waiting', text: `${name} ${waitingText(u.askKind, u.ask)}`, detail: u.ask ?? u.activity ?? null })
         else if (u.st === 'done') addNotice({ ...base, kind: 'done', text: `${name} finished - ready for review`, detail: null })
       } else if (action.type === 'TESTS_FINISHED')
         addNotice({ ...base, kind: action.exitCode === 0 ? 'tests-passed' : 'tests-failed', text: action.exitCode === 0 ? 'Tests passed' : `Tests failed (exit ${action.exitCode ?? '?'})`, detail: null })
@@ -114,7 +114,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }): R
       if (action.type === 'AGENT_STATUS' && task.st === 'working' && task.branch && task.col !== 'done') {
         const u = action.update
         if (s.prefs.notifyInput && (u.st === 'waiting' || u.st === 'failed')) {
-          const what = u.st === 'failed' ? 'failed' : u.askKind === 'permission' ? 'needs your approval' : 'is waiting for you'
+          const what = u.st === 'failed' ? 'failed' : waitingText(u.askKind, u.ask)
           // Answer right from the notification: approve or deny a permission, retry a failure.
           const actions =
             u.st === 'failed'
@@ -464,10 +464,21 @@ ${u.ask}` : ''}`, task.id, actions)
         }
       }
     }
-    const first = setTimeout(poll, 8000)
-    const every = setInterval(poll, 120_000)
+    // Coming back to the window (from merging on GitHub, say): a look right away.
+    let lastPoll = 0
+    const timed = (): void => {
+      lastPoll = Date.now()
+      poll()
+    }
+    const onFocus = (): void => {
+      if (Date.now() - lastPoll > 15_000) timed()
+    }
+    window.addEventListener('focus', onFocus)
+    const first = setTimeout(timed, 8000)
+    const every = setInterval(timed, 120_000)
     return () => {
       stopped = true
+      window.removeEventListener('focus', onFocus)
       clearTimeout(first)
       clearInterval(every)
     }

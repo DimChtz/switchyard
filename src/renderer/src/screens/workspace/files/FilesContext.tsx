@@ -43,6 +43,8 @@ export interface FilesApi {
   inRoot: (abs: string) => boolean
   /** Everything in the folder (null while it's read). */
   entries: FileEntry[] | null
+  /** Why the files couldn't be listed (the worktree is gone, say); null when they were, or are loading. */
+  listError: string | null
   refresh: () => void
   /** Bumped on every refresh (search runs again). */
   refreshKey: number
@@ -102,6 +104,10 @@ export function FilesProvider({ task, root: rootPath, baseBranch, bases, childre
   const { state, dispatch } = useAppStore()
   const prefs = prefsFor(state, task.projectId)
   const [entries, setEntries] = useState<FileEntry[] | null>(null)
+  const [listError, setListError] = useState<string | null>(null)
+  // Listing works again (the folder came back): the watcher starts over on it.
+  const [watchKey, setWatchKey] = useState(0)
+  const hadError = useRef(false)
   const [refreshKey, setRefreshKey] = useState(0)
   const [collapsed, setCollapsedState] = useState<Set<string>>(() => collapsedDirs.get(task.id) ?? new Set())
   const collapsedInit = useRef(collapsedDirs.has(task.id))
@@ -134,12 +140,20 @@ export function FilesProvider({ task, root: rootPath, baseBranch, bases, childre
   const refresh = useCallback((): void => {
     setRefreshKey((k) => k + 1)
     window.api.fs.list(rootPath, baseBranch, bases).then((list) => {
+      setListError(null)
+      if (hadError.current) setWatchKey((k) => k + 1)
+      hadError.current = false
       setEntries(list)
       // The first time: every folder closed.
       if (!collapsedInit.current) {
         collapsedInit.current = true
         setCollapsed(() => new Set(allDirPaths(list.map((f) => ({ path: f.path, status: f.status, isDir: f.isDir })))))
       }
+    }, (err: unknown) => {
+      // Not a spinner forever: what went wrong, with a way to try again.
+      hadError.current = true
+      setEntries(null)
+      setListError(/ENOENT|no such file|does not exist/i.test(String(err)) ? `The task's folder isn't there any more: ${rootPath}` : `Couldn't list the files: ${errText(err)}`)
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rootPath, baseBranch, JSON.stringify(bases ?? null), setCollapsed])
@@ -234,8 +248,15 @@ export function FilesProvider({ task, root: rootPath, baseBranch, bases, childre
           }
         }, 250)
       }),
-    [rootPath]
+    [rootPath, watchKey]
   )
+
+  // While the files can't be listed (the folder is gone, say), another look now and then.
+  useEffect(() => {
+    if (!listError) return
+    const t = setInterval(() => latest.current.refresh(), 4000)
+    return () => clearInterval(t)
+  }, [listError])
 
   const isDirty = useCallback((path: string): boolean => edits[path] !== undefined && edits[path] !== fileCache[path], [edits, fileCache])
 
@@ -414,6 +435,7 @@ export function FilesProvider({ task, root: rootPath, baseBranch, bases, childre
     relOf,
     inRoot,
     entries,
+    listError,
     refresh,
     refreshKey,
     collapsed,

@@ -3,7 +3,7 @@ import { NO_FILTER, boardFilterOf, loadBoardPrefs } from '../lib/boardFilter'
 import type { Action, AppState } from './types'
 import { AGENTS, COLUMN_ORDER, DEFAULT_PREFS, branchFor, firstMessage } from '@shared/constants'
 import { agentShort, busyAgents, nextTaskKey, raiseKeyHigh } from '../lib/derive'
-import { clock } from '../lib/status'
+import { clock, waitingText } from '../lib/status'
 import { prefsFor } from '../lib/projectPrefs'
 import { waitsFor, wouldLoop } from '@shared/stack'
 import { remember, travel } from './history'
@@ -584,9 +584,7 @@ function reduce(state: AppState, action: Action): AppState {
         { ...state, tasks: next },
         update.st === 'failed'
           ? `${name} failed on ${task.title}`
-          : update.askKind === 'permission'
-            ? `${name} needs approval on ${task.title}`
-            : `${name} is waiting on ${task.title}`,
+          : `${name} ${waitingText(update.askKind, update.ask)} on ${task.title}`,
         'waiting'
       )
     }

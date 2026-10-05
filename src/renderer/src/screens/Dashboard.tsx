@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { plural } from '../lib/summary'
 import { useAppStore } from '../store/AppStore'
 import { useHover } from '../lib/useHover'
-import { statusColor, timeAgo } from '../lib/status'
+import { statusColor, statusLabel, timeAgo } from '../lib/status'
 import { agentShort, tasksForProject, staleWorktrees } from '../lib/derive'
 import { useRealWorktrees } from '../lib/realGit'
 import { askText } from '../lib/agentControl'
@@ -35,7 +35,7 @@ function NeedsCard({ task }: { task: Task }): React.JSX.Element {
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, font: "12px var(--font-mono)" }}>
         <span style={{ width: 7, height: 7, borderRadius: '50%', background: statusColor(task.st) }} />
         <span style={{ color: statusColor(task.st) }}>
-          {agentShort(task.agentKind)} · {task.st === 'failed' ? 'failed' : 'needs you'}
+          {agentShort(task.agentKind)} · {statusLabel(task)}
         </span>
         <span style={{ flex: 1 }} />
         <span style={{ color: 'var(--t4)' }}>{timeAgo(task.lastActivityAt)}</span>

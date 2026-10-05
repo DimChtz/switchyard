@@ -7,7 +7,7 @@ import { join } from 'path'
 vi.mock('./store', () => ({ getPrefs: () => ({ worktreeRoot: '', syncMode: 'rebase' }) }))
 vi.mock('./log', () => ({ log: { info: () => {}, warn: () => {}, error: () => {} } }))
 
-import { addWorktree, defaultBranchOf, getDiffFiles, mergeWithoutCheckout, parseUnifiedDiff } from './git'
+import { addWorktree, closeCheck, closeWithPr, defaultBranchOf, getDiffFiles, mergeWithoutCheckout, parseUnifiedDiff } from './git'
 
 let dir = ''
 const git = (cwd: string, ...args: string[]): string => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd, stdio: 'pipe' }).toString().trim()
@@ -113,6 +113,61 @@ describe('mergeWithoutCheckout', () => {
     git(r, 'checkout', '-qb', 'elsewhere')
     await expect(mergeWithoutCheckout(r, 'task', 'main')).rejects.toThrow(/conflicts in a\.txt/)
     expect(git(r, 'rev-parse', 'main')).toBe(before)
+    expect(git(r, 'worktree', 'list').split('\n')).toHaveLength(1)
+  })
+})
+
+describe('closing a task whose pull request was merged on GitHub', () => {
+  // origin (bare), the user's clone with the task's worktree pushed, and GitHub's
+  // side: the PR squash-merged into main and its branch deleted, then a fetch --prune.
+  function mergedOnGitHub(): { r: string; wt: string } {
+    const origin = join(dir, 'origin.git')
+    execFileSync('git', ['init', '-q', '--bare', '-b', 'main', origin])
+    const r = repo()
+    git(r, 'remote', 'add', 'origin', origin)
+    git(r, 'push', '-q', '-u', 'origin', 'main')
+    const wt = join(dir, 'wt')
+    git(r, 'worktree', 'add', '-q', '-b', 'feature', wt)
+    writeFileSync(join(wt, 'a.txt'), 'one\ntwo\nthree\n')
+    git(wt, 'commit', '-qam', 'three')
+    writeFileSync(join(wt, 'b.txt'), 'new\n')
+    git(wt, 'add', '-A')
+    git(wt, 'commit', '-qm', 'b')
+    git(wt, 'push', '-q', '-u', 'origin', 'feature')
+    const site = join(dir, 'site')
+    execFileSync('git', ['clone', '-q', '-c', 'core.autocrlf=false', origin, site])
+    git(site, 'merge', '-q', '--squash', 'origin/feature')
+    git(site, 'commit', '-qm', 'Feature (#7)')
+    git(site, 'push', '-q', 'origin', 'main')
+    git(site, 'push', '-q', 'origin', '--delete', 'feature')
+    git(r, 'fetch', '-q', '--prune', 'origin')
+    return { r, wt }
+  }
+
+  it("finishes: nothing is lost though origin/feature is gone and main doesn't have the commits", async () => {
+    const { r, wt } = mergedOnGitHub()
+    expect(await closeCheck(wt, 'feature', 'main')).toBeNull()
+    await closeWithPr(r, wt, 'feature', 'main', true)
+    expect(existsSync(wt)).toBe(false)
+    expect(git(r, 'worktree', 'list').split('\n')).toHaveLength(1)
+    expect(git(r, 'branch', '--list', 'feature')).toBe('')
+  })
+
+  it("refuses while there's a commit made after the merge (it's nowhere else)", async () => {
+    const { r, wt } = mergedOnGitHub()
+    writeFileSync(join(wt, 'c.txt'), 'later\n')
+    git(wt, 'add', '-A')
+    git(wt, 'commit', '-qm', 'later')
+    expect(await closeCheck(wt, 'feature', 'main')).toMatch(/1 commit isn't in the pull request/)
+    await expect(closeWithPr(r, wt, 'feature', 'main', true)).rejects.toThrow(/push it first/)
+    expect(existsSync(join(wt, 'c.txt'))).toBe(true)
+  })
+
+  it('finishes a task whose worktree folder is already gone', async () => {
+    const { r, wt } = mergedOnGitHub()
+    rmSync(wt, { recursive: true, force: true })
+    expect(await closeCheck(wt, 'feature', 'main')).toBeNull()
+    await closeWithPr(r, wt, 'feature', 'main', true)
     expect(git(r, 'worktree', 'list').split('\n')).toHaveLength(1)
   })
 })

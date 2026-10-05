@@ -4,7 +4,7 @@ import { useHover } from '../../../lib/useHover'
 import { fileIcon } from '../../../lib/fileLang'
 import { buildTree, allDirPaths, type TreeRow, type TreeItem } from '../../../lib/fileTree'
 import { FILE_DRAG_TYPE } from '../../../lib/dropPaths'
-import { IconButton, Menu, confirm, type MenuItem } from '../../../components/ui'
+import { Button, IconButton, Menu, confirm, type MenuItem } from '../../../components/ui'
 import { shortcut } from '../../../lib/shortcuts'
 import { errText } from '../../../lib/errors'
 import { isMac, keyLabel, revealLabel } from '../../../lib/keys'
@@ -24,7 +24,7 @@ const DRAG_TYPE = FILE_DRAG_TYPE
 export function ExplorerView({ chrome, activePath }: { chrome: PanelChrome; activePath: string | null }): React.JSX.Element {
   const { dispatch } = useAppStore()
   const files = useFiles()
-  const { task, entries, collapsed, setCollapsed, abs, relOf, inRoot: inWorktree, refresh, openFile } = files
+  const { task, entries, listError, collapsed, setCollapsed, abs, relOf, inRoot: inWorktree, refresh, openFile } = files
   const [spinning, setSpinning] = useState(false)
   const [creating, setCreating] = useState<{ parentDir: string; isDir: boolean } | null>(null)
   const [createName, setCreateName] = useState('')
@@ -473,7 +473,14 @@ export function ExplorerView({ chrome, activePath }: { chrome: PanelChrome; acti
           setMenu({ x: e.clientX, y: e.clientY, row: null })
         }}
       >
-        {entries === null ? (
+        {entries === null && listError ? (
+          <div style={{ padding: 12, display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 8, font: '12.5px/1.5 var(--font-ui)', color: 'var(--t3)', overflowWrap: 'anywhere' }}>
+            <span>{listError}</span>
+            <Button size="sm" onClick={refresh}>
+              Retry
+            </Button>
+          </div>
+        ) : entries === null ? (
           <div style={{ padding: 12, color: 'var(--t4)', fontSize: 12.5 }}>Loading…</div>
         ) : (
           <>
