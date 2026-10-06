@@ -7,7 +7,7 @@ import { join } from 'path'
 vi.mock('./store', () => ({ getPrefs: () => ({ worktreeRoot: '', syncMode: 'rebase' }) }))
 vi.mock('./log', () => ({ log: { info: () => {}, warn: () => {}, error: () => {} } }))
 
-import { addWorktree, closeCheck, closeWithPr, defaultBranchOf, getDiffFiles, mergeWithoutCheckout, parseUnifiedDiff } from './git'
+import { addWorktree, closeCheck, closeWithPr, commitsAfter, defaultBranchOf, getDiffFiles, mergeWithoutCheckout, parseUnifiedDiff } from './git'
 
 let dir = ''
 const git = (cwd: string, ...args: string[]): string => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd, stdio: 'pipe' }).toString().trim()
@@ -172,5 +172,20 @@ describe('closing a task whose pull request was merged on GitHub', () => {
     expect(await closeCheck(wt, 'feature', 'main')).toBeNull()
     await closeWithPr(r, wt, 'feature', 'main', true)
     expect(git(r, 'worktree', 'list').split('\n')).toHaveLength(1)
+  })
+})
+
+describe('commitsAfter (what a pull request is missing)', () => {
+  it("is 0 at or behind the PR's head, and counts the commits made after it", async () => {
+    const r = repo()
+    const head = git(r, 'rev-parse', 'HEAD')
+    expect(await commitsAfter(r, head)).toBe(0)
+    writeFileSync(join(r, 'later.txt'), 'later\n')
+    git(r, 'add', '-A')
+    git(r, 'commit', '-qm', 'after the PR')
+    expect(await commitsAfter(r, head)).toBe(1)
+    git(r, 'reset', '-q', '--hard', head)
+    expect(await commitsAfter(r, head)).toBe(0)
+    expect(await commitsAfter(r, 'f'.repeat(40))).toBeNull()
   })
 })

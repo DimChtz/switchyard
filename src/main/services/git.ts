@@ -684,13 +684,7 @@ async function unpublishedCount(worktreePath: string, branch: string, baseBranch
       .then((out) => (JSON.parse(out) as { headRefOid?: string }).headRefOid ?? null)
       .catch(() => null)
     if (head) {
-      // HEAD is the PR's head (or behind it): all of it is in the PR.
-      const inPr = await git
-        .raw(['merge-base', '--is-ancestor', 'HEAD', head])
-        .then(() => true)
-        .catch(() => false)
-      if (inPr) return 0
-      const after = await count(`${head}..HEAD`)
+      const after = await commitsAfter(worktreePath, head)
       if (after !== null) return after
     }
   }
@@ -702,6 +696,20 @@ async function unpublishedCount(worktreePath: string, branch: string, baseBranch
   // The commits behind the files that differ (a squash merge took the rest).
   if (missing) return (await count(`origin/${baseBranch}..HEAD`, missing)) || 1
   return (await count(`origin/${baseBranch}..HEAD`)) ?? (await count(`${baseBranch}..HEAD`)) ?? 0
+}
+
+/**
+ * The worktree's commits that a pull request's head commit doesn't have: 0
+ * when HEAD is that commit or behind it; null when it can't tell (the commit
+ * isn't here - pushed from elsewhere).
+ */
+export async function commitsAfter(worktreePath: string, head: string): Promise<number | null> {
+  // Its exit code is the answer - gitYes, not simple-git, which takes a silent "no" for a yes.
+  if (await gitYes(worktreePath, ['merge-base', '--is-ancestor', 'HEAD', head]).catch(() => false)) return 0
+  return gitAt(worktreePath)
+    .raw(['rev-list', '--count', `${head}..HEAD`])
+    .then((out) => Number(out.trim()) || 0)
+    .catch(() => null)
 }
 
 /** The files HEAD changed (since it left `ref`'s history) that don't read the same in `ref`; null when it can't tell. */

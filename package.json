@@ -33,7 +33,7 @@
     "chokidar": "^4.0.1",
     "electron-updater": "^6.3.9",
     "jsonc-parser": "^3.3.1",
-    "simple-git": "^3.27.0"
+    "simple-git": "^4.0.2"
   },
   "devDependencies": {
     "@codemirror/commands": "^6.11.1",
