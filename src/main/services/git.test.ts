@@ -15,6 +15,9 @@ function repo(branch = 'main'): string {
   const r = join(dir, 'repo')
   execFileSync('git', ['init', '-q', '-b', branch, r])
   git(r, 'config', 'core.autocrlf', 'false')
+  // Its own identity: the code under test makes commits (merges) too, and a build machine has no global one.
+  git(r, 'config', 'user.name', 't')
+  git(r, 'config', 'user.email', 't@t')
   writeFileSync(join(r, 'a.txt'), 'one\ntwo\n')
   git(r, 'add', '-A')
   git(r, 'commit', '-qm', 'init')
