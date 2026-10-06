@@ -75,6 +75,9 @@ export function TerminalView({ sessionId, cwd, cmd, args, execCommand, onExit, a
   const autoFocusRef = useRef(autoFocus)
   autoFocusRef.current = autoFocus
   const containerRef = useRef<HTMLDivElement>(null)
+  // Where xterm draws: inside the container's margin. (Not the container itself - with border-box
+  // sizing the fit addon counts its padding as room, and the text ran into the edges.)
+  const hostRef = useRef<HTMLDivElement>(null)
   const { state } = useAppStore()
   // A project can set its own terminal font and the like.
   const prefs = prefsFor(state, projectIdForPath(state, cwd))
@@ -101,7 +104,7 @@ export function TerminalView({ sessionId, cwd, cmd, args, execCommand, onExit, a
   }, [optionsKey, sessionId])
 
   useEffect(() => {
-    const container = containerRef.current
+    const container = hostRef.current
     if (!container) return
 
     let cancelled = false
@@ -343,8 +346,9 @@ export function TerminalView({ sessionId, cwd, cmd, args, execCommand, onExit, a
           if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropping(false)
         }}
         onDrop={onDrop}
-        style={{ flex: 1, minHeight: 0, minWidth: 0, padding: '8px 4px', position: 'relative' }}
+        style={{ flex: 1, minHeight: 0, minWidth: 0, position: 'relative' }}
       >
+        <div ref={hostRef} style={{ position: 'absolute', inset: '10px 8px 8px 14px' }} />
         {dropping ? (
           <div
             style={{
