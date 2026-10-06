@@ -42,7 +42,8 @@ mac:
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
 dmg:
-  artifactName: ${name}-${version}.${ext}
+  # One per architecture (Apple Silicon, Intel) - the same name made one replace the other on upload.
+  artifactName: ${name}-${version}-${arch}.${ext}
 linux:
   target:
     - AppImage
