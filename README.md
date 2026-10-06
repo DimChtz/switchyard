@@ -77,7 +77,7 @@ To release a version:
 **Platform notes:**
 
 - **Windows:** builds aren't code-signed, so SmartScreen warns on first install. Updates work.
-- **macOS:** builds aren't signed or notarized (no Apple Developer account). macOS blocks the downloaded app at first; allow it in System Settings → Privacy & Security, or run `xattr -cr /Applications/Switchyard.app`. It doesn't update itself until it's signed.
+- **macOS:** builds aren't signed or notarized (no Apple Developer account). After installing, macOS says the app "is damaged and can't be opened" - it isn't; that's how macOS treats an unsigned app from the internet. Run `xattr -cr /Applications/Switchyard.app` once in Terminal, then open it. It doesn't update itself until it's signed: Switchyard says when a new version is out, with a link to download it.
 - **Linux:** the AppImage updates itself; the deb doesn't.
 
 ## Project layout

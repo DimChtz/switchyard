@@ -13,7 +13,8 @@ permissions:
 
 jobs:
   check:
-    runs-on: ubuntu-latest
+    # Pinned (ubuntu-latest moves to a new Ubuntu now and then): the builds change only when this does.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -47,7 +48,7 @@ jobs:
           # Apple Silicon and Intel in one build (one latest-mac.yml for the updater).
           - os: macos-latest
             target: --mac --arm64 --x64
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             target: --linux
     runs-on: ${{ matrix.os }}
     steps:
