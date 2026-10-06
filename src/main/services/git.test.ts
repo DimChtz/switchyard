@@ -7,7 +7,7 @@ import { join } from 'path'
 vi.mock('./store', () => ({ getPrefs: () => ({ worktreeRoot: '', syncMode: 'rebase' }) }))
 vi.mock('./log', () => ({ log: { info: () => {}, warn: () => {}, error: () => {} } }))
 
-import { addWorktree, closeCheck, closeWithPr, commitsAfter, defaultBranchOf, mergeAndPrune, getDiffFiles, mergeWithoutCheckout, parseUnifiedDiff } from './git'
+import { addWorktree, closeCheck, closeWithPr, commitsAfter, defaultBranchOf, mergeAndPrune, getDiffFiles, getWorktreeStatus, mergeWithoutCheckout, parseUnifiedDiff } from './git'
 
 let dir = ''
 const git = (cwd: string, ...args: string[]): string => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd, stdio: 'pipe' }).toString().trim()
@@ -232,5 +232,35 @@ describe('merging a finished task', () => {
     mainMovesOn(r)
     expect(await mergeAndPrune(r, wt, 'task', 'main')).toEqual({ merged: true })
     expect(readFileSync(join(r, 'n.txt'), 'utf-8')).toBe('new\n')
+  })
+})
+
+describe('a task rebased onto origin while the local base lags', () => {
+  it("shows only the task's own changes, not what main got meanwhile", async () => {
+    const r = repo()
+    const origin = join(dir, 'origin.git')
+    execFileSync('git', ['init', '-q', '--bare', '-b', 'main', origin])
+    git(r, 'remote', 'add', 'origin', origin)
+    git(r, 'push', '-q', '-u', 'origin', 'main')
+    // Others push to main; this checkout's main doesn't pull them.
+    const up = join(dir, 'up')
+    execFileSync('git', ['clone', '-q', '-c', 'core.autocrlf=false', origin, up])
+    for (let i = 1; i <= 5; i++) {
+      writeFileSync(join(up, `up${i}.txt`), `${i}\n`)
+      git(up, 'add', '-A')
+      git(up, 'commit', '-qm', `up ${i}`)
+    }
+    git(up, 'push', '-q', 'origin', 'main')
+    git(r, 'fetch', '-q', 'origin')
+    // The task: one file, then git pull --rebase (onto origin/main).
+    const wt = join(dir, 'task-wt')
+    git(r, 'worktree', 'add', '-q', '-b', 'task', wt)
+    writeFileSync(join(wt, 't.txt'), 'task\n')
+    git(wt, 'add', '-A')
+    git(wt, 'commit', '-qm', 'task')
+    git(wt, 'rebase', '-q', 'origin/main')
+
+    expect((await getDiffFiles(wt, 'main')).map((f) => f.path)).toEqual(['t.txt'])
+    expect(await getWorktreeStatus(wt, 'main')).toMatchObject({ ahead: 1, behind: 0 })
   })
 })

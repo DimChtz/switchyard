@@ -1,6 +1,6 @@
 import { execFile } from 'child_process'
 import { promisify } from 'util'
-import { gitArgs, gitEnv } from './gitEnv'
+import { gitArgs, gitEnv, newestBase } from './gitEnv'
 import { existsSync, promises as fs } from 'fs'
 import { isAbsolute, join, relative } from 'path'
 import { getProjects, getTasks } from './store'
@@ -65,7 +65,7 @@ export async function tree(projectId: string): Promise<MapTree> {
 
 /** A task's changed files in a checkout (vs where it branched off; uncommitted and new ones too). */
 async function changed(path: string, base: string): Promise<string[]> {
-  const fork = (await git(path, ['merge-base', base, 'HEAD']).catch(() => '')).trim()
+  const fork = (await git(path, ['merge-base', await newestBase(path, base), 'HEAD']).catch(() => '')).trim()
   const [diff, untracked] = await Promise.all([
     fork ? git(path, ['-c', 'core.quotepath=off', 'diff', '--name-only', '--no-renames', fork]).catch(() => '') : Promise.resolve(''),
     git(path, ['-c', 'core.quotepath=off', 'ls-files', '--others', '--exclude-standard']).catch(() => '')

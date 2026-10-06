@@ -1,4 +1,4 @@
-import { gitAt, gitArgs, gitEnv, gitYes } from './gitEnv'
+import { gitAt, gitArgs, gitEnv, gitYes, newestBase } from './gitEnv'
 import { basename, isAbsolute, join } from 'path'
 import { promises as fs } from 'fs'
 import { tmpdir } from 'os'
@@ -365,7 +365,7 @@ export async function getWorktreeStatus(worktreePath: string, baseBranch: string
   let ahead = 0
   let behind = 0
   try {
-    const counts = await git.raw(['rev-list', '--left-right', '--count', `${baseBranch}...HEAD`])
+    const counts = await git.raw(['rev-list', '--left-right', '--count', `${await newestBase(worktreePath, baseBranch)}...HEAD`])
     const [b, a] = counts.trim().split(/\s+/).map(Number)
     behind = b || 0
     ahead = a || 0
@@ -397,7 +397,7 @@ export async function getLog(worktreePath: string, limit = 10): Promise<{ hash: 
  */
 async function forkPoint(worktreePath: string, baseBranch: string): Promise<string> {
   try {
-    return (await gitAt(worktreePath).raw(['merge-base', baseBranch, 'HEAD'])).trim() || 'HEAD'
+    return (await gitAt(worktreePath).raw(['merge-base', await newestBase(worktreePath, baseBranch), 'HEAD'])).trim() || 'HEAD'
   } catch {
     return 'HEAD'
   }
@@ -522,11 +522,13 @@ export function parseUnifiedDiff(raw: string): DiffLine[] {
 export async function rebaseOnto(worktreePath: string, baseBranch: string): Promise<void> {
   const git = gitAt(worktreePath)
   const merge = getPrefs(worktreePath).syncMode === 'merge'
+  // Onto origin's base when it's newer than the local one: up to date for real.
+  const onto = await newestBase(worktreePath, baseBranch)
   try {
     // --autostash: uncommitted changes (an agent's work in progress) are put
     // aside for the sync and back after it, instead of stopping it.
-    if (merge) await git.merge([baseBranch, '--no-edit', '--autostash'])
-    else await git.rebase(['--autostash', baseBranch])
+    if (merge) await git.merge([onto, '--no-edit', '--autostash'])
+    else await git.rebase(['--autostash', onto])
   } catch (err) {
     const conflicted = (await git.status()).conflicted
     if (merge) await git.merge(['--abort']).catch(() => {})

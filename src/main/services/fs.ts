@@ -1,7 +1,7 @@
 import { promises as fs } from 'fs'
 import { basename, dirname, join, relative, resolve, sep } from 'path'
 import { shell } from 'electron'
-import { gitAt, gitArgs, gitEnv } from './gitEnv'
+import { gitAt, gitArgs, gitEnv, newestBase } from './gitEnv'
 import { execFile } from 'child_process'
 import type { FileEntry, CheckoutFiles, EditorConfigProps, FileDoc } from '@shared/types'
 import { editorConfigFor, parseEditorConfig, type EditorConfigFile } from '@shared/editorconfig'
@@ -17,7 +17,7 @@ async function gitStatusMap(root: string, baseBranch?: string): Promise<Map<stri
   if (baseBranch) {
     try {
       // -z: names exactly as they are (spaces, tabs), and a rename's two names apart.
-      const parts = (await git.raw(['diff', '--name-status', '-z', `${baseBranch}...HEAD`])).split('\0')
+      const parts = (await git.raw(['diff', '--name-status', '-z', `${await newestBase(root, baseBranch)}...HEAD`])).split('\0')
       for (let i = 0; i < parts.length; i++) {
         const code = parts[i]
         if (!code) continue

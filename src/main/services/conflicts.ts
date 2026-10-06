@@ -1,7 +1,7 @@
 import { BrowserWindow } from 'electron'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
-import { gitArgs, gitEnv } from './gitEnv'
+import { gitArgs, gitEnv, newestBase } from './gitEnv'
 import { existsSync, promises as fs } from 'fs'
 import { tmpdir } from 'os'
 import { basename, join } from 'path'
@@ -126,7 +126,7 @@ async function doScan(): Promise<ConflictReport> {
         const snap = await snapshotCommit(path, `Switchyard conflict check: ${task.key}`)
         // A task building on another compares with that one's branch (its own changes only).
         const base = baseFor(task, project, all)
-        const fork = (await git(path, ['merge-base', base, snap.sha])).out.trim()
+        const fork = (await git(path, ['merge-base', await newestBase(path, base), snap.sha])).out.trim()
         const names = (await git(path, ['-c', 'core.quotepath=off', 'diff', '--name-only', '--no-renames', fork, snap.sha])).out
         checkouts.push({ task, project, path, sha: snap.sha, base, files: new Set(names.split('\n').filter(Boolean)) })
       } catch {

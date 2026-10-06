@@ -59,6 +59,24 @@ export function gitEnv(extra: Record<string, string> = {}): NodeJS.ProcessEnv {
 }
 
 /**
+ * What a task is compared with: its base branch - or origin's copy of it when
+ * that's newer (the local one is behind it, or the same). A branch rebased
+ * onto origin/main (git pull --rebase) while the local main lags would
+ * otherwise "change" everything main got meanwhile: thousands of lines that
+ * aren't the task's. A local base with commits origin doesn't have stays the
+ * one compared with.
+ */
+export async function newestBase(cwd: string, baseBranch: string): Promise<string> {
+  if (baseBranch.startsWith('origin/')) return baseBranch
+  const remote = `origin/${baseBranch}`
+  const exists = (ref: string): Promise<boolean> => gitYes(cwd, ['rev-parse', '--verify', '--quiet', ref]).catch(() => false)
+  if (!(await exists(`refs/remotes/${remote}`))) return baseBranch
+  // No local base at all (only origin's): origin's it is.
+  if (!(await exists(`refs/heads/${baseBranch}`))) return remote
+  return (await gitYes(cwd, ['merge-base', '--is-ancestor', baseBranch, remote]).catch(() => false)) ? remote : baseBranch
+}
+
+/**
  * Runs a git command whose answer is its exit code (merge-base
  * --is-ancestor, check-ignore…): true for 0, false for 1. simple-git can't
  * be asked this - a failure that prints nothing to stderr comes back as a
