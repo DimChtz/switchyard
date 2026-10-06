@@ -69,6 +69,11 @@ export async function snapshotCommit(path: string, message: string): Promise<Omi
   try {
     try {
       await fs.copyFile(index, tmp)
+      // With the index's own time: git compares it with each file's to catch a file
+      // edited in the same second the index was written ("racily clean" - same size,
+      // same time, new content). A copy dated now would hide such an edit.
+      const { atime, mtime } = await fs.stat(index)
+      await fs.utimes(tmp, atime, mtime)
     } catch {
       await git(path, ['read-tree', 'HEAD'], env)
     }
