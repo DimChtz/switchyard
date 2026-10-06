@@ -82,3 +82,25 @@ describe('task keys', () => {
     expect(s.tasks.find((t) => t.id === 'P-1')?.archivedAt).toBeNull()
   })
 })
+
+describe('moving a card within its column', () => {
+  const ids = (s: AppState): string[] => s.tasks.filter((t) => t.col === 'backlog').map((t) => t.id)
+  it('puts it in front of the card it was dropped on, or at the end', () => {
+    let s = start([task(1), task(2), task(3)])
+    s = reducer(s, { type: 'MOVE_TASK', id: 'P-3', col: 'backlog', before: 'P-1' })
+    expect(ids(s)).toEqual(['P-3', 'P-1', 'P-2'])
+    s = reducer(s, { type: 'MOVE_TASK', id: 'P-3', col: 'backlog', before: null })
+    expect(ids(s)).toEqual(['P-1', 'P-2', 'P-3'])
+  })
+  it('changes nothing else - and nothing at all without a place', () => {
+    const s = start([task(1), task(2)])
+    expect(reducer(s, { type: 'MOVE_TASK', id: 'P-2', col: 'backlog' })).toBe(s)
+    const moved = reducer(s, { type: 'MOVE_TASK', id: 'P-2', col: 'backlog', before: 'P-1' })
+    expect(moved.tasks.find((t) => t.id === 'P-2')).toBe(s.tasks.find((t) => t.id === 'P-2'))
+  })
+  it('lands where it was dropped in another column too', () => {
+    let s = start([task(1), task(2, { col: 'ready' }), task(3, { col: 'ready' })])
+    s = reducer(s, { type: 'MOVE_TASK', id: 'P-1', col: 'ready', before: 'P-3' })
+    expect(s.tasks.filter((t) => t.col === 'ready').map((t) => t.id)).toEqual(['P-2', 'P-1', 'P-3'])
+  })
+})

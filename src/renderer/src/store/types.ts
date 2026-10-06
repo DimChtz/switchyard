@@ -127,7 +127,8 @@ export type Action =
   | { type: 'NAV'; view: ViewName; projectId?: string | null; taskId?: string | null }
   | { type: 'OPEN_TASK'; taskId: string; tab?: WorkspaceTab }
   | { type: 'SET_BOARD_FOCUS'; id: string | null }
-  | { type: 'MOVE_TASK'; id: string; col: BoardColumn }
+  /** `before`: the card it goes in front of (null: the column's end); left out, it keeps its place. */
+  | { type: 'MOVE_TASK'; id: string; col: BoardColumn; before?: string | null }
   /** `after`: the new task builds on that one. */
   | { type: 'BEGIN_ADD_TASK'; after?: string }
   | { type: 'CANCEL_ADD_TASK' }

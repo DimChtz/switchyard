@@ -135,6 +135,7 @@ function Card({ task, focused, cost }: { task: Task; focused: boolean; cost: num
   return (
     <div
       draggable={renaming === null}
+      data-card-id={task.id}
       onDragStart={(e) => {
         e.dataTransfer.setData('text/plain', task.id)
       }}
@@ -593,6 +594,17 @@ function ColumnCell({
 }): React.JSX.Element {
   const { state, dispatch } = useAppStore()
   const [dragOver, setDragOver] = useState(false)
+  // Where a dragged card would land: in front of this card, or at the end ('end').
+  const [dropAt, setDropAt] = useState<string | null>(null)
+  const listRef = useRef<HTMLDivElement>(null)
+  const placeAt = (y: number): string => {
+    const cards = [...(listRef.current?.querySelectorAll<HTMLElement>('[data-card-id]') ?? [])]
+    const next = cards.find((c) => {
+      const r = c.getBoundingClientRect()
+      return y < r.top + r.height / 2
+    })
+    return next?.dataset.cardId ?? 'end'
+  }
 
   // Dropping a started task on Done really finishes it: merged (or through
   // its pull request). Leftover changes need a decision first.
@@ -605,23 +617,37 @@ function ColumnCell({
       onDragOver={(e) => {
         e.preventDefault()
         setDragOver(true)
+        const at = placeAt(e.clientY)
+        if (at !== dropAt) setDropAt(at)
       }}
-      onDragLeave={() => setDragOver(false)}
+      onDragLeave={(e) => {
+        if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
+        setDragOver(false)
+        setDropAt(null)
+      }}
       onDrop={(e) => {
         e.preventDefault()
         setDragOver(false)
+        setDropAt(null)
         const id = e.dataTransfer.getData('text/plain')
         const task = state.tasks.find((t) => t.id === id)
         if (!task) return
+        const at = placeAt(e.clientY)
+        const before = at === 'end' ? null : at
+        // Within its column: a new place, nothing else.
+        if (task.col === col) {
+          if (before !== id) dispatch({ type: 'MOVE_TASK', id, col, before })
+          return
+        }
         if (col === 'progress' && !(task.agentKind && task.branch)) {
           dispatch({ type: 'OPEN_START_MODAL', taskId: id })
         } else if (col === 'done' && task.worktreePath && task.col !== 'done') {
           const project = state.projects.find((p) => p.id === task.projectId)
           if (project) finishFromBoard(task, project)
         } else if (col === 'review' && task.col !== 'review') {
-          reviewReady(task).then((ok) => ok && dispatch({ type: 'MOVE_TASK', id, col }))
+          reviewReady(task).then((ok) => ok && dispatch({ type: 'MOVE_TASK', id, col, before }))
         } else {
-          dispatch({ type: 'MOVE_TASK', id, col })
+          dispatch({ type: 'MOVE_TASK', id, col, before })
         }
       }}
       style={{
@@ -637,14 +663,23 @@ function ColumnCell({
       }}
     >
       {head}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, overflow: lanes ? 'visible' : 'auto', minHeight: 0, flex: 1 }}>
+      <div ref={listRef} style={{ display: 'flex', flexDirection: 'column', gap: 8, overflow: lanes ? 'visible' : 'auto', minHeight: 0, flex: 1 }}>
         {adding ? <AddTaskInput /> : null}
         {tasks.map((t) => (
-          <Card key={t.id} task={t} focused={state.boardFocus === t.id} cost={costs.get(t.id) ?? 0} />
+          <React.Fragment key={t.id}>
+            {dropAt === t.id ? <DropLine /> : null}
+            <Card task={t} focused={state.boardFocus === t.id} cost={costs.get(t.id) ?? 0} />
+          </React.Fragment>
         ))}
+        {dropAt === 'end' && tasks.length ? <DropLine /> : null}
       </div>
     </div>
   )
+}
+
+/** Where a dragged card lands. (Negative margins: the column's gap doesn't grow while dragging.) */
+function DropLine(): React.JSX.Element {
+  return <div style={{ height: 2, margin: '-5px 2px -5px', borderRadius: 1, background: 'var(--c-blue)', flex: 'none' }} />
 }
 
 /** A lane's title row: fold it, and what its cards are doing. */

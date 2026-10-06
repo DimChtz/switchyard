@@ -123,6 +123,9 @@ function reduce(state: AppState, action: Action): AppState {
       const task = state.tasks.find((t) => t.id === action.id)
       if (!task) return state
 
+      // Within its column: only its place changes.
+      if (action.col === task.col) return action.before === undefined ? state : { ...state, tasks: placeTask(state.tasks, task.id, action.before) }
+
       if (action.col === 'progress' && !(task.agentKind && task.branch)) {
         // Caller is expected to dispatch OPEN_START_MODAL instead in this case.
         return state
@@ -151,7 +154,8 @@ function reduce(state: AppState, action: Action): AppState {
         next = { ...next, st: 'paused' }
       }
 
-      return { ...state, tasks: mapTask(state, task.id, () => next) }
+      const tasks = mapTask(state, task.id, () => next)
+      return { ...state, tasks: action.before === undefined ? tasks : placeTask(tasks, task.id, action.before) }
     }
 
     case 'BEGIN_ADD_TASK':
@@ -869,4 +873,20 @@ function reduce(state: AppState, action: Action): AppState {
     default:
       return state
   }
+}
+
+/**
+ * Moves a task in the list (a column shows its tasks in list order): in front
+ * of `before`, or after the last task of its column (and project) when null.
+ */
+export function placeTask(tasks: Task[], id: string, before: string | null): Task[] {
+  const task = tasks.find((t) => t.id === id)
+  if (!task || before === id) return tasks
+  const rest = tasks.filter((t) => t.id !== id)
+  let at = before ? rest.findIndex((t) => t.id === before) : -1
+  if (at < 0) {
+    const last = rest.map((t, i) => (t.col === task.col && t.projectId === task.projectId ? i : -1)).reduce((a, b) => Math.max(a, b), -1)
+    at = last < 0 ? rest.length : last + 1
+  }
+  return [...rest.slice(0, at), task, ...rest.slice(at)]
 }
