@@ -64,6 +64,8 @@ export const IPC = {
   gitUnpushed: 'git:unpushed',
   gitCloseWithPr: 'git:closeWithPr',
   gitCloseCheck: 'git:closeCheck',
+  gitPrMergeMethods: 'git:prMergeMethods',
+  gitMergePr: 'git:mergePr',
   gitIssues: 'git:issues',
   gitPrDetails: 'git:prDetails',
   baseList: 'base:list',

@@ -25,6 +25,7 @@ import { errText } from '../lib/errors'
 import { inParens, setUserBindings } from '../lib/shortcuts'
 import { clock, waitingText, wakeAt } from '../lib/status'
 import { prefsFor } from '../lib/projectPrefs'
+import { finishWithPr } from '../lib/taskActions'
 import { baseFor, parentFinished } from '@shared/stack'
 import { knowTasks } from '../lib/stack'
 
@@ -528,6 +529,28 @@ ${u.ask}` : ''}`, task.id, actions)
       .map((t) => setTimeout(() => dispatch({ type: 'WAKE_TASK', taskId: t.id }), Math.min(2 ** 31 - 1, Math.max(0, wakeAt(t.sleeping!) - Date.now()))))
     return () => timers.forEach(clearTimeout)
   }, [sleepKey, dispatch])
+
+  // A task's pull request merged on GitHub (seen by the PR check): the task goes to Done by itself -
+  // Settings → Git, "Finish tasks when their pull request is merged". Not while its agent is working
+  // (that's said instead), and finishWithPr refuses anything that would lose work.
+  const prBefore = useRef<Map<string, string | null> | null>(null)
+  useEffect(() => {
+    const prev = prBefore.current
+    prBefore.current = new Map(state.tasks.map((t) => [t.id, t.pr?.state ?? null]))
+    if (!prev || !hydratedRef.current) return
+    const s = stateRef.current
+    for (const t of state.tasks) {
+      if (t.pr?.state !== 'MERGED' || !prev.has(t.id) || prev.get(t.id) === 'MERGED') continue
+      if (t.col === 'done' || !t.worktreePath) continue
+      const project = s.projects.find((p) => p.id === t.projectId)
+      if (!project || !prefsFor(s, project.id).finishOnPrMerge) continue
+      if (t.st === 'working') {
+        dispatch({ type: 'TOAST', text: `PR #${t.pr.number ?? ''} of ${t.key} is merged - it goes to Done once its agent stops (or finish it now).` })
+        continue
+      }
+      finishWithPr(t, project, dispatch, s.projects).catch(() => {})
+    }
+  }, [state.tasks, dispatch])
 
   // The activity log (the daily summary): moves to Review, failures, finishes.
   const before = useRef<Task[] | null>(null)

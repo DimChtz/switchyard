@@ -219,21 +219,48 @@ export async function pruneWorktrees(repoPath: string): Promise<void> {
  * rest), and backs out of a conflicting merge so the main checkout is left
  * as it was.
  */
-export async function mergeAndPrune(repoPath: string, worktreePath: string, branch: string, baseBranch: string, prune = true, message?: string): Promise<void> {
+export async function mergeAndPrune(repoPath: string, worktreePath: string, branch: string, baseBranch: string, prune = true, message?: string): Promise<{ merged: boolean }> {
   const dirty = (await gitAt(worktreePath).status()).files.length
   if (dirty > 0) {
     throw new Error(`The worktree has ${dirty} uncommitted change${dirty > 1 ? 's' : ''} - commit or discard them first (Changes tab).`)
   }
   const main = gitAt(repoPath)
-  // The base branch checked out somewhere: merge there, so its files follow.
-  // Checked out nowhere (you're on another branch): merge without a checkout.
-  const holder = (await listWorktrees(repoPath)).find((w) => w.branch === baseBranch)
-  if (!holder) await mergeWithoutCheckout(repoPath, branch, baseBranch, message)
-  else await mergeIn(holder.path, branch, baseBranch, message)
-  if (!prune) return
+  // Nothing the base doesn't have already (no commits of its own, or merged some other way - a
+  // squash on GitHub, say): no merge, so no empty merge commit on the base.
+  const merged = !(await nothingToMerge(repoPath, branch, baseBranch))
+  if (merged) {
+    // The base branch checked out somewhere: merge there, so its files follow.
+    // Checked out nowhere (you're on another branch): merge without a checkout.
+    const holder = (await listWorktrees(repoPath)).find((w) => w.branch === baseBranch)
+    if (!holder) await mergeWithoutCheckout(repoPath, branch, baseBranch, message)
+    else await mergeIn(holder.path, branch, baseBranch, message)
+  }
+  if (!prune) return { merged }
   // Checked clean above - --force only gets ignored files (node_modules, .env) out of the way.
   await dropWorktree(repoPath, worktreePath)
-  await main.raw(['branch', '-d', branch]).catch(() => {})
+  // -D when nothing was merged: its commits may be in the base only as a squash, which -d doesn't see.
+  await main.raw(['branch', merged ? '-d' : '-D', branch]).catch(() => {})
+  return { merged }
+}
+
+/**
+ * Whether merging `branch` into `base` would change nothing: the branch is
+ * behind it (or the same), or the merge's files are the base's files already.
+ */
+export async function nothingToMerge(repoPath: string, branch: string, baseBranch: string): Promise<boolean> {
+  if (await gitYes(repoPath, ['merge-base', '--is-ancestor', `refs/heads/${branch}`, `refs/heads/${baseBranch}`]).catch(() => false)) return true
+  // The merge as git would make it (git 2.38+), without touching anything: its tree against the base's.
+  const r = await execFileP('git', gitArgs(['merge-tree', '--write-tree', '--no-messages', `refs/heads/${baseBranch}`, `refs/heads/${branch}`]), { cwd: repoPath, env: gitEnv(), windowsHide: true, maxBuffer: 16 * 1024 * 1024 }).catch(
+    (err: { code?: number }) => (err.code === 1 ? { stdout: '' } : null) // 1: it conflicts - so there's something to merge
+  )
+  if (r) {
+    const tree = r.stdout.split('\n')[0].trim()
+    const baseTree = (await gitAt(repoPath).raw(['rev-parse', `refs/heads/${baseBranch}^{tree}`]).catch(() => '')).trim()
+    return !!tree && tree === baseTree
+  }
+  // Older git: every file the branch changed reads the same in the base already.
+  const missing = await notIn(gitAt(repoPath), `refs/heads/${baseBranch}`, `refs/heads/${branch}`)
+  return !!missing && missing.length === 0
 }
 
 /** A merge in the checkout that has the base branch out; a conflicting one is backed out again. */
@@ -597,6 +624,33 @@ export async function createPr(worktreePath: string, repoPath: string, branch: s
   return { url, number: null, state: null, created: false }
 }
 
+export type PrMergeMethod = 'squash' | 'merge' | 'rebase'
+
+/** How the repository lets pull requests be merged (its GitHub settings); all three when it can't be asked. */
+export async function prMergeMethods(cwd: string): Promise<PrMergeMethod[]> {
+  try {
+    const r = JSON.parse(await gh(['repo', 'view', '--json', 'squashMergeAllowed,mergeCommitAllowed,rebaseMergeAllowed'], cwd)) as Record<string, boolean>
+    const ok = (['squash', 'merge', 'rebase'] as const).filter((m) => r[m === 'squash' ? 'squashMergeAllowed' : m === 'merge' ? 'mergeCommitAllowed' : 'rebaseMergeAllowed'])
+    return ok.length ? ok : ['squash', 'merge', 'rebase']
+  } catch {
+    return ['squash', 'merge', 'rebase']
+  }
+}
+
+/**
+ * Merges the pull request on GitHub. The branch on GitHub is left to the
+ * repository's own setting (delete after merge); the local one goes when the
+ * task finishes. Refusals (checks, reviews, conflicts) come back as GitHub says them.
+ */
+export async function mergePr(cwd: string, ref: string, method: PrMergeMethod): Promise<void> {
+  if (!(await hasGh())) throw new Error('Merging on GitHub needs the GitHub CLI - install it and run `gh auth login`.')
+  try {
+    await gh(['pr', 'merge', ref, `--${method}`], cwd)
+  } catch (err) {
+    throw new Error(ghError(err), { cause: err })
+  }
+}
+
 /** The pull request for a branch (or URL), via the GitHub CLI; null without one. */
 export async function prStatus(worktreePath: string, ref: string): Promise<PullRequest | null> {
   if (!(await hasGh())) return null
@@ -713,12 +767,12 @@ export async function commitsAfter(worktreePath: string, head: string): Promise<
 }
 
 /** The files HEAD changed (since it left `ref`'s history) that don't read the same in `ref`; null when it can't tell. */
-async function notIn(git: ReturnType<typeof gitAt>, ref: string): Promise<string[] | null> {
+async function notIn(git: ReturnType<typeof gitAt>, ref: string, head = 'HEAD'): Promise<string[] | null> {
   try {
-    const base = (await git.raw(['merge-base', 'HEAD', ref])).trim()
-    const files = (await git.raw(['diff', '--name-only', '-z', base, 'HEAD'])).split('\0').filter(Boolean)
+    const base = (await git.raw(['merge-base', head, ref])).trim()
+    const files = (await git.raw(['diff', '--name-only', '-z', base, head])).split('\0').filter(Boolean)
     if (!files.length) return []
-    return (await git.raw(['diff', '--name-only', '-z', 'HEAD', ref, '--', ...files])).split('\0').filter(Boolean)
+    return (await git.raw(['diff', '--name-only', '-z', head, ref, '--', ...files])).split('\0').filter(Boolean)
   } catch {
     return null
   }

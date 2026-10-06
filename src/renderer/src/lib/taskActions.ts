@@ -61,12 +61,24 @@ export async function mergeTask(task: Task, project: Project, prefs: Prefs, disp
     else await window.api.pty.kill(agentSessionId(task.id))
     // "closes #N" in a merge commit closes the issue once it's pushed to GitHub.
     const message = task.issue ? `Merge ${task.key}: ${task.title} (closes #${task.issue.number})` : undefined
+    let anything = false
     for (const w of order) {
-      await window.api.git.mergeAndPrune(w.project.repoPath, w.path, task.branch, baseOf(task, w.project), prune, w.project.id === project.id ? message : undefined)
+      const r = await window.api.git.mergeAndPrune(w.project.repoPath, w.path, task.branch, baseOf(task, w.project), prune, w.project.id === project.id ? message : undefined)
+      anything ||= r.merged
       merged.push(w.project.name)
     }
     if (prune && task.taskDir) await window.api.git.removeTaskDir(task.taskDir)
     const where = order.length > 1 ? ` in ${order.length} repos (${merged.join(' → ')})` : ''
+    // Nothing of its own to merge (no commits, or already in the base): finished without a merge commit.
+    if (!anything) {
+      dispatch({
+        type: 'FINISH_TASK',
+        taskId: task.id,
+        note: `Nothing to merge - ${base} has it all · ${prune ? 'worktree pruned' : 'worktree kept'}`,
+        toast: `${task.key} is done - nothing to merge, ${base} already has it all.`
+      })
+      return true
+    }
     dispatch({
       type: 'FINISH_TASK',
       taskId: task.id,
@@ -152,6 +164,9 @@ export async function pushTask(task: Task, dispatch: Dispatch, commitFirst = fal
  */
 export async function finishWithPr(task: Task, project: Project, dispatch: Dispatch, projects: Project[] = [project]): Promise<boolean> {
   if (!task.worktreePath || !task.branch || !task.pr) return false
+  // Once at a time (a merge seen by the PR check while Done is finishing it, say).
+  if (finishing.has(task.id)) return false
+  finishing.add(task.id)
   const merged = task.pr.state === 'MERGED'
   const others = worktreesOf(task, projects).slice(1)
   try {
@@ -177,10 +192,13 @@ export async function finishWithPr(task: Task, project: Project, dispatch: Dispa
     })
     return true
   } catch (err) {
-    dispatch({ type: 'TOAST', text: `Could not finish: ${errText(err)}` })
+    dispatch({ type: 'TOAST', text: `Could not finish ${task.key}: ${errText(err)}` })
     return false
+  } finally {
+    finishing.delete(task.id)
   }
 }
+const finishing = new Set<string>()
 
 /**
  * The task's pull request as GitHub has it now (merged or closed on the
@@ -194,32 +212,6 @@ export async function freshPr(task: Task, dispatch: Dispatch): Promise<Task['pr'
   const pr = { url: now.url, number: now.number, state: now.state }
   if (now.state !== task.pr.state) dispatch({ type: 'SET_TASK_PR', taskId: task.id, pr })
   return pr
-}
-
-/**
- * Done, for a started task (dropped on Done, or the workspace's finish): a
- * pull request merged on GitHub - checked right now, not as of the last
- * look - closes it out; an open one stays; without one the branch is merged
- * here. Leftover changes need a decision first.
- */
-export async function finishTask(task: Task, project: Project, prefs: Prefs, dispatch: Dispatch, projects: Project[] = [project]): Promise<boolean> {
-  const pr = await freshPr(task, dispatch)
-  if (pr?.state === 'MERGED') return finishWithPr({ ...task, pr }, project, dispatch, projects)
-  if (pr) {
-    dispatch({ type: 'OPEN_TASK', taskId: task.id })
-    dispatch({
-      type: 'TOAST',
-      text: pr.state === 'CLOSED' ? `PR #${pr.number ?? ''} was closed without merging - reopen it, or delete the task.` : `PR #${pr.number ?? ''} is still open - merge it on GitHub, or Merge & finish here.`
-    })
-    return false
-  }
-  const dirty = await taskDirty(task, projects)
-  if (dirty > 0) {
-    dispatch({ type: 'OPEN_TASK', taskId: task.id, tab: 'changes' })
-    dispatch({ type: 'TOAST', text: `${task.key} has ${dirty} uncommitted change${dirty > 1 ? 's' : ''} - commit or discard them, then Merge & finish.` })
-    return false
-  }
-  return mergeTask(task, project, prefs, dispatch, false, projects)
 }
 
 /**

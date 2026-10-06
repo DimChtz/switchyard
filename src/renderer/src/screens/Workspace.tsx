@@ -6,7 +6,8 @@ import { agentShort } from '../lib/derive'
 import { WorkspaceBench } from './workspace/WorkspaceBench'
 import { Button, IconButton, Menu, confirm, type MenuAnchor } from '../components/ui'
 import { taskMenuItems } from '../lib/menus'
-import { attachRepo, commitMessageFor, finishGone, finishWithPr, freshPr, mergeTask, openPullRequest, pushTask, recreateWorktree, reviewReady, taskDirty } from '../lib/taskActions'
+import { attachRepo, commitMessageFor, finishGone, finishWithPr, mergeTask, openPullRequest, pushTask, recreateWorktree, reviewReady, taskDirty } from '../lib/taskActions'
+import { finishTask } from '../lib/finishTask'
 import { checkoutsOf, repoDir, reposOf } from '../lib/multiRepo'
 import { useHover } from '../lib/useHover'
 import type { Project, PullRequest, RemoteInfo, Task } from '@shared/types'
@@ -141,19 +142,13 @@ function WorkspaceBody({ task, project }: { task: Task; project: Project }): Rea
         run('merge')
         return
       }
-      // Merged on GitHub since the last look: no merging here as well.
-      const go = async (): Promise<void> => {
-        setBusy('finish')
-        const pr = await freshPr(task, dispatch)
-        if (pr?.state === 'MERGED') await finishWithPr({ ...task, pr }, project, dispatch, state.projects)
-        setBusy(null)
-        if (pr?.state !== 'MERGED') await run('merge')
-      }
-      go().catch(() => setBusy(null))
+      // A pull request: it's merged on GitHub (asked first), never here as well.
+      setBusy('finish')
+      finishTask(task, project, prefsFor(state, project.id), dispatch, state.projects).finally(() => setBusy(null))
       return
     }
     if (task.col === 'backlog' || task.col === 'ready') dispatch({ type: 'PRIMARY_ACTION', taskId: task.id })
-  }, [task, project, dispatch, hasWorktree, run, state.projects])
+  }, [task, project, dispatch, hasWorktree, run, state])
 
   // ⇧⌘R Move to Review, ⇧⌘M Merge & finish - as the button hints say.
   useEffect(() => {
@@ -181,7 +176,9 @@ function WorkspaceBody({ task, project }: { task: Task; project: Project }): Rea
             : task.col === 'progress'
               ? 'Move to Review'
               : task.col === 'review'
-                ? 'Merge & finish'
+                ? task.pr?.state === 'OPEN'
+                  ? 'Merge PR & finish'
+                  : 'Merge & finish'
                 : task.col === 'done'
                   ? null
                   : 'Start with agent'

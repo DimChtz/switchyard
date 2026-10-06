@@ -7,7 +7,7 @@ import { join } from 'path'
 vi.mock('./store', () => ({ getPrefs: () => ({ worktreeRoot: '', syncMode: 'rebase' }) }))
 vi.mock('./log', () => ({ log: { info: () => {}, warn: () => {}, error: () => {} } }))
 
-import { addWorktree, closeCheck, closeWithPr, commitsAfter, defaultBranchOf, getDiffFiles, mergeWithoutCheckout, parseUnifiedDiff } from './git'
+import { addWorktree, closeCheck, closeWithPr, commitsAfter, defaultBranchOf, mergeAndPrune, getDiffFiles, mergeWithoutCheckout, parseUnifiedDiff } from './git'
 
 let dir = ''
 const git = (cwd: string, ...args: string[]): string => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd, stdio: 'pipe' }).toString().trim()
@@ -187,5 +187,50 @@ describe('commitsAfter (what a pull request is missing)', () => {
     git(r, 'reset', '-q', '--hard', head)
     expect(await commitsAfter(r, head)).toBe(0)
     expect(await commitsAfter(r, 'f'.repeat(40))).toBeNull()
+  })
+})
+
+describe('merging a finished task', () => {
+  const setup = (): { r: string; wt: string } => {
+    const r = repo()
+    const wt = join(dir, 'task-wt')
+    git(r, 'worktree', 'add', '-q', '-b', 'task', wt)
+    return { r, wt }
+  }
+  const mainMovesOn = (r: string): void => {
+    writeFileSync(join(r, 'm.txt'), 'main\n')
+    git(r, 'add', '-A')
+    git(r, 'commit', '-qm', 'main moves on')
+  }
+
+  it('makes no merge commit for a branch with no work of its own', async () => {
+    const { r, wt } = setup()
+    mainMovesOn(r)
+    const before = git(r, 'rev-parse', 'main')
+    expect(await mergeAndPrune(r, wt, 'task', 'main')).toEqual({ merged: false })
+    expect(git(r, 'rev-parse', 'main')).toBe(before)
+    expect(existsSync(wt)).toBe(false)
+  })
+
+  it('makes no merge commit when the work is in main already (squashed there)', async () => {
+    const { r, wt } = setup()
+    writeFileSync(join(wt, 'a.txt'), 'one\ntwo\nthree\n')
+    git(wt, 'commit', '-qam', 'three')
+    git(r, 'merge', '-q', '--squash', 'task')
+    git(r, 'commit', '-qm', 'Task (#1)')
+    const before = git(r, 'rev-parse', 'main')
+    expect(await mergeAndPrune(r, wt, 'task', 'main')).toEqual({ merged: false })
+    expect(git(r, 'rev-parse', 'main')).toBe(before)
+    expect(git(r, 'branch', '--list', 'task')).toBe('')
+  })
+
+  it('still merges real work', async () => {
+    const { r, wt } = setup()
+    writeFileSync(join(wt, 'n.txt'), 'new\n')
+    git(wt, 'add', '-A')
+    git(wt, 'commit', '-qm', 'work')
+    mainMovesOn(r)
+    expect(await mergeAndPrune(r, wt, 'task', 'main')).toEqual({ merged: true })
+    expect(readFileSync(join(r, 'n.txt'), 'utf-8')).toBe('new\n')
   })
 })

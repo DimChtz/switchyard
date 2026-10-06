@@ -193,7 +193,7 @@ const api = {
     diffStat: (worktreePath: string, baseBranch: string): Promise<DiffStat> =>
       ipcRenderer.invoke(IPC.gitDiffStat, worktreePath, baseBranch),
     rebase: (worktreePath: string, baseBranch: string): Promise<void> => ipcRenderer.invoke(IPC.gitRebase, worktreePath, baseBranch),
-    mergeAndPrune: (repoPath: string, worktreePath: string, branch: string, baseBranch: string, prune?: boolean, message?: string): Promise<void> =>
+    mergeAndPrune: (repoPath: string, worktreePath: string, branch: string, baseBranch: string, prune?: boolean, message?: string): Promise<{ merged: boolean }> =>
       ipcRenderer.invoke(IPC.gitMergeAndPrune, repoPath, worktreePath, branch, baseBranch, prune, message),
     issues: (repoPath: string): Promise<Issue[]> => ipcRenderer.invoke(IPC.gitIssues, repoPath),
     shortSha: (repoPath: string, ref: string): Promise<string | null> => ipcRenderer.invoke(IPC.gitShortSha, repoPath, ref),
@@ -217,6 +217,10 @@ const api = {
       ipcRenderer.invoke(IPC.gitUnpushed, worktreePath, branch, baseBranch),
     closeWithPr: (repoPath: string, worktreePath: string, branch: string, baseBranch: string, merged: boolean, prRef?: string): Promise<void> =>
       ipcRenderer.invoke(IPC.gitCloseWithPr, repoPath, worktreePath, branch, baseBranch, merged, prRef),
+    /** How the repository lets pull requests be merged (its GitHub settings). */
+    prMergeMethods: (cwd: string): Promise<('squash' | 'merge' | 'rebase')[]> => ipcRenderer.invoke(IPC.gitPrMergeMethods, cwd),
+    /** Merges the pull request on GitHub. */
+    mergePr: (cwd: string, ref: string, method: 'squash' | 'merge' | 'rebase'): Promise<void> => ipcRenderer.invoke(IPC.gitMergePr, cwd, ref, method),
     /** Why the task can't close through its pull request without losing work, or null when it can. */
     closeCheck: (worktreePath: string, branch: string, baseBranch: string, prRef?: string): Promise<string | null> =>
       ipcRenderer.invoke(IPC.gitCloseCheck, worktreePath, branch, baseBranch, prRef),

@@ -114,7 +114,13 @@ export interface ConfirmOptions {
   danger?: boolean
 }
 
-type Pending = ConfirmOptions & { resolve: (ok: boolean) => void }
+/** A question with a second way to say yes (choose): its button sits between Cancel and the main one. */
+export interface ChooseOptions extends ConfirmOptions {
+  altLabel?: string
+}
+
+type Answer = 'confirm' | 'alt' | null
+type Pending = ChooseOptions & { resolve: (a: Answer) => void }
 let show: ((p: Pending) => void) | null = null
 
 /**
@@ -123,8 +129,16 @@ let show: ((p: Pending) => void) | null = null
  * Enter confirms, Esc or a click outside cancels.
  */
 export function confirm(options: ConfirmOptions): Promise<boolean> {
+  return choose(options).then((a) => a === 'confirm')
+}
+
+/**
+ * Like confirm, with a second choice (altLabel): 'confirm' for the main
+ * button (Enter), 'alt' for the other, null for Cancel (Esc).
+ */
+export function choose(options: ChooseOptions): Promise<Answer> {
   return new Promise((resolve) => {
-    if (!show) return resolve(false)
+    if (!show) return resolve(null)
     show({ ...options, resolve })
   })
 }
@@ -135,7 +149,7 @@ export function ConfirmHost(): React.JSX.Element | null {
   useEffect(() => {
     show = (p) =>
       setPending((cur) => {
-        cur?.resolve(false) // a newer question replaces an unanswered one
+        cur?.resolve(null) // a newer question replaces an unanswered one
         return p
       })
     return () => {
@@ -143,8 +157,8 @@ export function ConfirmHost(): React.JSX.Element | null {
     }
   }, [])
 
-  const answer = (ok: boolean): void => {
-    pending?.resolve(ok)
+  const answer = (a: Answer): void => {
+    pending?.resolve(a)
     setPending(null)
   }
 
@@ -159,7 +173,7 @@ export function ConfirmHost(): React.JSX.Element | null {
       const el = document.activeElement as HTMLElement | null
       if (e.key === 'Enter' && el?.tagName === 'BUTTON' && el.closest('[role=dialog]')) return
       e.preventDefault()
-      pending.resolve(e.key === 'Enter')
+      pending.resolve(e.key === 'Enter' ? 'confirm' : null)
       setPending(null)
     }
     window.addEventListener('keydown', onKey, true)
@@ -168,7 +182,7 @@ export function ConfirmHost(): React.JSX.Element | null {
 
   if (!pending) return null
   return (
-    <Modal width={420} top={160} hint={null} onClose={() => answer(false)}>
+    <Modal width={pending.altLabel ? 480 : 420} top={160} hint={null} onClose={() => answer(null)}>
       <div style={{ padding: '18px 20px 16px', display: 'flex', flexDirection: 'column', gap: 8 }}>
         <div style={{ font: '600 16px var(--font-ui)', color: 'var(--t1)', letterSpacing: '-0.01em' }}>{pending.title}</div>
         {pending.body ? <div style={{ font: '13px/1.5 var(--font-ui)', color: 'var(--t-icon)' }}>{pending.body}</div> : null}
@@ -179,10 +193,15 @@ export function ConfirmHost(): React.JSX.Element | null {
         ) : null}
       </div>
       <ModalFooter>
-        <Button size="lg" hint="esc" onClick={() => answer(false)}>
+        <Button size="lg" hint="esc" onClick={() => answer(null)}>
           {pending.cancelLabel ?? 'Cancel'}
         </Button>
-        <Button size="lg" variant="primary" tone={pending.danger ? 'danger' : undefined} hint="↵" onClick={() => answer(true)}>
+        {pending.altLabel ? (
+          <Button size="lg" onClick={() => answer('alt')}>
+            {pending.altLabel}
+          </Button>
+        ) : null}
+        <Button size="lg" variant="primary" tone={pending.danger ? 'danger' : undefined} hint="↵" onClick={() => answer('confirm')}>
           {pending.confirmLabel ?? 'OK'}
         </Button>
       </ModalFooter>

@@ -658,6 +658,10 @@ export interface Prefs {
   worktreeRoot: string
   branchPattern: string
   pruneAfterMerge: boolean
+  /** A task whose pull request is merged (on GitHub) goes to Done by itself. */
+  finishOnPrMerge: boolean
+  /** How Switchyard merges a pull request on GitHub (Done asks first; the repository may allow fewer). */
+  prMergeMethod: 'squash' | 'merge' | 'rebase'
   confirmRemove: boolean
   syncMode: 'rebase' | 'merge'
   warnBehind: boolean
