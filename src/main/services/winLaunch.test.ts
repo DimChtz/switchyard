@@ -27,8 +27,11 @@ IF EXIST "%dp0%\\node.exe" (
 endLocal & goto #_undefined_# 2>NUL || title %COMSPEC% & "%_prog%"  "%dp0%\\node_modules\\@acme\\agent\\cli.js" %*
 `
 
+// Shims are read only on Windows: their paths ("%dp0%\node.exe") are Windows paths.
+const onWindows = process.platform === 'win32'
+
 describe('Windows launch', () => {
-  it("finds the script an npm shim runs (with the node.exe beside it when there's one)", () => {
+  it.runIf(onWindows)("finds the script an npm shim runs (with the node.exe beside it when there's one)", () => {
     mkdirSync(join(dir, 'node_modules', '@acme', 'agent'), { recursive: true })
     writeFileSync(join(dir, 'node_modules', '@acme', 'agent', 'cli.js'), '')
     writeFileSync(join(dir, 'node.exe'), '')
@@ -36,7 +39,7 @@ describe('Windows launch', () => {
     expect(t).toEqual({ program: join(dir, 'node.exe'), script: join(dir, 'node_modules', '@acme', 'agent', 'cli.js') })
   })
 
-  it('runs an .exe a shim points to directly', () => {
+  it.runIf(onWindows)('runs an .exe a shim points to directly', () => {
     mkdirSync(join(dir, 'bin'), { recursive: true })
     writeFileSync(join(dir, 'bin', 'tool.exe'), '')
     expect(shimTarget(join(dir, 'tool.cmd'), '@"%~dp0\\bin\\tool.exe" %*')).toEqual({ program: join(dir, 'bin', 'tool.exe'), script: null })
