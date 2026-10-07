@@ -13,6 +13,8 @@ export default defineConfig({
   },
   test: {
     environment: 'node',
+    // Many tests run git dozens of times: on CI's Windows machines that alone can take more than the default 5s.
+    testTimeout: 30_000,
     include: ['src/**/*.test.ts']
   }
 })
