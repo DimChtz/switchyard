@@ -25,7 +25,7 @@ import { errText } from '../lib/errors'
 import { inParens, setUserBindings } from '../lib/shortcuts'
 import { clock, waitingText, wakeAt } from '../lib/status'
 import { prefsFor } from '../lib/projectPrefs'
-import { finishWithPr } from '../lib/taskActions'
+import { discoverPr, finishWithPr } from '../lib/taskActions'
 import { baseFor, parentFinished } from '@shared/stack'
 import { knowTasks } from '../lib/stack'
 
@@ -442,6 +442,11 @@ ${u.ask}` : ''}`, task.id, actions)
   useEffect(() => {
     let stopped = false
     const poll = async (): Promise<void> => {
+      // Pull requests opened elsewhere (by the agent, on github.com) for a task's branch: found first.
+      for (const t of stateRef.current.tasks.filter((x) => !x.pr && x.worktreePath && x.branch && x.col !== 'done' && !x.archivedAt)) {
+        if (stopped) return
+        await discoverPr(t, dispatch)
+      }
       const s = stateRef.current
       for (const t of s.tasks.filter((x) => x.pr && x.worktreePath && x.col !== 'done' && !x.archivedAt && x.pr.state !== 'MERGED' && x.pr.state !== 'CLOSED')) {
         if (stopped) return

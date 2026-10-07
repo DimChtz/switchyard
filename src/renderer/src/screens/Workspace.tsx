@@ -6,7 +6,7 @@ import { agentShort } from '../lib/derive'
 import { WorkspaceBench } from './workspace/WorkspaceBench'
 import { Button, IconButton, Menu, confirm, type MenuAnchor } from '../components/ui'
 import { taskMenuItems } from '../lib/menus'
-import { attachRepo, commitMessageFor, finishGone, finishWithPr, mergeTask, openPullRequest, pushTask, recreateWorktree, reviewReady, taskDirty } from '../lib/taskActions'
+import { attachRepo, commitMessageFor, discoverPr, finishGone, finishWithPr, mergeTask, openPullRequest, pushTask, recreateWorktree, reviewReady, taskDirty } from '../lib/taskActions'
 import { finishTask } from '../lib/finishTask'
 import { checkoutsOf, repoDir, reposOf } from '../lib/multiRepo'
 import { useHover } from '../lib/useHover'
@@ -48,6 +48,17 @@ function WorkspaceBody({ task, project }: { task: Task; project: Project }): Rea
   useEffect(() => {
     window.api.git.remoteInfo(project.repoPath).then(setRemote)
   }, [project.repoPath])
+
+  // No pull request known yet: one its agent (or you, on github.com) opened for the branch - looked for
+  // on opening, and every minute while it's open (an agent may open one any time).
+  useEffect(() => {
+    if (task.pr || !task.worktreePath || !task.branch || task.col === 'done') return
+    const look = (): void => void discoverPr(task, dispatch)
+    look()
+    const t = setInterval(look, 60_000)
+    return () => clearInterval(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [task.id, !!task.pr, task.worktreePath, task.branch, task.col])
 
   // The open pull request's state (merged or closed on GitHub) and what
   // hasn't been pushed to it yet.

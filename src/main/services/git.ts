@@ -653,6 +653,29 @@ export async function mergePr(cwd: string, ref: string, method: PrMergeMethod): 
   }
 }
 
+/**
+ * A pull request opened for the task's branch by someone else - its agent, or
+ * you on github.com: the newest one whose branch it is, opened `since` (the
+ * task's start) or later - an older one would be another task's that had the
+ * same branch name. Null without the GitHub CLI, or without one.
+ */
+export async function findPr(worktreePath: string, branch: string, since: number): Promise<PullRequest | null> {
+  if (!(await hasGh())) return null
+  try {
+    const list = JSON.parse(await gh(['pr', 'list', '--head', branch, '--state', 'all', '--limit', '10', '--json', 'url,number,state,createdAt'], worktreePath)) as {
+      url: string
+      number: number
+      state: PullRequest['state']
+      createdAt: string
+    }[]
+    // (A minute's grace: the task's start and GitHub's clock.)
+    const mine = list.filter((p) => Date.parse(p.createdAt) >= since - 60_000).sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt))[0]
+    return mine ? { url: mine.url, number: mine.number, state: mine.state, created: false } : null
+  } catch {
+    return null
+  }
+}
+
 /** The pull request for a branch (or URL), via the GitHub CLI; null without one. */
 export async function prStatus(worktreePath: string, ref: string): Promise<PullRequest | null> {
   if (!(await hasGh())) return null

@@ -201,6 +201,21 @@ export async function finishWithPr(task: Task, project: Project, dispatch: Dispa
 const finishing = new Set<string>()
 
 /**
+ * A pull request opened for the task somewhere else - by its agent, or on
+ * github.com: found by the task's branch (one opened since the task started)
+ * and remembered on the task, as if Open PR had made it. Null without one.
+ */
+export async function discoverPr(task: Task, dispatch: Dispatch): Promise<Task['pr']> {
+  if (task.pr) return task.pr
+  if (!task.worktreePath || !task.branch || task.col === 'done') return null
+  const found = await window.api.git.findPr(task.worktreePath, task.branch, task.startedAt ?? task.createdAt).catch(() => null)
+  if (!found) return null
+  const pr = { url: found.url, number: found.number, state: found.state }
+  dispatch({ type: 'SET_TASK_PR', taskId: task.id, pr })
+  return pr
+}
+
+/**
  * The task's pull request as GitHub has it now (merged or closed on the
  * website since the last check, say); the task is updated when it changed.
  * The last known state when GitHub can't be asked.
