@@ -19,6 +19,7 @@ import type {
   AgentStatusUpdate,
   BranchInfo,
   BranchResult,
+  CliRequest,
   Issue,
   Note,
   NoteDraft,
@@ -102,6 +103,18 @@ const api = {
     openDir: (): Promise<void> => ipcRenderer.invoke(IPC.logOpenDir)
   },
   /** App updates (the installed app, with a release channel). */
+  /** `switchyard new …` from a terminal, and switchyard:// links. */
+  cli: {
+    /** What came in before the window listened (once). */
+    take: (): Promise<CliRequest[]> => ipcRenderer.invoke(IPC.cliTake),
+    onRequest: (cb: (req: CliRequest) => void): (() => void) => {
+      const handler = (_e: Electron.IpcRendererEvent, req: CliRequest): void => cb(req)
+      ipcRenderer.on(IPC.cliRequest, handler)
+      return () => ipcRenderer.removeListener(IPC.cliRequest, handler)
+    },
+    /** Puts a `switchyard` command on the PATH. */
+    install: (): Promise<{ path: string; note: string }> => ipcRenderer.invoke(IPC.cliInstall)
+  },
   updates: {
     check: (): Promise<{ message: string }> => ipcRenderer.invoke(IPC.updatesCheck),
     install: (): Promise<void> => ipcRenderer.invoke(IPC.updatesInstall),

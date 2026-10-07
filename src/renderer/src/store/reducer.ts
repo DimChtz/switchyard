@@ -1,4 +1,6 @@
-import type { Note, Task } from '@shared/types'
+import type { BoardColumn, Note, Prefs, Task } from '@shared/types'
+import { columnName, visibleColumns, wipLimit } from '../lib/boardPrefs'
+import { inProject } from '../lib/multiRepo'
 import { NO_FILTER, boardFilterOf, loadBoardPrefs } from '../lib/boardFilter'
 import type { Action, AppState } from './types'
 import { AGENTS, COLUMN_ORDER, DEFAULT_PREFS, branchFor, firstMessage } from '@shared/constants'
@@ -59,6 +61,23 @@ function mapTask(state: AppState, id: string, fn: (t: Task) => Task): Task[] {
   return state.tasks.map((t) => (t.id === id ? fn(t) : t))
 }
 
+/** Moving `task` into `col` goes over the column's limit (Settings → Board): what to say, and whether it's refused. */
+function overLimit(state: AppState, task: Task, col: BoardColumn): { text: string; block: boolean } | null {
+  const prefs = prefsFor(state, task.projectId)
+  const limit = wipLimit(prefs, col)
+  if (!limit) return null
+  const count = state.tasks.filter((t) => t.id !== task.id && t.col === col && !t.archivedAt && !t.scratch && inProject(t, task.projectId)).length
+  if (count < limit) return null
+  const name = columnName(prefs, col)
+  return prefs.wipBlock ? { text: `${name} is full (${limit} at most) - move a card out first.`, block: true } : { text: `${name} is over its limit: ${count + 1} cards for ${limit}.`, block: false }
+}
+
+/** Where a new task goes (Settings → Board) - a column that shows. */
+function newTaskColumn(prefs: Prefs): 'backlog' | 'ready' {
+  const shown = visibleColumns(prefs)
+  return shown.includes(prefs.newTaskColumn) ? prefs.newTaskColumn : shown.includes('backlog') ? 'backlog' : 'ready'
+}
+
 function withToast(state: AppState, text: string, tone: 'plain' | 'waiting' | 'done' = 'plain'): AppState {
   toastSeq += 1
   return { ...state, toast: { id: toastSeq, text, tone } }
@@ -82,11 +101,17 @@ function bookkeep(state: AppState, action: Action): AppState {
   const high = raiseKeyHigh(reduced.keyHigh, reduced.tasks)
   const next = high === reduced.keyHigh ? reduced : { ...reduced, keyHigh: high }
   if (action.type === 'HYDRATE') return next
-  const before = new Map(state.tasks.map((t) => [t.id, t.st]))
+  const before = new Map(state.tasks.map((t) => [t.id, t]))
   const now = Date.now()
   let changed = false
   const tasks = next.tasks.map((t) => {
-    const was = before.get(t.id)
+    const b = before.get(t.id)
+    // When it came into its column (a new task: now) - the board's "in this column for…" and stale cards.
+    if (!b ? !t.colAt : b.col !== t.col) {
+      changed = true
+      t = { ...t, colAt: now }
+    }
+    const was = b?.st
     if (was === undefined || (was === 'working') === (t.st === 'working')) return t
     changed = true
     return t.st === 'working'
@@ -141,6 +166,10 @@ function reduce(state: AppState, action: Action): AppState {
       // its pull request) - see finishTask. Callers do that instead.
       if (action.col === 'done' && task.worktreePath) return state
 
+      // The column's card limit (Settings → Board): refused, or only said.
+      const over = overLimit(state, task, action.col)
+      if (over && over.block) return withToast(state, over.text)
+
       const fromIdx = COLUMN_ORDER.indexOf(task.col)
       const toIdx = COLUMN_ORDER.indexOf(action.col)
       const movingBackward = toIdx < fromIdx
@@ -158,7 +187,8 @@ function reduce(state: AppState, action: Action): AppState {
       }
 
       const tasks = mapTask(state, task.id, () => next)
-      return { ...state, tasks: action.before === undefined ? tasks : placeTask(tasks, task.id, action.before) }
+      const moved = { ...state, tasks: action.before === undefined ? tasks : placeTask(tasks, task.id, action.before) }
+      return over ? withToast(moved, over.text) : moved
     }
 
     case 'BEGIN_ADD_TASK':
@@ -182,7 +212,7 @@ function reduce(state: AppState, action: Action): AppState {
         projectId: project.id,
         title,
         buildsOn: after?.id ?? null,
-        col: 'backlog',
+        col: newTaskColumn(prefsFor(state, project.id)),
         agentKind: null,
         st: null,
         worktreeId: null,
@@ -364,6 +394,10 @@ function reduce(state: AppState, action: Action): AppState {
       // A new branch git wouldn't take (the dialog says why; ⌘↵ gets here too).
       const bad = state.start.inPlace || state.start.existingWorktree ? null : branchProblem(state.start.branch)
       if (bad) return withToast(state, bad)
+      // In Progress's card limit (Settings → Board): starting it would go over.
+      const starting = state.tasks.find((t) => t.id === state.start!.taskId)
+      const full = starting && starting.col !== 'progress' ? overLimit(state, starting, 'progress') : null
+      if (full?.block) return withToast(state, full.text)
       // All slots taken (Settings → Agents), or the task it builds on hasn't started: it waits in the queue.
       const max = state.prefs.maxAgents
       const busy = busyAgents(state.tasks)

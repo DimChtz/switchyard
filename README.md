@@ -6,7 +6,9 @@ Track your projects on a board, start a task with an agent, and Switchyard creat
 
 ## Features
 
-- **Board per project:** Backlog, Ready, In Progress, Review and Done columns. Starting a task creates its worktree and launches the agent you pick.
+- **Board per project:** Backlog, Ready, In Progress, Review and Done columns. Starting a task creates its worktree and launches the agent you pick. Settings → Board renames or hides columns, sets card limits, compact cards, stale markers, sort order and auto-archive - for every project, or one.
+- **Command line:** `switchyard new "Fix the login" --agent claude` from any terminal (Settings → General → Install command). In a project's folder the task goes on that project's board; `--start` starts it right away. `switchyard://new?title=…` links do the same.
+- **Tools for the agents (MCP):** previews, tests, conflicts, review comments, notes, the pull request's checks, and the task's terminals - an agent can read the dev server's output or run a command in a shell tab you see.
 - **Agents view:** every running agent across projects, with the ones waiting for you or failed first.
 - **Task workspace:** the agent's terminal, shells, files, diffs, preview, notes and timeline as tabs. Split the editor right or down, drag tabs between groups, and resize.
 - **Review:** per-file diffs with line comments sent back to the agent as a review, plus commit, discard, and pull requests through the GitHub CLI.

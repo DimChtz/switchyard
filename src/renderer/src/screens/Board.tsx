@@ -3,10 +3,10 @@ import { plural } from '../lib/summary'
 import { useAppStore } from '../store/AppStore'
 import { useHover } from '../lib/useHover'
 import { clock, statusColor, statusLabel, timeAgo, wakeAt, TEST_COLOR, TEST_LABEL } from '../lib/status'
-import { AGENTS, COLUMN_LABEL, COLUMN_ORDER } from '@shared/constants'
+import { AGENTS, COLUMN_LABEL } from '@shared/constants'
 import { agentShort, busyAgents, queuedTasks } from '../lib/derive'
 import { useRealDiffStats } from '../lib/realGit'
-import type { BoardColumn, PrDetails, Project, RemoteInfo, Task } from '@shared/types'
+import type { BoardColumn, PrDetails, Prefs, Project, RemoteInfo, Task } from '@shared/types'
 import type { BadgeTone } from '@shared/plugins'
 import { useTaskBadges } from '../lib/plugins'
 import { Button, Menu, TipNote, TipTitle, Tooltip, confirm, useContextMenu, type MenuAnchor, type MenuItem } from '../components/ui'
@@ -19,6 +19,7 @@ import { shortcut } from '../lib/shortcuts'
 import { prefsFor } from '../lib/projectPrefs'
 import { inProject, isMulti, reposOf } from '../lib/multiRepo'
 import { isStarted } from '@shared/scratch'
+import { cardShow, columnName, inColumnSince, isStale, sortColumn, visibleColumns, wipLimit } from '../lib/boardPrefs'
 import {
   BUILTIN_VIEWS,
   boardFilterOf,
@@ -54,8 +55,14 @@ function Card({ task, focused, cost }: { task: Task; focused: boolean; cost: num
   // Another running task changes the same files (or its base moved under it).
   const clash = conflictLabel(conflictsOf(useConflicts(), task.id), state.tasks, baseFor(task, state.projects.find((p) => p.id === task.projectId) ?? { id: task.projectId }, state.tasks))
   const active = task.agentKind && task.st !== null && task.st !== 'done'
+  // Settings → Board: how much a card shows, and when it's gone stale.
+  const bp = prefsFor(state, task.projectId)
+  const show = cardShow(bp)
+  const compact = bp.cardDensity === 'compact'
+  const stale = isStale(task, bp.boardStaleDays)
+  const since = timeAgo(inColumnSince(task))
 
-  const ring = focused ? 'color-mix(in srgb, var(--c-blue) 70%, transparent)' : hover ? 'var(--bd-5)' : 'var(--bd-2)'
+  const ring = focused ? 'color-mix(in srgb, var(--c-blue) 70%, transparent)' : hover ? 'var(--bd-5)' : stale ? 'color-mix(in srgb, var(--c-amber) 45%, transparent)' : 'var(--bd-2)'
   const bg = focused ? 'var(--bg-panel-2)' : 'var(--bg-panel)'
 
   const parent = parentOf(task, state.tasks)
@@ -109,7 +116,8 @@ function Card({ task, focused, cost }: { task: Task; focused: boolean; cost: num
   const editable = !started && task.col !== 'done'
   const teaser = task.col === 'done' ? (task.doneNote ?? '') : started ? '' : plainText(task.desc ?? '')
   const addHint = editable && focused && !teaser
-  const showDesc = !!teaser || addHint
+  // (A compact card: no description - it's in the task sheet.)
+  const showDesc = !compact && (!!teaser || addHint)
   const [descHover, descHoverProps] = useHover()
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
   const [renaming, setRenaming] = useState<string | null>(null)
@@ -202,8 +210,14 @@ function Card({ task, focused, cost }: { task: Task; focused: boolean; cost: num
             #{task.issue.number}
           </span>
         ) : null}
-        {task.prDetails && task.pr?.state === 'OPEN' ? <PrChip task={task} /> : null}
-        {cost > 0 ? (
+        {show.pr && task.prDetails && task.pr?.state === 'OPEN' ? <PrChip task={task} /> : null}
+        {(show.age && !compact) || stale ? (
+          <span title={`In ${columnName(bp, task.col)} for ${since}${stale ? ` - stale (Settings → Board: after ${bp.boardStaleDays} day${bp.boardStaleDays === 1 ? '' : 's'})` : ''}`} style={{ font: '11px var(--font-mono)', color: stale ? 'var(--c-amber)' : 'var(--t4)', whiteSpace: 'nowrap' }}>
+            {stale ? '◷ ' : ''}
+            {since}
+          </span>
+        ) : null}
+        {show.cost && cost > 0 ? (
           <span title="Agent spend on this task, at API prices (Usage)" style={{ font: '11px var(--font-mono)', color: 'var(--t3)' }}>
             {formatCost(cost)}
           </span>
@@ -278,29 +292,38 @@ function Card({ task, focused, cost }: { task: Task; focused: boolean; cost: num
             <span style={{ color: 'var(--t1)' }}>{agentShort(task.agentKind)}</span>
             <span style={{ color: statusColor(task.st) }}>{statusLabel(task)}</span>
           </div>
-          <div
-            style={{
-              font: "11.5px var(--font-mono)",
-              color: 'var(--t2)',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis'
-            }}
-          >
-            {task.branch}
-          </div>
-          {task.st === 'working' && task.activity ? (
+          {/* What a detailed card shows (Settings → Board); a compact one only the agent and its status. */}
+          {!compact && show.branch && (task.branch || task.inPlace) ? (
+            <div
+              style={{
+                font: "11.5px var(--font-mono)",
+                color: 'var(--t2)',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis'
+              }}
+            >
+              {task.branch ?? '⌂ project folder'}
+            </div>
+          ) : null}
+          {!compact && show.activity && task.st === 'working' && task.activity ? (
             <div style={{ font: '12px var(--font-ui)', color: 'var(--t3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={task.activity}>
               {task.activity}
             </div>
           ) : null}
-          <div style={{ display: 'flex', gap: 8, font: "11.5px var(--font-mono)", color: 'var(--t3)' }}>
-            <span>{realStats ? realStats.files : '…'} files</span>
-            <span style={{ color: 'var(--c-green)' }}>+{realStats ? realStats.added : 0}</span>
-            <span style={{ color: 'var(--c-red)' }}>-{realStats ? realStats.deleted : 0}</span>
-            <span style={{ flex: 1 }} />
-            {task.lastTest ? <span style={{ color: TEST_COLOR[task.lastTest.status] }}>{TEST_LABEL[task.lastTest.status]}</span> : null}
-          </div>
+          {!compact && (show.diff || task.lastTest) ? (
+            <div style={{ display: 'flex', gap: 8, font: "11.5px var(--font-mono)", color: 'var(--t3)' }}>
+              {show.diff ? (
+                <>
+                  <span>{realStats ? realStats.files : '…'} files</span>
+                  <span style={{ color: 'var(--c-green)' }}>+{realStats ? realStats.added : 0}</span>
+                  <span style={{ color: 'var(--c-red)' }}>-{realStats ? realStats.deleted : 0}</span>
+                </>
+              ) : null}
+              <span style={{ flex: 1 }} />
+              {task.lastTest ? <span style={{ color: TEST_COLOR[task.lastTest.status] }}>{TEST_LABEL[task.lastTest.status]}</span> : null}
+            </div>
+          ) : null}
         </div>
       ) : null}
       {clash && task.col !== 'done' ? (
@@ -538,11 +561,23 @@ function ColumnHead({ col, all, shown, filtering }: { col: BoardColumn; all: Tas
           : 'merges'
         : plural(shown.filter((t) => t.agentKind).length, 'agent')
 
+  // Settings → Board: its name, its card limit, Done's length.
+  const bp = prefsFor(state, state.projectId)
+  const limit = wipLimit(bp, col)
+  const limitColor = !limit ? 'var(--t4)' : all.length > limit ? 'var(--c-red)' : all.length === limit ? 'var(--c-amber)' : 'var(--t4)'
+  const cut = col === 'done' && bp.doneShown > 0 && all.length > bp.doneShown
+
   return (
     <div onContextMenu={ctx.onContextMenu} style={{ display: 'flex', alignItems: 'center', gap: 8, height: 24, padding: '0 4px', flex: 'none', minWidth: 0 }}>
       {ctx.menu}
-      <span style={{ font: '500 12.5px var(--font-ui)', color: 'var(--t1)', whiteSpace: 'nowrap' }}>{COLUMN_LABEL[col]}</span>
-      <span style={{ font: "12px var(--font-mono)", color: 'var(--t4)' }}>{filtering ? `${shown.length}/${all.length}` : all.length}</span>
+      <span title={columnName(bp, col) !== COLUMN_LABEL[col] ? `${COLUMN_LABEL[col]} (renamed in Settings → Board)` : undefined} style={{ font: '500 12.5px var(--font-ui)', color: 'var(--t1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', minWidth: 0 }}>
+        {columnName(bp, col)}
+      </span>
+      <span title={limit ? `At most ${limit} here (Settings → Board)${bp.wipBlock ? ' - moves past it are refused' : ''}` : cut ? `The latest ${bp.doneShown} of ${all.length} show (Settings → Board)` : undefined} style={{ font: "12px var(--font-mono)", color: limitColor, whiteSpace: 'nowrap' }}>
+        {filtering ? `${shown.length}/${all.length}` : all.length}
+        {limit ? `/${limit}` : ''}
+        {cut ? ` · latest ${bp.doneShown}` : ''}
+      </span>
       <span style={{ flex: 1 }} />
       {col === 'ready' && queueable.length ? (
         <span
@@ -597,6 +632,9 @@ function ColumnCell({
   const [dragOver, setDragOver] = useState(false)
   // Where a dragged card would land: in front of this card, or at the end ('end').
   const [dropAt, setDropAt] = useState<string | null>(null)
+  const bp = prefsFor(state, state.projectId)
+  // Ordered by hand (Settings → Board): a drop line shows where a card lands.
+  const manual = bp.columnSort === 'manual'
   const listRef = useRef<HTMLDivElement>(null)
   const placeAt = (y: number): string => {
     const cards = [...(listRef.current?.querySelectorAll<HTMLElement>('[data-card-id]') ?? [])]
@@ -635,16 +673,26 @@ function ColumnCell({
         if (!task) return
         const at = placeAt(e.clientY)
         const before = at === 'end' ? null : at
-        // Within its column: a new place, nothing else.
+        // Within its column: a new place, nothing else (a column sorted by something keeps its order).
         if (task.col === col) {
-          if (before !== id) dispatch({ type: 'MOVE_TASK', id, col, before })
+          if (!manual) dispatch({ type: 'TOAST', text: `${columnName(bp, col)} is sorted by ${SORT_LABEL[bp.columnSort]} - set "As dragged" in Settings → Board to order it by hand.` })
+          else if (before !== id) dispatch({ type: 'MOVE_TASK', id, col, before })
           return
         }
         if (col === 'progress' && !isStarted(task)) {
-          dispatch({ type: 'OPEN_START_MODAL', taskId: id })
-        } else if (col === 'done' && task.worktreePath && task.col !== 'done') {
+          // Settings → Board: the Start dialog, or straight away with the defaults (as "Start in background").
+          if (bp.dropToProgress === 'start' && !task.worktreePath) dispatch({ type: 'QUEUE_TASKS', taskIds: [id] })
+          else dispatch({ type: 'OPEN_START_MODAL', taskId: id })
+        } else if (col === 'done' && task.col !== 'done') {
+          // Settings → Board: asked first.
+          const sure = bp.confirmDone ? confirm({ title: `Move ${task.key} to ${columnName(bp, 'done')}?`, body: task.title, confirmLabel: `Move to ${columnName(bp, 'done')}` }) : Promise.resolve(true)
           const project = state.projects.find((p) => p.id === task.projectId)
-          if (project) finishFromBoard(task, project)
+          sure.then((ok) => {
+            if (!ok) return
+            if (task.worktreePath) {
+              if (project) finishFromBoard(task, project)
+            } else dispatch({ type: 'MOVE_TASK', id, col, before })
+          })
         } else if (col === 'review' && task.col !== 'review') {
           reviewReady(task).then((ok) => ok && dispatch({ type: 'MOVE_TASK', id, col, before }))
         } else {
@@ -668,15 +716,17 @@ function ColumnCell({
         {adding ? <AddTaskInput /> : null}
         {tasks.map((t) => (
           <React.Fragment key={t.id}>
-            {dropAt === t.id ? <DropLine /> : null}
+            {manual && dropAt === t.id ? <DropLine /> : null}
             <Card task={t} focused={state.boardFocus === t.id} cost={costs.get(t.id) ?? 0} />
           </React.Fragment>
         ))}
-        {dropAt === 'end' && tasks.length ? <DropLine /> : null}
+        {manual && dropAt === 'end' && tasks.length ? <DropLine /> : null}
       </div>
     </div>
   )
 }
+
+const SORT_LABEL: Record<Prefs['columnSort'], string> = { manual: 'hand', newest: 'newest first', activity: 'latest activity', needs: 'what needs you' }
 
 /** Where a dragged card lands. (Negative margins: the column's gap doesn't grow while dragging.) */
 function DropLine(): React.JSX.Element {
@@ -988,8 +1038,17 @@ export function Board(): React.JSX.Element | null {
   }, [orderKey])
   if (!project) return null
   const live = all.filter((t) => t.st === 'working' || t.st === 'waiting' || t.st === 'failed')
+  // Settings → Board (the project's own, if it has them): which columns, their order, Done's length.
+  const bp = prefsFor(state, project.id)
+  const cols = visibleColumns(bp)
   const byCol = (tasks: Task[], col: BoardColumn): Task[] => tasks.filter((t) => t.col === col)
-  const grid: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(5,minmax(0,1fr))', gap: 10 }
+  const cards = (tasks: Task[], col: BoardColumn): Task[] => {
+    const list = sortColumn(byCol(tasks, col), bp.columnSort)
+    // Done: its latest few (the rest are still counted, and in the archive's search once archived).
+    return col === 'done' && bp.doneShown > 0 ? [...list].sort((a, b) => inColumnSince(b) - inColumnSince(a)).slice(0, bp.doneShown) : list
+  }
+  const addCol: BoardColumn = cols.includes(bp.newTaskColumn) ? bp.newTaskColumn : cols.includes('backlog') ? 'backlog' : 'ready'
+  const grid: React.CSSProperties = { display: 'grid', gridTemplateColumns: `repeat(${cols.length},minmax(0,1fr))`, gap: 10 }
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
@@ -1027,13 +1086,13 @@ export function Board(): React.JSX.Element | null {
       <OutsideStrip project={project} />
       {group === 'none' ? (
         <div style={{ ...grid, flex: 1, minHeight: 0, padding: '14px 16px' }}>
-          {COLUMN_ORDER.map((col) => (
+          {cols.map((col) => (
             <ColumnCell
               key={col}
               col={col}
-              tasks={byCol(shown, col)}
+              tasks={cards(shown, col)}
               costs={costs}
-              adding={col === 'backlog' && state.addingTask}
+              adding={col === addCol && state.addingTask}
               head={<ColumnHead col={col} all={byCol(all, col)} shown={byCol(shown, col)} filtering={filtering} />}
             />
           ))}
@@ -1041,7 +1100,7 @@ export function Board(): React.JSX.Element | null {
       ) : (
         <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '0 16px 14px' }}>
           <div style={{ ...grid, position: 'sticky', top: 0, zIndex: 1, background: 'var(--bg-app)', padding: '14px 4px 6px' }}>
-            {COLUMN_ORDER.map((col) => (
+            {cols.map((col) => (
               <ColumnHead key={col} col={col} all={byCol(all, col)} shown={byCol(shown, col)} filtering={filtering} />
             ))}
           </div>
@@ -1060,8 +1119,8 @@ export function Board(): React.JSX.Element | null {
                 {lane.label ? <LaneHead lane={lane} folded={isFolded} onToggle={() => dispatch({ type: 'TOGGLE_BOARD_LANE', key: lane.key })} /> : null}
                 {isFolded ? null : (
                   <div style={grid}>
-                    {COLUMN_ORDER.map((col) => (
-                      <ColumnCell key={col} col={col} tasks={byCol(lane.tasks, col)} costs={costs} adding={i === 0 && col === 'backlog' && state.addingTask} lanes />
+                    {cols.map((col) => (
+                      <ColumnCell key={col} col={col} tasks={cards(lane.tasks, col)} costs={costs} adding={i === 0 && col === addCol && state.addingTask} lanes />
                     ))}
                   </div>
                 )}

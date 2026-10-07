@@ -241,7 +241,7 @@ function Shell(): React.JSX.Element {
         </div>
       </div>
       {state.zen ? <ZenExit onExit={() => dispatch({ type: 'SET_ZEN', on: false })} /> : <StatusBar />}
-      <CommandPalette />
+      <CommandPalette menus={menus} run={run} />
       <FilePreview />
       <StartTaskModal />
       <NewProjectModal />

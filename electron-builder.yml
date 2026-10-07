@@ -13,6 +13,11 @@ files:
 # Native parts of the terminal (node-pty) run as separate files - they can't live inside the asar.
 asarUnpack:
   - '**/node_modules/@lydell/node-pty*/**'
+# switchyard://new?title=… links (see src/main/cli.ts).
+protocols:
+  - name: Switchyard
+    schemes:
+      - switchyard
 # Double-clicking a plugin package opens it in Switchyard (which asks to install it).
 fileAssociations:
   - ext: syplugin

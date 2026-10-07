@@ -11,6 +11,7 @@ import { keyLabel } from '../lib/keys'
 import { wsOpen } from '../lib/wsStore'
 import { defaultScope, recentFiles, rememberFile, sameScope, scopeLabel, scopeRoot, scopesOf, searchFiles, useCheckoutFiles, type FileHit } from '../lib/quickOpen'
 import { Menu } from './ui'
+import type { MenuModel } from '@shared/types'
 
 interface Cmd {
   id: string
@@ -28,7 +29,7 @@ interface Cmd {
  * the task's worktree (that branch), or the project's main checkout, which
  * opens read-only. Typing ">" in Go to file switches to commands.
  */
-export function CommandPalette(): React.JSX.Element | null {
+export function CommandPalette({ menus, run }: { menus: MenuModel[]; run: (id: string) => void }): React.JSX.Element | null {
   const { state, dispatch } = useAppStore()
   const inputRef = useRef<HTMLInputElement>(null)
   const selectedRef = useRef<HTMLDivElement>(null)
@@ -39,6 +40,8 @@ export function CommandPalette(): React.JSX.Element | null {
   const { list, error } = useCheckoutFiles(root)
   const query = useDeferredValue(palette?.query ?? '')
   const [scopeMenu, setScopeMenu] = useState<{ x: number; y: number } | null>(null)
+  const runRef = useRef(run)
+  runRef.current = run
 
   const hits = useMemo<FileHit[]>(() => (filesMode && root && list ? searchFiles(list, query, recentFiles(root)) : []), [filesMode, root, list, query])
 
@@ -91,11 +94,6 @@ export function CommandPalette(): React.JSX.Element | null {
           if (sc) setTimeout(() => dispatch({ type: 'OPEN_FILE_SEARCH', scope: sc }), 0)
         }
       },
-      { id: 'nav-dash', label: 'Go to Projects', run: () => dispatch({ type: 'NAV', view: 'dashboard' }) },
-      { id: 'nav-agents', label: 'Go to Agents', run: () => dispatch({ type: 'NAV', view: 'agents' }) },
-      { id: 'nav-wt', label: 'Go to Worktrees', run: () => dispatch({ type: 'NAV', view: 'worktrees' }) },
-      { id: 'prefs', label: 'Preferences', sub: shortcut('preferences'), run: () => dispatch({ type: 'OPEN_SETTINGS', section: 'general' }) },
-      { id: 'new-project', label: 'New project…', sub: shortcut('new-project'), run: () => dispatch({ type: 'OPEN_ADD_PROJECT' }) },
       {
         id: 'new-note',
         label: 'New note',
@@ -104,7 +102,17 @@ export function CommandPalette(): React.JSX.Element | null {
           createNote(dispatch, { body: starterBody(), projectId: state.projectId, taskId: null, pinned: false }).then((n) => n && dispatch({ type: 'OPEN_NOTE', id: n.id }))
       }
     ]
-    // Plugins' commands ("Hello: Copy task as Markdown").
+    // Everything in the app's menus, as VS Code lists them: "View: Reload window",
+    // "File: Preferences…" (plugins' commands are in theirs). What can't run now isn't offered.
+    const skip = new Set(['find', 'quick-open', 'new-note', 'undo', 'redo', 'cut', 'copy', 'paste', 'selectAll'])
+    for (const m of menus) {
+      for (const it of m.items) {
+        if (it.type === 'separator' || it.enabled === false || skip.has(it.id)) continue
+        // (Once the palette has closed - the menu's commands wait while a dialog is open - by the latest `run`.)
+        list.push({ id: `menu-${it.id}`, label: `${m.label}: ${it.label}`, sub: it.key ? keyLabel(it.key) : undefined, run: () => setTimeout(() => runRef.current(it.id), 30) })
+      }
+    }
+    // Plugins' commands also by their plugin's name ("Hello: Copy task as Markdown").
     for (const c of pluginCommands()) list.push({ id: `plugin-${c.id}`, label: `${c.pluginName}: ${c.title}`, sub: shortcut(c.id), run: () => runPluginCommand(c.id, state, dispatch) })
     for (const p of state.projects) {
       list.push({
@@ -156,7 +164,7 @@ export function CommandPalette(): React.JSX.Element | null {
     const text = (x: React.ReactNode): string => (typeof x === 'string' ? x.toLowerCase() : '')
     return [...list.filter((c) => text(c.label).includes(q) || text(c.sub).includes(q)), ...notes]
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.palette, state.projects, state.tasks, state.notes, state.projectId, dispatch, hits])
+  }, [state.palette, state.projects, state.tasks, state.notes, state.projectId, dispatch, hits, menus])
 
   useEffect(() => {
     if (state.palette) inputRef.current?.focus()

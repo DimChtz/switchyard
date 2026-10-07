@@ -22,7 +22,7 @@ import { useUsage } from '../lib/usage'
 import { Button, FooterNote, IconButton, Menu, Modal, Segmented, SectionLabel, Select as MenuSelect, TextArea as UITextArea, TextInput, Toggle as UIToggle, confirm, type MenuAnchor } from '../components/ui'
 import { askInstall, usePlugins } from '../lib/plugins'
 import type { PluginInfo, PluginSource } from '@shared/plugins'
-import { AGENTS, APP_PREF_KEYS, DEFAULT_MESSAGE_TEMPLATE, LANGUAGES, PROJECT_SETTING_KEYS, firstMessage, parseEnv } from '@shared/constants'
+import { AGENTS, APP_PREF_KEYS, COLUMN_LABEL, COLUMN_ORDER, DEFAULT_MESSAGE_TEMPLATE, DEFAULT_PREFS, LANGUAGES, PROJECT_SETTING_KEYS, firstMessage, parseEnv } from '@shared/constants'
 import type { AgentKind, EditorOption, NoticeKind, Prefs, Project, ProjectSettingKey, ProjectSettingScope, RepoScan, ShellOption } from '@shared/types'
 
 const MONO = "var(--font-mono)"
@@ -33,6 +33,7 @@ const SECTIONS: [string, string][] = [
   ['appearance', 'Appearance'],
   ['agents', 'Agents'],
   ['git', 'Git & worktrees'],
+  ['board', 'Board'],
   ['terminal', 'Terminal & editor'],
   ['editor', 'File editor'],
   ['keys', 'Keyboard shortcuts'],
@@ -413,6 +414,75 @@ function GlobalSettings({ section, scope, onScope }: { section: string; scope: P
     )
   }
 
+  if (section === 'board') {
+    const show = { ...DEFAULT_PREFS.cardShow, ...pf.cardShow }
+    const days = (n: number): string => (n ? `${n} day${n === 1 ? '' : 's'}` : 'Never')
+    return wrap(
+      <>
+        <Head file={userFile} title="Board" sub={scope ? scopeSub : 'Columns, cards and what moving them does'}>
+          {scopePicker}
+        </Head>
+        <Group title="Columns">
+          <Row k="boardHidden" label="Columns" sub="Show or hide them, give them your own names, and limit how many cards each holds. In Progress always shows">
+            <ColumnsEditor prefs={pf} set={set} />
+          </Row>
+          <Row k="wipBlock" label="Over a limit" sub="When a column is full: only say so, or refuse the move (and starting a task, for In Progress)">
+            <Seg value={pf.wipBlock ? 'block' : 'warn'} options={[['warn', 'Warn'], ['block', 'Refuse']]} onChange={(v) => set({ wipBlock: v === 'block' })} />
+          </Row>
+          <Row k="autoArchiveDays" label="Archive done tasks after" sub="They leave Done for the archive (searchable, and they can come back)">
+            <Seg value={String(pf.autoArchiveDays)} options={[0, 3, 7, 14, 30].map((n): [string, string] => [String(n), days(n)])} onChange={(v) => set({ autoArchiveDays: Number(v) })} />
+          </Row>
+          <Row k="doneShown" label="Done shows" sub="Its latest few - the rest are still counted">
+            <Seg value={String(pf.doneShown)} options={[['0', 'All'], ['5', '5'], ['10', '10'], ['25', '25']]} onChange={(v) => set({ doneShown: Number(v) })} />
+          </Row>
+        </Group>
+        <Group title="Cards">
+          <Row k="cardDensity" label="Cards" sub="Compact: the title and what its agent is doing">
+            <Seg value={pf.cardDensity} options={[['detailed', 'Detailed'], ['compact', 'Compact']]} onChange={(v) => set({ cardDensity: v as Prefs['cardDensity'] })} />
+          </Row>
+          <Row k="cardShow" label="A detailed card shows" sub="Cost and the pull request show on compact cards too">
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 12px' }}>
+              {(
+                [
+                  ['branch', 'Branch'],
+                  ['diff', 'Files changed'],
+                  ['cost', 'Cost'],
+                  ['pr', 'Pull request'],
+                  ['activity', "What it's doing"],
+                  ['age', 'Time in the column']
+                ] as [keyof Prefs['cardShow'], string][]
+              ).map(([k, label]) => (
+                <label key={k} style={{ display: 'flex', alignItems: 'center', gap: 7, font: '12.5px var(--font-ui)', color: 'var(--t2)', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={show[k]} onChange={(e) => set({ cardShow: { ...show, [k]: e.target.checked } })} />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </Row>
+          <Row k="boardStaleDays" label="Mark cards stale after" sub="A card that hasn't moved columns in that long is outlined, with how long it's been there">
+            <Seg value={String(pf.boardStaleDays)} options={[0, 2, 3, 7, 14].map((n): [string, string] => [String(n), days(n)])} onChange={(v) => set({ boardStaleDays: Number(v) })} />
+          </Row>
+          <Row k="columnSort" label="Order in a column" sub="Pinned cards stay on top either way">
+            <Seg value={pf.columnSort} options={[['manual', 'As dragged'], ['newest', 'Newest'], ['activity', 'Activity'], ['needs', 'Needs you']]} onChange={(v) => set({ columnSort: v as Prefs['columnSort'] })} />
+          </Row>
+        </Group>
+        <Group title="Moving cards">
+          <Row k="dropToProgress" label="Dropping a card on In Progress" sub="Start right away uses the task's agent (else the default) and the usual branch - as Start in background">
+            <Seg value={pf.dropToProgress} options={[['dialog', 'Opens Start'], ['start', 'Starts right away']]} onChange={(v) => set({ dropToProgress: v as Prefs['dropToProgress'] })} />
+          </Row>
+          {tog('Confirm before moving to Done', '', 'confirmDone')}
+          {tog('Keep cards in Review until their pull request is approved', 'A task with an open pull request goes to Done once GitHub says it’s approved (or it was merged there)', 'reviewNeedsApproval')}
+          <Row k="newTaskColumn" label="New tasks go to" sub="">
+            <Seg value={pf.newTaskColumn} options={[['backlog', 'Backlog'], ['ready', 'Ready']]} onChange={(v) => set({ newTaskColumn: v as Prefs['newTaskColumn'] })} />
+          </Row>
+          <Row k="defaultLanes" label="Lanes" sub="On a board where you haven't picked any (the Lanes button picks them per board)">
+            <Seg value={pf.defaultLanes} options={[['none', 'None'], ['agent', 'By agent'], ['repo', 'By repo']]} onChange={(v) => set({ defaultLanes: v as Prefs['defaultLanes'] })} />
+          </Row>
+        </Group>
+      </>
+    )
+  }
+
   if (section === 'terminal') {
     return wrap(
       <>
@@ -525,6 +595,22 @@ function GlobalSettings({ section, scope, onScope }: { section: string; scope: P
         </Row>
       </Group>
       <Group title="Quitting">{tog('Confirm before quitting while agents run', 'Quitting stops every running agent', 'confirmQuit')}</Group>
+      <Group title="Command line" note={'switchyard new "Fix the login" [--agent claude] [--start] [--project api] [--desc "…"] - in a project’s folder it goes on that project’s board. Links: switchyard://new?title=…&agent=…&start=1'}>
+        <Row label="The switchyard command" sub="Puts a small launcher on your PATH (as VS Code's code command): new tasks from any terminal, or from scripts">
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <Button
+              onClick={() =>
+                window.api.cli
+                  .install()
+                  .then((r) => dispatch({ type: 'TOAST', text: `Installed ${r.path}. ${r.note}`, tone: 'done' }))
+                  .catch(toastErr)
+              }
+            >
+              Install command
+            </Button>
+          </div>
+        </Row>
+      </Group>
       <Group title="Updates">
         {tog('Download updates automatically', 'The installed app checks now and then and installs a new version when you quit', 'autoUpdate')}
         <Row label="Check now" sub="Help → Check for updates does the same">
@@ -1394,6 +1480,38 @@ function Seg({ value, options, onChange }: { value: string; options: [string, st
 }
 
 /** Saves as you type (debounced), like the rest of the page. */
+/** Settings → Board's columns: shown or not, their names, their card limits. */
+function ColumnsEditor({ prefs, set }: { prefs: Prefs; set: (patch: Partial<Prefs>) => void }): React.JSX.Element {
+  const hidden = new Set(prefs.boardHidden ?? [])
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '18px minmax(0,1fr) 64px', gap: '6px 8px', alignItems: 'center' }}>
+      <span />
+      <span style={{ font: `10.5px ${MONO}`, color: 'var(--t4)', textTransform: 'uppercase', letterSpacing: '.06em' }}>Name</span>
+      <span style={{ font: `10.5px ${MONO}`, color: 'var(--t4)', textTransform: 'uppercase', letterSpacing: '.06em' }}>Limit</span>
+      {COLUMN_ORDER.map((col) => (
+        <React.Fragment key={col}>
+          <input
+            type="checkbox"
+            title={col === 'progress' ? 'In Progress always shows' : `Show ${COLUMN_LABEL[col]}`}
+            disabled={col === 'progress'}
+            checked={!hidden.has(col)}
+            onChange={(e) => set({ boardHidden: e.target.checked ? [...hidden].filter((c) => c !== col) : [...hidden, col] })}
+          />
+          <TextField value={prefs.boardNames?.[col] ?? ''} placeholder={COLUMN_LABEL[col]} onChange={(v) => set({ boardNames: { ...prefs.boardNames, [col]: v.trim() || undefined } })} />
+          <TextField
+            value={prefs.wipLimits?.[col] ? String(prefs.wipLimits[col]) : ''}
+            placeholder="-"
+            onChange={(v) => {
+              const n = Math.max(0, Math.floor(Number(v.replace(/[^\d]/g, '')) || 0))
+              set({ wipLimits: { ...prefs.wipLimits, [col]: n || undefined } })
+            }}
+          />
+        </React.Fragment>
+      ))}
+    </div>
+  )
+}
+
 function TextField({ value, placeholder, onChange }: { value: string; placeholder?: string; onChange: (v: string) => void }): React.JSX.Element {
   const [local, setLocal] = useState(value)
   const [focused, setFocused] = useState(false)

@@ -130,3 +130,30 @@ describe('working in the project folder', () => {
     expect(add(s, 'next').tasks[0].key).toBe('P-2')
   })
 })
+
+describe('board settings', () => {
+  const withPrefs = (tasks: Task[], prefs: Partial<AppState['prefs']>): AppState => {
+    const s = start(tasks)
+    return { ...s, prefs: { ...s.prefs, ...prefs } }
+  }
+
+  it('refuses a move into a full column - or only says so', () => {
+    const tasks = [task(1, { col: 'review', agentKind: 'claude', st: 'done', branch: 'b1' }), task(2, { col: 'progress', agentKind: 'claude', st: 'working', branch: 'b2' })]
+    let s = reducer(withPrefs(tasks, { wipLimits: { progress: 1 }, wipBlock: true }), { type: 'MOVE_TASK', id: 'P-1', col: 'progress' })
+    expect(s.tasks.find((t) => t.id === 'P-1')!.col).toBe('review')
+    expect(s.toast?.text).toMatch(/In Progress is full/)
+    s = reducer(withPrefs(tasks, { wipLimits: { progress: 1 }, wipBlock: false }), { type: 'MOVE_TASK', id: 'P-1', col: 'progress' })
+    expect(s.tasks.find((t) => t.id === 'P-1')!.col).toBe('progress')
+    expect(s.toast?.text).toMatch(/over its limit: 2 cards for 1/)
+  })
+
+  it('puts new tasks where Settings say - and notes when a card came into its column', () => {
+    let s: AppState = { ...withPrefs([], { newTaskColumn: 'ready' }), projectId: 'p', addingTask: true, newTaskTitle: 'x' }
+    s = reducer(s, { type: 'COMMIT_ADD_TASK' })
+    expect(s.tasks[0].col).toBe('ready')
+    expect(s.tasks[0].colAt).toBeGreaterThan(0)
+    // Hidden, Backlog isn't where they go.
+    s = { ...withPrefs([], { newTaskColumn: 'backlog', boardHidden: ['backlog'] }), projectId: 'p', addingTask: true, newTaskTitle: 'y' }
+    expect(reducer(s, { type: 'COMMIT_ADD_TASK' }).tasks[0].col).toBe('ready')
+  })
+})

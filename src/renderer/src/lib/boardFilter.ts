@@ -1,4 +1,4 @@
-import type { Task } from '@shared/types'
+import type { Prefs, Project, Task } from '@shared/types'
 import { AGENTS } from '@shared/constants'
 import { reposOf } from './multiRepo'
 
@@ -126,8 +126,12 @@ export function boardFilterOf(state: { projectId: string | null; board: BoardPre
   return (state.projectId && state.board.filters[state.projectId]) || NO_FILTER
 }
 
-export function boardGroupOf(state: { projectId: string | null; board: BoardPrefs }): BoardGroup {
-  return (state.projectId && state.board.group[state.projectId]) || 'none'
+/** The board's lanes: as picked there, else Settings → Board's default (a project can have its own). */
+export function boardGroupOf(state: { projectId: string | null; board: BoardPrefs; prefs?: Prefs; projects?: Project[] }): BoardGroup {
+  const picked = state.projectId ? state.board.group[state.projectId] : undefined
+  if (picked) return picked
+  const own = state.projects?.find((p) => p.id === state.projectId)?.prefs?.defaultLanes
+  return own ?? state.prefs?.defaultLanes ?? 'none'
 }
 
 // ── Kept per project ────────────────────────────────────────────────

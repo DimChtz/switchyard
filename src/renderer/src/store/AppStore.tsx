@@ -1,4 +1,4 @@
-import React, { createContext, useCallback, useContext, useEffect, useReducer, useRef } from 'react'
+import React, { createContext, useCallback, useContext, useEffect, useReducer, useRef, useState } from 'react'
 import { addNotice as recordNotice, loadNotices } from '../lib/notices'
 import { startUpdateWatch } from '../lib/updates'
 import type { Action, AppState } from './types'
@@ -8,7 +8,7 @@ import { tailLines } from '../lib/ptyTail'
 import { startPlugins } from '../lib/plugins'
 import { busyAgents, hasTools, knowKeyHigh, nextTaskKey, queuedTasks } from '../lib/derive'
 import { checksMessage, prSummary } from '@shared/pr'
-import type { AgentStatusUpdate, KeybindingsState, Project, SettingsFileError, Task } from '@shared/types'
+import type { AgentStatusUpdate, CliRequest, KeybindingsState, Project, SettingsFileError, Task } from '@shared/types'
 import { chainCommands, repoCommands, repoDir, taskRoot } from '../lib/multiRepo'
 import { saveBoardPrefs } from '../lib/boardFilter'
 import { criteriaMessage } from '../lib/criteria'
@@ -26,9 +26,10 @@ import { inParens, setUserBindings } from '../lib/shortcuts'
 import { clock, waitingText, wakeAt } from '../lib/status'
 import { prefsFor } from '../lib/projectPrefs'
 import { discoverPr, finishWithPr } from '../lib/taskActions'
-import { closeNoteTabs, renameNoteTabs } from '../lib/wsStore'
+import { adoptShell, closeNoteTabs, renameNoteTabs, shellsOf } from '../lib/wsStore'
 import { baseFor, parentFinished } from '@shared/stack'
 import { isStarted } from '@shared/scratch'
+import { dueForArchive } from '../lib/boardPrefs'
 import { knowTasks } from '../lib/stack'
 
 interface Ctx {
@@ -66,6 +67,7 @@ async function reconcileTasks(tasks: Task[]): Promise<Task[]> {
 export function AppStoreProvider({ children }: { children: React.ReactNode }): React.JSX.Element {
   const [state, rawDispatch] = useReducer(reducer, undefined, initialState)
   const hydratedRef = useRef(false)
+  const [hydrated, setHydrated] = useState(false)
   // What a launch made in the task's other repositories, to undo when it's cancelled.
   const madeRef = useRef(new Map<string, Made[]>())
   const stateRef = useRef(state)
@@ -248,6 +250,48 @@ ${u.ask}` : ''}`, task.id, actions)
   // The notification center's history.
   useEffect(loadNotices, [])
 
+  // Settings → Board: Done cards go to the archive after N days (each project's own setting) - at start, then hourly.
+  useEffect(() => {
+    if (!hydrated) return
+    const sweep = (): void => {
+      const s = stateRef.current
+      const ids = s.projects.flatMap((p) => dueForArchive(s.tasks.filter((t) => t.projectId === p.id), prefsFor(s, p.id).autoArchiveDays).map((t) => t.id))
+      if (ids.length) dispatch({ type: 'ARCHIVE_TASKS', taskIds: ids })
+    }
+    sweep()
+    const t = setInterval(sweep, 60 * 60 * 1000)
+    return () => clearInterval(t)
+  }, [hydrated, dispatch, state.prefs.autoArchiveDays])
+
+  // `switchyard new "…"` from a terminal, or a switchyard:// link: a task on the board - its
+  // Start dialog open when an agent was named, started straight away with --start.
+  useEffect(() => {
+    if (!hydrated) return
+    const take = (req: CliRequest): void => {
+      const s = stateRef.current
+      const project = s.projects.find((p) => p.id === req.projectId) ?? s.projects.find((p) => p.id === s.projectId) ?? s.projects[0]
+      if (!project) return rawDispatch({ type: 'TOAST', text: `“${req.title}” didn't make it to the board: add a project first.` })
+      const key = nextTaskKey(s.tasks, project, s.keyHigh)
+      const now = Date.now()
+      const starting = req.start || !!req.agent
+      const col = starting ? 'ready' : prefsFor(s, project.id).newTaskColumn
+      dispatch({ type: 'ADD_TASK', task: { id: key, key, projectId: project.id, title: req.title.slice(0, 200), desc: req.desc.slice(0, 8000), col, agentKind: null, st: null, worktreeId: null, worktreePath: null, branch: null, ask: null, doneNote: null, firstMessage: null, createdAt: now, startedAt: null, lastActivityAt: now } })
+      dispatch({ type: 'NAV', view: 'board', projectId: project.id })
+      const agent = req.agent ? AGENTS.find((a) => a.kind === req.agent?.toLowerCase() || a.name.toLowerCase() === req.agent?.toLowerCase()) : undefined
+      if (req.agent && !agent) rawDispatch({ type: 'TOAST', text: `No agent “${req.agent}” - ${AGENTS.map((a) => a.kind).join(', ')}.` })
+      if (!starting) return rawDispatch({ type: 'TOAST', text: `${key} added to ${project.name}: ${req.title}`, tone: 'done' })
+      dispatch({ type: 'OPEN_START_MODAL', taskId: key })
+      if (agent) dispatch({ type: 'SET_START_AGENT', agentKind: agent.kind })
+      if (req.start) {
+        dispatch({ type: 'LAUNCH_START' })
+        dispatch({ type: 'BACKGROUND_START' })
+        rawDispatch({ type: 'TOAST', text: `Starting ${key} in ${project.name}: ${req.title}` })
+      }
+    }
+    window.api.cli.take().then((list) => list.forEach(take)).catch(() => {})
+    return window.api.cli.onRequest(take)
+  }, [hydrated, dispatch])
+
   // What agents ask Switchyard through its tools (MCP): cards, questions, test results.
   useEffect(
     () =>
@@ -260,6 +304,29 @@ ${u.ask}` : ''}`, task.id, actions)
         if (!task) return reply(null, 'This task is no longer on the board.')
         const name = AGENTS.find((a) => a.kind === task.agentKind)?.name ?? 'The agent'
         if (req.kind === 'tests-finished') return dispatch({ type: 'TESTS_FINISHED', taskId: task.id, exitCode: req.exitCode ?? -1 })
+        if (req.kind === 'list-terminals') return reply(shellsOf(task.id).map((sh) => ({ id: sh.id, name: sh.name })))
+        if (req.kind === 'terminal-opened') return adoptShell(task.id, req.id, req.name)
+        if (req.kind === 'write-note') {
+          // One of this task's notes, rewritten - or a new one linked to it.
+          const own = req.id ? s.notes.find((n) => n.id === req.id && n.taskId === task.id) : undefined
+          if (req.id && !own) return reply(null, `No note "${req.id}" linked to ${task.key}.`)
+          const body = `# ${req.title}\n\n${req.body.trim()}\n`
+          window.api.notes
+            .save({ id: own?.id, body, projectId: task.projectId, taskId: task.id, pinned: own?.pinned ?? false })
+            .then((note) => {
+              rawDispatch({ type: 'NOTE_SAVED', note })
+              rawDispatch({ type: 'TOAST', text: `${name} ${own ? 'updated' : 'wrote'} a note on ${task.key}: ${req.title}` })
+              reply(note.id)
+            })
+            .catch((err: unknown) => reply(null, errText(err)))
+          return
+        }
+        if (req.kind === 'ready-for-review') {
+          if (task.col !== 'progress') return reply(true)
+          dispatch({ type: 'PRIMARY_ACTION', taskId: task.id })
+          if (req.summary.trim()) rawDispatch({ type: 'TOAST', text: `${task.key} is ready for review - ${req.summary.trim().slice(0, 200)}`, tone: 'done' })
+          return reply(true)
+        }
         if (req.kind === 'note') return rawDispatch({ type: 'TOAST', text: `${task.key}: ${req.text}` })
         if (req.kind === 'verify-criterion') {
           if (!task.criteria?.[req.index]) return reply(null, 'That criterion is gone.')
@@ -331,6 +398,7 @@ ${u.ask}` : ''}`, task.id, actions)
       const reconciled = await reconcileTasks(tasks)
       if (!cancelled) dispatch({ type: 'HYDRATE', projects, tasks: reconciled, prefs, keyHigh: high })
       hydratedRef.current = true
+      setHydrated(true)
     }
     hydrate()
     return () => {

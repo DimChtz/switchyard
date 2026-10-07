@@ -11,6 +11,7 @@ import { initUserSettings, watchProjectSettings, watchUserSettings } from './ser
 import { startupTheme, watchThemes } from './services/themes'
 import { killAll as killAllPty, runningAgents } from './services/pty'
 import { SMOKE, runSmoke, smokeDataFolder } from './smoke'
+import { deliver, parseArgs, registerCli } from './cli'
 
 if (is.dev && process.env['SWITCHYARD_DEBUG_PORT']) {
   app.commandLine.appendSwitch('remote-debugging-port', process.env['SWITCHYARD_DEBUG_PORT'])
@@ -25,16 +26,27 @@ smokeDataFolder()
 
 // One copy at a time: two would share the store file and both run the
 // worktree cleanup. Starting it again brings the open window forward.
-if (!app.requestSingleInstanceLock()) {
+// (Its own arguments go along as they were typed: Chromium reorders the ones the running copy
+// gets - every --flag first - so `new "x" --agent claude` would lose its agent.)
+if (!app.requestSingleInstanceLock({ argv: process.argv, cwd: process.cwd() })) {
   app.quit()
 } else {
-  app.on('second-instance', (_e, argv) => {
+  app.on('second-instance', (_e, argv, workingDirectory, data) => {
+    // `switchyard new …` in a terminal, or a switchyard:// link (Windows, Linux).
+    const sent = data as { argv?: unknown; cwd?: unknown } | undefined
+    const own = Array.isArray(sent?.argv) && sent.argv.every((a) => typeof a === 'string') ? (sent.argv as string[]) : argv
+    deliver(parseArgs(own, typeof sent?.cwd === 'string' ? sent.cwd : workingDirectory))
     const win = BrowserWindow.getAllWindows()[0]
     if (!win) return
     if (win.isMinimized()) win.restore()
     win.focus()
     // A plugin package double-clicked while Switchyard runs (Windows, Linux).
     for (const p of packagesIn(argv)) openedWith(p)
+  })
+  // A switchyard:// link on macOS (it can come before the app is ready: kept until the window asks).
+  app.on('open-url', (e, url) => {
+    e.preventDefault()
+    app.whenReady().then(() => deliver(parseArgs([url], '')))
   })
   // The same on macOS (it can come before the app is ready).
   app.on('open-file', (e, path) => {
@@ -223,6 +235,9 @@ function start(): void {
     watchProjectSettings(getProjects())
     buildMenu()
     registerIpcHandlers()
+    registerCli()
+    // Started as `switchyard new …` (or by a link): the window takes it once it's up.
+    if (!SMOKE) deliver(parseArgs(process.argv, process.cwd()))
     // Before the window: its agents list includes the plugins' ones.
     initPlugins()
     const win = createWindow()

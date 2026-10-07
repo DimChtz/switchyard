@@ -171,6 +171,8 @@ export interface Task {
   archivedAt?: number | null
   /** Kept at the top of its column (when it was pinned: the latest goes first). */
   pinnedAt?: number | null
+  /** When it came into its column (the board: how long it's been there, stale cards, auto-archive). */
+  colAt?: number
   /**
    * Works in the project's own checkout, on whatever is checked out there -
    * no branch or worktree of its own (an exploration, an investigation).
@@ -414,6 +416,24 @@ export type AgentToolRequest =
   | { kind: 'tests-finished'; taskId: string; exitCode: number | null }
   | { kind: 'verify-criterion'; taskId: string; index: number; passed: boolean; note: string; image: string | null }
   | { kind: 'note'; taskId: string; text: string }
+  /** The task's shell tabs, with their names (the agent reads and types into them). */
+  | { kind: 'list-terminals'; taskId: string }
+  /** A shell the agent opened (already running): it becomes one of the task's tabs. */
+  | { kind: 'terminal-opened'; taskId: string; id: string; name: string }
+  | { kind: 'write-note'; taskId: string; title: string; body: string; id: string | null }
+  | { kind: 'ready-for-review'; taskId: string; summary: string }
+
+/** A task asked for from the command line (`switchyard new …`) or a switchyard:// link. */
+export interface CliRequest {
+  title: string
+  desc: string
+  /** An agent kind (claude, codex…): the Start dialog opens with it. */
+  agent: string | null
+  /** Start it straight away (in the background). */
+  start: boolean
+  /** The project named, or the one the command ran in; null: the one open in the window. */
+  projectId: string | null
+}
 
 /** Review comments changed outside the window: a task's agent answered some. */
 export interface CommentsChange {
@@ -670,6 +690,34 @@ export interface Prefs {
   pruneAfterMerge: boolean
   /** Done deletes the task's local branch once its work is in the base branch (merged here, or its PR merged). Off: it's kept. */
   deleteBranchOnFinish: boolean
+  // ── The board (Settings → Board; a project can have its own) ──
+  /** Columns not shown (In Progress always is). */
+  boardHidden: BoardColumn[]
+  /** Columns' own names ("Todo", "Shipped"); unset: the usual ones. */
+  boardNames: Partial<Record<BoardColumn, string>>
+  /** At most this many cards in a column (0 or unset: no limit). */
+  wipLimits: Partial<Record<BoardColumn, number>>
+  /** Over a limit: refuse the move (else only warn). */
+  wipBlock: boolean
+  /** Done cards go to the archive after this many days (0: never). */
+  autoArchiveDays: number
+  /** Done shows its latest this many (0: all). */
+  doneShown: number
+  cardDensity: 'detailed' | 'compact'
+  /** What a detailed card shows. */
+  cardShow: { branch: boolean; diff: boolean; cost: boolean; pr: boolean; activity: boolean; age: boolean }
+  /** A card that hasn't moved in this many days is marked (0: never). */
+  boardStaleDays: number
+  /** The order in a column: as dragged, or by something (pinned ones stay first). */
+  columnSort: 'manual' | 'newest' | 'activity' | 'needs'
+  /** A card dropped on In Progress: the Start dialog, or started straight away with the defaults. */
+  dropToProgress: 'dialog' | 'start'
+  confirmDone: boolean
+  /** A task in Review with an open pull request goes to Done only once the PR is approved. */
+  reviewNeedsApproval: boolean
+  newTaskColumn: 'backlog' | 'ready'
+  /** Lanes on a board you haven't picked them for. */
+  defaultLanes: 'none' | 'agent' | 'repo'
   /** A task whose pull request is merged (on GitHub) goes to Done by itself. */
   finishOnPrMerge: boolean
   /** How Switchyard merges a pull request on GitHub (Done asks first; the repository may allow fewer). */

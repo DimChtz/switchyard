@@ -18,7 +18,7 @@ import { conflictsOf, useConflicts } from '../lib/conflicts'
 import { baseOf } from '../lib/stack'
 import { liveParent } from '@shared/stack'
 import { errText } from '../lib/errors'
-import { COLUMN_LABEL } from '@shared/constants'
+import { columnName } from '../lib/boardPrefs'
 import { LayoutButtons } from './workspace/layout/LayoutButtons'
 import { useHeadBranch } from '../lib/headBranch'
 
@@ -230,7 +230,7 @@ function WorkspaceBody({ task, project }: { task: Task; project: Project }): Rea
           <span style={{ color: 'var(--bd-5)', flex: 'none' }}>/</span>
           {task.scratch ? null : (
             <>
-              <span style={{ fontSize: 13, color: 'var(--t3)', flex: 'none' }}>{COLUMN_LABEL[task.col]}</span>
+              <span style={{ fontSize: 13, color: 'var(--t3)', flex: 'none' }}>{columnName(prefsFor(state, project.id), task.col)}</span>
               <span style={{ color: 'var(--bd-5)', flex: 'none' }}>/</span>
             </>
           )}

@@ -12,6 +12,9 @@ import { commentsChanged } from './review'
 import { parseEnv, COLUMN_LABEL } from '@shared/constants'
 import { IPC } from '@shared/ipc'
 import { baseFor, parentOf } from '@shared/stack'
+import { checksMessage, prSummary, reviewMessage } from '@shared/pr'
+import { prDetails } from './git'
+import * as notes from './notes'
 import type { AgentToolRequest, Project, Task } from '@shared/types'
 
 /**
@@ -226,6 +229,87 @@ export async function evidenceImage(path: string): Promise<string | null> {
   } catch {
     return null
   }
+}
+
+// ── The task's terminals: its shell tabs, and the dev server, tests and setup runs ──
+interface Terminal {
+  id: string
+  name: string
+  kind: 'shell' | 'dev server' | 'tests' | 'setup'
+}
+
+const shellPrefix = (task: Task): string => `${task.id}-shell-`
+
+async function terminalsOf(task: Task): Promise<Terminal[]> {
+  // The shell tabs' names are the window's (renamed tabs too).
+  const named = ((await askWindow({ kind: 'list-terminals', taskId: task.id }).catch(() => [])) as { id: string; name: string }[]) ?? []
+  const shells = ptyService.list(shellPrefix(task)).map((id, i): Terminal => ({ id, name: named.find((n) => n.id === id)?.name ?? `shell ${i + 1}`, kind: 'shell' }))
+  const dev = ptyService.list(`preview-${task.id}`).map((id): Terminal => ({ id, name: id.includes('~') ? `dev server (${id.split('~')[1]})` : 'dev server', kind: 'dev server' }))
+  const runs = [
+    { id: `tests-${task.id}`, name: 'tests', kind: 'tests' as const },
+    { id: `setup-${task.id}`, name: 'setup', kind: 'setup' as const }
+  ].filter((r) => ptyService.info(r.id))
+  return [...shells, ...dev, ...runs]
+}
+
+function pickTerminal(list: Terminal[], which: unknown): Terminal | undefined {
+  const w = str(which).trim().toLowerCase()
+  if (!w) return list.find((t) => t.kind === 'shell')
+  return list.find((t) => t.id.toLowerCase() === w || t.name.toLowerCase() === w) ?? (/^\d+$/.test(w) ? list.filter((t) => t.kind === 'shell')[Number(w) - 1] : undefined)
+}
+
+/** A terminal's output as text: no colors or cursor moves, and the empty lines those left (a prompt's redraws) squeezed. */
+const plain = (s: string): string =>
+  s
+    // eslint-disable-next-line no-control-regex
+    .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(\x07|\x1b\\)|\x1b[()][0-9A-B]|\x1b[=>]/g, '')
+    .replace(/\r(?!\n)/g, '\n')
+    .replace(/[ \t]+$/gm, '')
+    .replace(/\n{3,}/g, '\n\n')
+
+/** The last `lines` lines a terminal printed, as text. */
+function lastLines(id: string, lines: number): string {
+  const all = plain(ptyService.getBuffer(id)).split('\n')
+  return all.slice(-lines).join('\n').trim()
+}
+
+/** A shell tab of the task's, made for the agent: started here, and shown in the workspace. */
+function openShell(task: Task): string {
+  const w = window()
+  if (!w) throw new ToolError('Switchyard’s window is closed.')
+  const cwd = task.taskDir || task.worktreePath
+  if (!cwd) throw new ToolError('This task has no worktree yet.')
+  const id = `${shellPrefix(task)}${Date.now().toString(36)}`
+  ptyService.spawn(w.webContents, { id, cwd, cols: 120, rows: 30 })
+  tellWindow({ kind: 'terminal-opened', taskId: task.id, id, name: 'agent shell' })
+  return id
+}
+
+/** Types a command into a terminal and waits for its output to settle (or `wait` seconds). */
+async function runIn(id: string, command: string, wait: number): Promise<{ output: string; settled: boolean }> {
+  const before = ptyService.getBuffer(id).length
+  ptyService.write(id, command.replace(/\r?\n/g, '\r') + '\r')
+  const until = Date.now() + wait * 1000
+  let last = before
+  let quietSince = Date.now()
+  while (Date.now() < until) {
+    await new Promise((r) => setTimeout(r, 250))
+    if (!ptyService.exists(id)) break
+    const len = ptyService.getBuffer(id).length
+    if (len !== last) {
+      last = len
+      quietSince = Date.now()
+    } else if (len > before && Date.now() - quietSince > 1500) {
+      return { output: plain(ptyService.getBuffer(id).slice(before)), settled: true }
+    }
+  }
+  return { output: plain(ptyService.getBuffer(id).slice(before)), settled: !ptyService.exists(id) }
+}
+
+/** A note in full: its id, then its text (which starts with its heading, usually). */
+const full = (n: { id: string; title: string; body: string }): string => {
+  const body = n.body.trim()
+  return `[note ${n.id}]\n${body.startsWith('#') ? body : `# ${n.title}\n\n${body}`}`
 }
 
 const statusText = (t: Task): string =>
@@ -480,6 +564,140 @@ const TOOLS: Tool[] = [
     }
   },
   {
+    name: 'list_terminals',
+    description:
+      "The task's terminals in Switchyard - the shell tabs the user (or you) opened, its dev server, its tests and setup runs: their names, whether they run, and their last line. Read one with read_terminal; type into a shell with run_in_terminal.",
+    inputSchema: obj(),
+    run: async (task) => {
+      const list = await terminalsOf(task)
+      if (!list.length) return text('No terminals are open for this task. run_in_terminal opens a shell.')
+      return text(list.map((t) => `- ${t.name} [${t.kind}] ${ptyService.exists(t.id) ? 'running' : `exited (${ptyService.info(t.id)?.exitCode ?? '?'})`}: ${lastLines(t.id, 1).slice(0, 200) || '(no output yet)'}`).join('\n'))
+    }
+  },
+  {
+    name: 'read_terminal',
+    description: "What one of the task's terminals printed lately (its name from list_terminals: a shell tab, \"dev server\", \"tests\", \"setup\") - e.g. the dev server's errors, or a command the user ran.",
+    inputSchema: obj({ terminal: { type: 'string', description: 'Its name or number from list_terminals. Default: the first shell tab.' }, lines: { type: 'number', description: 'How many of the last lines (default 80, at most 500).' } }),
+    run: async (task, a) => {
+      const list = await terminalsOf(task)
+      const t = pickTerminal(list, a.terminal)
+      if (!t) throw new ToolError(list.length ? `No terminal "${str(a.terminal)}" - there are: ${list.map((x) => x.name).join(', ')}.` : 'No terminals are open for this task.')
+      const n = Math.min(500, Math.max(1, Number(a.lines) || 80))
+      return text(`${t.name} (${ptyService.exists(t.id) ? 'running' : 'exited'}), last ${n} lines:\n${lastLines(t.id, n) || '(nothing yet)'}`)
+    }
+  },
+  {
+    name: 'run_in_terminal',
+    description:
+      "Types a command into one of the task's shell tabs in Switchyard (the user sees it there) and returns what it printed once the output settles. For things that keep running and that the user should see - a watcher, a REPL, a server - or to use a shell the user set up. Opens a shell tab when there's none (or new_terminal). For ordinary commands your own shell tool is simpler.",
+    inputSchema: obj(
+      {
+        command: { type: 'string', description: 'The command line to type (Enter is pressed after it).' },
+        terminal: { type: 'string', description: 'A shell tab by name or number (list_terminals). Default: the first one.' },
+        new_terminal: { type: 'boolean', description: 'Open a new shell tab for it.' },
+        wait_seconds: { type: 'number', description: 'How long to wait for output at most (default 15, at most 120).' }
+      },
+      ['command']
+    ),
+    run: async (task, a) => {
+      const command = str(a.command)
+      if (!command.trim()) throw new ToolError('The command is empty.')
+      const shells = (await terminalsOf(task)).filter((t) => t.kind === 'shell' && ptyService.exists(t.id))
+      let id: string
+      if (a.new_terminal === true || !shells.length) {
+        id = openShell(task)
+        // Its prompt first (a profile script, oh-my-posh…).
+        const until = Date.now() + 8000
+        let len = -1
+        while (Date.now() < until) {
+          await new Promise((r) => setTimeout(r, 400))
+          const now = ptyService.getBuffer(id).length
+          if (now > 0 && now === len) break
+          len = now
+        }
+      } else {
+        const t = pickTerminal(shells, a.terminal)
+        if (!t) throw new ToolError(`No running shell "${str(a.terminal)}" - there are: ${shells.map((x) => x.name).join(', ')}.`)
+        id = t.id
+      }
+      const r = await runIn(id, command, Math.min(120, Math.max(1, Number(a.wait_seconds) || 15)))
+      const out = r.output.trim().slice(-8000)
+      return text(`${out || '(no output)'}${r.settled ? '' : '\n[still running - read_terminal shows more later]'}`)
+    }
+  },
+  {
+    name: 'stop_dev_server',
+    description: "Stops the task's dev server (started by start_dev_server or the Preview tab) - e.g. to restart it after changing its config.",
+    inputSchema: obj({ repo: { type: 'string', description: 'For a task in several repositories: which one. Default: the main one.' } }),
+    run: async (task, a) => {
+      const id = previewSession(task, pickRepo(task, a.repo).project)
+      if (!ptyService.exists(id)) return text('The dev server isn’t running.')
+      ptyService.kill(id)
+      return text('Stopped the dev server.')
+    }
+  },
+  {
+    name: 'read_notes',
+    description: "The user's notes for this task (Markdown, often decisions and context) in full, and the titles of the project's other notes. Pass an id to read one of those.",
+    inputSchema: obj({ id: { type: 'string', description: "A note's id (from the list) to read in full." } }),
+    run: async (task, a) => {
+      const all = await notes.list()
+      if (str(a.id)) {
+        const n = all.find((x) => x.id === str(a.id))
+        if (!n) throw new ToolError(`No note "${str(a.id)}".`)
+        return text(full(n))
+      }
+      const mine = all.filter((n) => n.taskId === task.id)
+      const project = all.filter((n) => n.projectId === task.projectId && n.taskId !== task.id)
+      if (!mine.length && !project.length) return text('No notes for this task or its project.')
+      return text(
+        [
+          ...mine.map(full),
+          project.length ? `Other notes in the project (read_notes with an id):\n${project.map((n) => `- ${n.title} (${n.id})`).join('\n')}` : ''
+        ]
+          .filter(Boolean)
+          .join('\n\n---\n\n')
+      )
+    }
+  },
+  {
+    name: 'write_note',
+    description: "Writes a note linked to this task in the user's notes (Markdown) - decisions, findings, a plan, a handover - for the user and for later agents. With an id, replaces that note's text.",
+    inputSchema: obj({ title: { type: 'string', description: 'Its title (becomes its first heading).' }, text: { type: 'string', description: 'The note, in Markdown.' }, id: { type: 'string', description: 'Update this note (one of this task’s) instead of writing a new one.' } }, ['title', 'text']),
+    run: async (task, a) => {
+      const title = str(a.title).trim()
+      if (!title) throw new ToolError('The title is empty.')
+      const id = (await askWindow({ kind: 'write-note', taskId: task.id, title: title.slice(0, 200), body: str(a.text).slice(0, 50_000), id: str(a.id) || null })) as string
+      return text(`Saved the note "${title}" (${id}), linked to ${task.key}.`)
+    }
+  },
+  {
+    name: 'pull_request',
+    description: "The task's pull request on GitHub: its state, CI checks (with the failing ones), review decision and the reviewers' comments - to fix what CI or reviewers found.",
+    inputSchema: obj(),
+    run: async (task) => {
+      if (!task.pr) return text('This task has no pull request yet.')
+      const cwd = task.worktreePath ?? reposOf(task)[0]?.path
+      if (!cwd) throw new ToolError('This task has no worktree.')
+      const d = await prDetails(cwd, task.pr.url)
+      if (!d) throw new ToolError(`Couldn't read ${task.pr.url} - is the GitHub CLI installed and signed in?`)
+      return text(
+        [`${d.url} - ${d.state}${d.reviewDecision ? `, review: ${d.reviewDecision.toLowerCase().replace(/_/g, ' ')}` : ''}. ${prSummary(d).text}`, checksMessage(d), reviewMessage(d)].filter(Boolean).join('\n\n')
+      )
+    }
+  },
+  {
+    name: 'ready_for_review',
+    description: "Tells Switchyard you're done: the task moves to Review on the board and the user is told, with your summary. Use when the work is complete (and its acceptance criteria verified).",
+    inputSchema: obj({ summary: { type: 'string', description: 'What you did, briefly - shown to the user.' } }, ['summary']),
+    run: async (task, a) => {
+      if (task.scratch) throw new ToolError("The scratchpad isn't a task - there's no review.")
+      if (task.col !== 'progress') return text(`${task.key} is in ${COLUMN_LABEL[task.col]} already.`)
+      await askWindow({ kind: 'ready-for-review', taskId: task.id, summary: str(a.summary).slice(0, 2000) })
+      return text(`${task.key} is in Review now.`)
+    }
+  },
+  {
     name: 'ask_user',
     description:
       'Asks the user a question through Switchyard\'s notifications (they may be away from the terminal). Their answer arrives as your next message - after asking, finish your turn unless you can go on without it.',
@@ -511,7 +729,7 @@ async function handleOne(taskId: string, msg: Message): Promise<Record<string, u
         capabilities: { tools: {} },
         serverInfo: { name: 'switchyard', version: app.getVersion() },
         instructions:
-          'Switchyard runs this task, alongside other tasks and agents. Use preview_screenshot to look at UI changes yourself, run_tests to check your work, check_conflicts before large changes or finishing, and review_comments / reply_to_review_comment for the user\'s review. If the task has acceptance criteria (acceptance_criteria), prove each with verify_criterion before you finish. list_active_tasks shows who else works in parallel; send_message / read_messages coordinate with them. Use ask_user when you need a decision while the user may be away.'
+          'Switchyard runs this task, alongside other tasks and agents. Use preview_screenshot to look at UI changes yourself, run_tests to check your work, check_conflicts before large changes or finishing, and review_comments / reply_to_review_comment for the user\'s review. If the task has acceptance criteria (acceptance_criteria), prove each with verify_criterion before you finish. list_active_tasks shows who else works in parallel; send_message / read_messages coordinate with them. Use ask_user when you need a decision while the user may be away. The task\'s terminals (the user\'s shell tabs, the dev server) are list_terminals / read_terminal / run_in_terminal; its notes read_notes / write_note; its pull request\'s checks and reviews pull_request. When you\'re done, ready_for_review.'
       })
     }
     case 'ping':

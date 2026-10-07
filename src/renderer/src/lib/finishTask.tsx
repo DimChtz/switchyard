@@ -25,6 +25,11 @@ export async function finishTask(task: Task, project: Project, prefs: Prefs, dis
   if (task.inPlace) return finishInPlace(task, dispatch)
   const pr = await freshPr(task, dispatch)
   if (pr?.state === 'MERGED') return finishWithPr({ ...task, pr }, project, dispatch, projects)
+  // Settings → Board: a task in Review waits for its pull request's approval.
+  if (prefs.reviewNeedsApproval && task.col === 'review' && pr?.state === 'OPEN' && task.prDetails?.reviewDecision !== 'APPROVED') {
+    dispatch({ type: 'TOAST', text: `${task.key} stays in Review until PR #${pr.number ?? ''} is approved (Settings → Board).` })
+    return false
+  }
   if (pr?.state === 'CLOSED') {
     const ok = await confirm({
       title: `PR #${pr.number ?? ''} was closed without merging`,

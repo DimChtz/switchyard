@@ -202,6 +202,13 @@ export function addShell(taskId: string, o: { cwd?: string; profile?: ShellOptio
   return id
 }
 
+/** A shell started outside the workspace (an agent's run_in_terminal): it becomes a tab, without taking the focus. */
+export function adoptShell(taskId: string, id: string, name: string): void {
+  if (shellsOf(taskId).some((s) => s.id === id)) return
+  setShells(taskId, [...shellsOf(taskId), { id, name }])
+  setLayout(taskId, (L) => addQuietly(L, `shell:${id}`))
+}
+
 export function renameShell(taskId: string, id: string, name: string): void {
   setShells(
     taskId,

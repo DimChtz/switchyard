@@ -4,6 +4,14 @@ import { app } from 'electron'
 import { promises as fs } from 'fs'
 import { join } from 'path'
 import { AGENTS } from '@shared/constants'
+import { TOOL_NAMES } from './agentTools'
+import { getPrefs, getTasks } from './store'
+
+/** Settings → Agents asks before shell commands, for this task's project. */
+function shellAsked(taskId: string): boolean {
+  const t = getTasks().find((x) => x.id === taskId)
+  return getPrefs(t?.worktreePath ?? undefined).shellPerm === 'ask'
+}
 
 /**
  * Claude Code reports what it does through hooks: small commands it runs
@@ -128,8 +136,9 @@ export async function settingsFileFor(taskId: string, tools = false): Promise<st
   const hook = { hooks: [{ type: 'command', command, timeout: 5 }] }
   const settings = {
     hooks: Object.fromEntries(EVENTS.map((ev) => [ev, [ev === 'PreToolUse' || ev === 'PostToolUse' ? { matcher: '*', ...hook } : hook]])),
-    // Switchyard's own tools (MCP) need no approval each time.
-    ...(tools ? { permissions: { allow: ['mcp__switchyard'] } } : {})
+    // Switchyard's own tools (MCP) need no approval each time - except typing commands into a
+    // terminal while Settings → Agents says shell commands are asked about: that one asks too.
+    ...(tools ? { permissions: { allow: shellAsked(taskId) ? TOOL_NAMES.filter((n) => n !== 'run_in_terminal').map((n) => `mcp__switchyard__${n}`) : ['mcp__switchyard'] } } : {})
   }
   const dir = join(app.getPath('userData'), 'agent-hooks')
   await fs.mkdir(dir, { recursive: true })
