@@ -553,20 +553,18 @@ function MiniSidebar(): React.JSX.Element {
         </RailButton>
       ))}
       <div style={{ width: 24, height: 1, flex: 'none', background: 'var(--bd-1)', margin: '8px 0' }} />
-      <div
-        ref={projectsRef}
-        onMouseEnter={popIn}
-        onMouseLeave={popOut}
-        style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, flex: 1, minHeight: 0, width: '100%', overflowY: 'auto', overflowX: 'hidden', scrollbarWidth: 'none' }}
-      >
-        {state.projects.map((p) => (
-          <MiniProject key={p.id} projectId={p.id} />
-        ))}
-        {state.projects.length === 0 ? (
-          <RailButton title="New project" onClick={() => dispatch({ type: 'OPEN_ADD_PROJECT' })} style={{ fontSize: 15 }}>
-            +
-          </RailButton>
-        ) : null}
+      {/* The rest of the rail (scrolls when there are many) - only the icons themselves open the list. */}
+      <div style={{ flex: 1, minHeight: 0, width: '100%', overflowY: 'auto', overflowX: 'hidden', scrollbarWidth: 'none' }}>
+        <div ref={projectsRef} onMouseEnter={state.projects.length ? popIn : undefined} onMouseLeave={popOut} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, width: '100%' }}>
+          {state.projects.map((p) => (
+            <MiniProject key={p.id} projectId={p.id} />
+          ))}
+          {state.projects.length === 0 ? (
+            <RailButton title="New project" onClick={() => dispatch({ type: 'OPEN_ADD_PROJECT' })} style={{ fontSize: 15 }}>
+              +
+            </RailButton>
+          ) : null}
+        </div>
       </div>
       {pop && state.projects.length > 0 ? (
         <div
