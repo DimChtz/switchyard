@@ -5,9 +5,10 @@ import { getPrefs, getProjects, getTasks } from './store'
 import { getWorktreeStatus, listWorktrees } from './git'
 import { expandPath } from './repos'
 import { log } from './log'
-import { join, resolve } from 'path'
+import { join } from 'path'
+import { canonical } from './paths'
 
-const norm = (p: string): string => resolve(p).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+const norm = canonical
 
 const HOUR = 60 * 60 * 1000
 

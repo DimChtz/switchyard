@@ -3,8 +3,9 @@ import { promisify } from 'util'
 import { gitArgs, gitEnv } from './gitEnv'
 import { existsSync, promises as fs } from 'fs'
 import { homedir } from 'os'
-import { join, resolve } from 'path'
+import { join } from 'path'
 import { getProjects, getTasks } from './store'
+import { isInside, realFolder, samePath } from './paths'
 import { getWorktreeStatus, listWorktrees } from './git'
 import type { OutsideItem, OutsideSession, Project, Task } from '@shared/types'
 
@@ -26,11 +27,7 @@ async function git(cwd: string, args: string[]): Promise<string> {
   return stdout
 }
 
-/** A path for comparing: absolute, one kind of slash, no trailing one, any case (Windows). */
-export function samePath(a: string, b: string): boolean {
-  const n = (p: string): string => resolve(p).replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
-  return n(a) === n(b)
-}
+export { samePath }
 
 /** Claude Code's folder name for a working directory: everything but letters and digits as "-". */
 export function claudeProjectDir(cwd: string): string {
@@ -169,10 +166,13 @@ async function claudeSessions(folders: string[], since: number): Promise<Outside
   } catch {
     return []
   }
-  const wanted = new Set(folders.map((f) => claudeProjectDir(f).toLowerCase()))
+  // Claude Code names the folder after the path it was started in, which may be spelled
+  // differently from git's (macOS's /var for /private/var, a Windows short name): matched by
+  // its last two folders, then each conversation's own cwd decides (as real folders).
+  const ends = folders.flatMap((f) => [f, realFolder(f)]).map((f) => claudeProjectDir(f.split(/[\\/]+/).filter(Boolean).slice(-2).join('/')).toLowerCase())
   const out: OutsideSession[] = []
   for (const d of dirs) {
-    if (!wanted.has(d.toLowerCase())) continue
+    if (!ends.some((e) => d.toLowerCase().endsWith(e))) continue
     const files = (await fs.readdir(join(root, d)).catch(() => [] as string[])).filter((f) => f.endsWith('.jsonl'))
     for (const f of files) {
       const p = join(root, d, f)
@@ -219,7 +219,7 @@ function held(tasks: Task[]): { paths: string[]; branches: Set<string>; sessions
   }
 }
 
-const inside = (p: string, dir: string): boolean => samePath(p, dir) || resolve(p).toLowerCase().startsWith(resolve(dir).toLowerCase() + (process.platform === 'win32' ? '\\' : '/'))
+const inside = isInside
 
 /** One project's outside work. */
 async function scanProject(project: Project, tasks: Task[]): Promise<OutsideItem[]> {

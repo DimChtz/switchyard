@@ -8,6 +8,7 @@ import { getPrefs } from './store'
 import { log } from './log'
 import { expandPath } from './repos'
 import { toPrDetails } from '@shared/pr'
+import { samePath } from './paths'
 import type { PrDetails } from '@shared/types'
 import type { BranchResult, FileDiff, DiffLine, DiffStat, GitWorktreeInfo, Issue, PullRequest, RemoteInfo, RepoInfo, WorktreeStatus } from '@shared/types'
 
@@ -881,8 +882,8 @@ export async function isWorktree(path: string): Promise<boolean> {
 async function dropWorktree(repoPath: string, worktreePath: string): Promise<void> {
   const main = gitAt(repoPath)
   // Only a folder git knows as this repository's worktree is ever deleted.
-  const same = (p: string): boolean => p.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase() === worktreePath.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
-  const registered = (await listWorktrees(repoPath).catch(() => [])).some((w) => !w.isMain && same(w.path))
+  // (Compared as real folders: git reports /private/var for /var on macOS, long names for Windows' short ones.)
+  const registered = (await listWorktrees(repoPath).catch(() => [])).some((w) => !w.isMain && samePath(w.path, worktreePath))
   if (!registered) {
     await main.raw(['worktree', 'prune']).catch(() => {})
     return
