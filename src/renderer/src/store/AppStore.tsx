@@ -26,6 +26,7 @@ import { inParens, setUserBindings } from '../lib/shortcuts'
 import { clock, waitingText, wakeAt } from '../lib/status'
 import { prefsFor } from '../lib/projectPrefs'
 import { discoverPr, finishWithPr } from '../lib/taskActions'
+import { closeNoteTabs, renameNoteTabs } from '../lib/wsStore'
 import { baseFor, parentFinished } from '@shared/stack'
 import { knowTasks } from '../lib/stack'
 
@@ -136,6 +137,11 @@ ${u.ask}` : ''}`, task.id, actions)
         window.api.sys.notify('Tests passed', `${task.key} · ${task.title} is ready for review`, task.id)
       }
     }
+
+    // A note's tabs (the Notes screen's and every workspace's) follow it: a new id when its title
+    // became a new file name, and they close when it's deleted.
+    if (action.type === 'NOTE_SAVED' && action.replaces) renameNoteTabs(action.replaces, action.note.id)
+    else if (action.type === 'NOTE_DELETED') closeNoteTabs(action.id)
 
     // The shortcut lookup reads these outside React (menus, key handling).
     if (action.type === 'KEYBINDINGS_LOADED') setUserBindings(action.bindings)

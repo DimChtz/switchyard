@@ -41,7 +41,6 @@ export function SessionsView({ task, layout, chrome }: { task: Task; layout: Lay
   const focused = groups.find((g) => g.g === layout.focus)
   const showing = focused?.a ?? null
   const isOpen = (id: string): boolean => groups.some((g) => g.tabs.includes(id))
-  const notes = state.notes.filter((n) => n.taskId === task.id).length
   const root = taskRoot(task) ?? undefined
   const t = task.lastTest
 
@@ -66,7 +65,6 @@ export function SessionsView({ task, layout, chrome }: { task: Task; layout: Lay
         {!hasSetup && !t && !shells.length ? <div style={{ padding: '2px 8px 4px', font: '12px var(--font-ui)', color: 'var(--t4)' }}>No terminals open.</div> : null}
         <Head>Tools</Head>
         {row('preview', 'Preview', devPort ? `localhost:${devPort}` : 'no server', '◎', 'var(--c-green)')}
-        {row('notes', 'Notes', `${notes} linked`, '¶', 'var(--t2)')}
         {row('timeline', 'Timeline', 'turns · undo', '↺', 'var(--t2)')}
         <NewTerminal
           onClick={() => addShell(task.id, { taskRoot: root })}

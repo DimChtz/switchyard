@@ -6,8 +6,8 @@ import { shortcut } from '../../../lib/shortcuts'
 import { dragWith } from './EditorArea'
 import type { PanelChrome } from './PanelHeader'
 
-export const VIEW_LABEL: Record<ViewId, string> = { task: 'Task', explorer: 'Explorer', search: 'Search', changes: 'Changes', sessions: 'Sessions', activity: 'Activity' }
-const VIEW_KEY: Partial<Record<ViewId, string>> = { explorer: 'ws-files', search: 'search-files', changes: 'ws-changes' }
+export const VIEW_LABEL: Record<ViewId, string> = { task: 'Task', explorer: 'Explorer', search: 'Search', changes: 'Changes', notes: 'Notes', sessions: 'Sessions', activity: 'Activity' }
+const VIEW_KEY: Partial<Record<ViewId, string>> = { explorer: 'ws-files', search: 'search-files', changes: 'ws-changes', notes: 'ws-notes' }
 
 /** The icons down one side (VS Code's activity bar): click to show a view, drag to reorder or to the other side. */
 export function ActivityStrip({ side, bars, badges }: { side: Side; bars: SideBars; badges: Partial<Record<ViewId, number>> }): React.JSX.Element | null {
@@ -130,6 +130,12 @@ const ICONS: Record<ViewId, React.ReactNode> = {
       <circle cx="13" cy="5.5" r="1.8" />
       <path d="M5 5.8v6.4" />
       <path d="M13 7.3c0 3.2-3.5 3.4-7 5" />
+    </>
+  ),
+  notes: (
+    <>
+      <path d="M4.5 2h7l3 3v10.5a.5.5 0 0 1-.5.5h-9.5a.5.5 0 0 1-.5-.5v-13a.5.5 0 0 1 .5-.5z" />
+      <path d="M7 8h5M7 11h5M7 14h3" />
     </>
   ),
   sessions: (

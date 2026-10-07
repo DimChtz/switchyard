@@ -39,6 +39,7 @@ export function initialState(): AppState {
     issuesFor: null,
     notes: [],
     noteId: null,
+    noteSeq: 0,
     base: {},
     archiveFor: null,
     keyHigh: {},
@@ -422,7 +423,7 @@ function reduce(state: AppState, action: Action): AppState {
     }
 
     case 'OPEN_NOTE':
-      return { ...state, view: 'notes', noteId: action.id ?? state.noteId, palette: null }
+      return { ...state, view: 'notes', noteId: action.id ?? state.noteId, noteSeq: action.id ? state.noteSeq + 1 : state.noteSeq, palette: null }
 
     case 'OPEN_ISSUES':
       return { ...state, issuesFor: action.projectId }

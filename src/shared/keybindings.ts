@@ -91,7 +91,7 @@ export function keyCommands(mac: boolean): KeyCommand[] {
     { id: 'ws-files', title: 'Show the Explorer', category: 'Workspace', key: 'f', when: 'workspace' },
     { id: 'ws-preview', title: 'Open the Preview', category: 'Workspace', key: 'p', when: 'workspace' },
     { id: 'ws-changes', title: 'Show the Changes', category: 'Workspace', key: 'c', when: 'workspace' },
-    { id: 'ws-notes', title: 'Open the Notes', category: 'Workspace', key: 'n', when: 'workspace' },
+    { id: 'ws-notes', title: 'Show the Notes', category: 'Workspace', key: 'n', when: 'workspace' },
     // (Ctrl+\ is the shell's own in a Windows/Linux terminal.)
     { id: 'ws-split-right', title: 'Split editor right', category: 'Workspace', key: `${mod}+\\`, when: mac ? 'workspace' : 'workspace && !terminalFocus' },
     { id: 'ws-split-down', title: 'Split editor down', category: 'Workspace', key: `${mod}+shift+\\`, when: mac ? 'workspace' : 'workspace && !terminalFocus' },

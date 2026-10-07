@@ -32,12 +32,12 @@ export interface Layout {
 }
 export type Zone = 'left' | 'right' | 'top' | 'bottom' | 'center'
 export type Side = 'L' | 'R'
-export type ViewId = 'task' | 'explorer' | 'search' | 'changes' | 'sessions' | 'activity'
+export type ViewId = 'task' | 'explorer' | 'search' | 'changes' | 'notes' | 'sessions' | 'activity'
 
 export const isGroup = (n: LayoutNode): n is Group => 'g' in n
 
 /** A file's tab can be open in several groups at once (a split of the same file); a terminal can't. */
-export const canDuplicate = (id: TabId): boolean => /^(file|diff):/.test(id) || id === 'preview' || id === 'notes' || id === 'timeline'
+export const canDuplicate = (id: TabId): boolean => /^(file|diff|note):/.test(id) || id === 'preview' || id === 'timeline'
 
 export function defaultLayout(tabs: TabId[] = ['agent']): Layout {
   return { root: { g: 'g1', tabs, a: tabs[0] ?? null }, focus: 'g1', max: null, n: 2 }
@@ -392,6 +392,7 @@ export const DEFAULT_BARS: SideBars = {
     ['explorer', 'L'],
     ['search', 'L'],
     ['changes', 'L'],
+    ['notes', 'L'],
     ['sessions', 'L'],
     ['activity', 'R']
   ],
@@ -439,7 +440,14 @@ export function readBars(raw: unknown): SideBars {
   if (!r || !Array.isArray(r.views)) return DEFAULT_BARS
   const views = r.views.filter((v): v is [ViewId, Side] => Array.isArray(v) && ids.includes(v[0]) && (v[1] === 'L' || v[1] === 'R'))
   const seen = new Set(views.map((v) => v[0]))
-  for (const v of DEFAULT_BARS.views) if (!seen.has(v[0])) views.push(v)
+  // A view that's new since these were kept: where it goes by default (after the one before it there).
+  DEFAULT_BARS.views.forEach((v, i) => {
+    if (seen.has(v[0])) return
+    const prev = DEFAULT_BARS.views[i - 1]?.[0]
+    const at = prev ? views.findIndex((x) => x[0] === prev) : -1
+    views.splice(at < 0 ? views.length : at + 1, 0, v)
+    seen.add(v[0])
+  })
   const deduped = views.filter((v, i) => views.findIndex((o) => o[0] === v[0]) === i)
   const okOpen = (side: Side): ViewId | null => {
     const id = r.open?.[side] ?? null

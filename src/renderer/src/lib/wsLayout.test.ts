@@ -135,9 +135,22 @@ describe('side bars', () => {
 
   it('reads stored side bars, filling in what is missing', () => {
     const b = readBars({ views: [['activity', 'L'], ['bogus', 'R'], ['activity', 'R']], open: { L: 'activity', R: 'task' }, width: { L: 9999 } })
-    expect(b.views.map((v) => v[0])).toEqual(['activity', 'task', 'explorer', 'search', 'changes', 'sessions'])
+    expect(b.views.map((v) => v[0])).toEqual(['activity', 'task', 'explorer', 'search', 'changes', 'notes', 'sessions'])
     expect(b.open).toEqual({ L: 'activity', R: null })
     expect(b.width).toEqual({ L: 640, R: 240 })
     expect(readBars(null)).toBe(DEFAULT_BARS)
+  })
+
+  it('puts a view that came later (Notes) where it goes by default, keeping your own order', () => {
+    const kept = readBars({ views: [['changes', 'R'], ['task', 'L'], ['explorer', 'L'], ['search', 'L'], ['sessions', 'L'], ['activity', 'R']], open: { L: 'task', R: null }, width: {} })
+    expect(kept.views).toEqual([
+      ['changes', 'R'],
+      ['notes', 'L'],
+      ['task', 'L'],
+      ['explorer', 'L'],
+      ['search', 'L'],
+      ['sessions', 'L'],
+      ['activity', 'R']
+    ])
   })
 })

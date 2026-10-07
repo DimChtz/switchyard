@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react'
 import type { ShellOption } from '@shared/types'
-import { closeWhere, defaultLayout, groupsOf, openBeside, openTab, readBars, readLayout, showView, type Layout, type SideBars, type TabId, type ViewId, type Zone } from './wsLayout'
+import { closeWhere, defaultLayout, groupsOf, openBeside, openTab, readBars, readLayout, renameTabs, showView, type Layout, type SideBars, type TabId, type ViewId, type Zone } from './wsLayout'
 import { shellPrefix } from './agentControl'
 
 /**
@@ -35,7 +35,8 @@ let layouts: Record<string, Layout> = load(LAYOUTS_KEY, (raw) => {
   const out: Record<string, Layout> = {}
   if (raw && typeof raw === 'object') for (const [id, l] of Object.entries(raw)) {
     const L = readLayout(l)
-    if (L) out[id] = L
+    // (The all-notes tab is gone: notes are a side bar, and each note its own tab.)
+    if (L) out[id] = closeWhere(L, (t) => t === 'notes')
   }
   return out
 })
@@ -56,8 +57,35 @@ function save(): void {
 
 // --- layouts -----------------------------------------------------------------
 
+/** The Notes screen's arrangement (its note tabs), kept like a task's. */
+export const NOTES_LAYOUT = '~notes'
+
 export function getLayout(taskId: string): Layout {
-  return layouts[taskId] ?? (layouts[taskId] = defaultLayout(['agent', ...shellsOf(taskId).map((s) => `shell:${s.id}`)]))
+  return layouts[taskId] ?? (layouts[taskId] = taskId === NOTES_LAYOUT ? defaultLayout([]) : defaultLayout(['agent', ...shellsOf(taskId).map((s) => `shell:${s.id}`)]))
+}
+
+/** A change to every arrangement - the tasks' and the Notes screen's. */
+function everyLayout(fn: (L: Layout) => Layout): void {
+  let changed = false
+  const next: Record<string, Layout> = {}
+  for (const [k, L] of Object.entries(layouts)) {
+    next[k] = fn(L)
+    if (next[k] !== L) changed = true
+  }
+  if (!changed) return
+  layouts = next
+  save()
+  emit()
+}
+
+/** A note saved under a new id (its title became its file name): its tabs follow. */
+export function renameNoteTabs(from: string, to: string): void {
+  everyLayout((L) => renameTabs(L, (id) => (id === `note:${from}` ? `note:${to}` : id)))
+}
+
+/** A note that's gone (deleted): its tabs close everywhere. */
+export function closeNoteTabs(id: string): void {
+  everyLayout((L) => closeWhere(L, (t) => t === `note:${id}`))
 }
 
 export function setLayout(taskId: string, fn: (L: Layout) => Layout): void {
@@ -102,6 +130,7 @@ export function showInWorkspace(taskId: string, what: 'terminal' | 'files' | 'ch
   if (what === 'terminal') wsOpen(taskId, 'agent')
   else if (what === 'files') wsShowView('explorer')
   else if (what === 'changes') wsShowView('changes')
+  else if (what === 'notes') wsShowView('notes')
   else wsOpen(taskId, what)
 }
 

@@ -29,7 +29,8 @@ import { SessionsView } from './terminal/SessionsView'
 import { ActivityView } from './terminal/ActivityView'
 import { AgentTab, OutputTab, ShellTab } from './terminal/TerminalTabs'
 import { WorkspacePreview, previewPortOf } from './WorkspacePreview'
-import { WorkspaceNotes } from './WorkspaceNotes'
+import { NotesList, NoteTab } from '../../components/notes/NotesPane'
+import { linkOf, noteMenuItems, noteTitle } from '../../lib/notes'
 import { WorkspaceTimeline } from './WorkspaceTimeline'
 
 // The last request (wsIntent) a workspace carried out - each is done once.
@@ -128,7 +129,11 @@ function Bench({ task, project }: { task: Task; project: Project }): React.JSX.E
       const port = previewPortOf(task.id)
       return { label: 'Preview', sub: port ? `:${port}` : undefined, ic: '◎', icColor: 'var(--c-green)', tip: 'Preview of this worktree' }
     }
-    if (id === 'notes') return { label: 'Notes', ic: '¶', icColor: 'var(--t2)', tip: 'Notes linked to this task' }
+    if (id.startsWith('note:')) {
+      const n = state.notes.find((x) => x.id === id.slice(5))
+      const title = n ? noteTitle(n) || 'Untitled' : 'Note'
+      return { label: title, ic: '¶', icColor: n?.pinned ? 'var(--c-pin)' : 'var(--t2)', tip: n ? `${title} · ${linkOf(n, state.tasks, state.projects).label}` : title }
+    }
     if (id === 'timeline') return { label: 'Timeline', ic: '↺', icColor: 'var(--t2)', tip: 'The agent’s turns - and undoing them' }
     return null
   }
@@ -141,7 +146,7 @@ function Bench({ task, project }: { task: Task; project: Project }): React.JSX.E
     if (id.startsWith('file:')) return files ? <FileEditor path={id.slice(5)} visible={visible} /> : noFolder
     if (id.startsWith('diff:')) return changes ? <DiffTab path={id.slice(5)} gid={gid} /> : noFolder
     if (id === 'preview') return <WorkspacePreview task={task} project={project} />
-    if (id === 'notes') return <WorkspaceNotes task={task} />
+    if (id.startsWith('note:')) return <NoteTab id={id.slice(5)} onOpen={(n) => wsOpen(task.id, `note:${n}`, gid)} />
     if (id === 'timeline') return <WorkspaceTimeline task={task} active={visible} />
     return null
   }
@@ -170,6 +175,8 @@ function Bench({ task, project }: { task: Task; project: Project }): React.JSX.E
       const s = shells.find((x) => x.id === id.slice(6))
       items.push({ label: 'Rename…', separatorBefore: true, onClick: () => setRenaming({ id, value: s?.name ?? '' }) })
     }
+    const note = id.startsWith('note:') ? state.notes.find((x) => x.id === id.slice(5)) : undefined
+    if (note) items.push(...noteMenuItems(note, { tasks: state.tasks, projects: state.projects, dispatch }).map((m, k) => (k === 0 ? { ...m, separatorBefore: true } : m)))
     if (files && (id.startsWith('file:') || id.startsWith('diff:'))) {
       const path = id.slice(5)
       items.push(
@@ -192,7 +199,6 @@ function Bench({ task, project }: { task: Task; project: Project }): React.JSX.E
     { label: 'New terminal', glyph: '›', glyphColor: 'var(--t2)', onClick: () => newShellIn(gid) },
     ...profiles.map((p, i) => ({ label: `New terminal · ${p.label}`, glyph: '›', glyphColor: 'var(--t4)', extra: true, separatorBefore: i === 0, onClick: () => newShellIn(gid, p) })),
     { label: 'Preview', glyph: '◎', glyphColor: 'var(--c-green)', separatorBefore: true, onClick: () => wsOpen(task.id, 'preview', gid) },
-    { label: 'Notes', glyph: '¶', glyphColor: 'var(--t2)', onClick: () => wsOpen(task.id, 'notes', gid) },
     { label: 'Timeline', glyph: '↺', glyphColor: 'var(--t2)', onClick: () => wsOpen(task.id, 'timeline', gid) }
   ]
 
@@ -206,6 +212,8 @@ function Bench({ task, project }: { task: Task; project: Project }): React.JSX.E
         return files ? <SearchView chrome={chrome} /> : <NoFolderView id={id} chrome={chrome} />
       case 'changes':
         return changes && root ? <ChangesView chrome={chrome} root={root} activeDiff={showing.startsWith('diff:') ? showing.slice(5) : null} /> : <NoFolderView id={id} chrome={chrome} />
+      case 'notes':
+        return <NotesList task={task} activeId={showing.startsWith('note:') ? showing.slice(5) : null} onOpen={(n) => wsOpen(task.id, `note:${n}`)} header={<PanelHeader title="Notes" chrome={chrome} />} />
       case 'sessions':
         return <SessionsView task={task} layout={layout} chrome={chrome} />
       case 'activity':

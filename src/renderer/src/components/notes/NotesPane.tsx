@@ -9,11 +9,10 @@ import type { Note, Task } from '@shared/types'
 
 type Filter = 'all' | 'pinned' | 'tasks' | 'projects' | 'personal'
 
-// Kept while the screen is closed: the editor's mode, the list's filter, and per task its search and note.
+// Kept while the list is closed: the editors' mode, the list's filter, and per task its search.
 let lastMode: NoteMode = 'live'
 let lastFilter: Filter = 'all'
 const taskQuery = new Map<string, string>()
-const taskNote = new Map<string, string>()
 
 /** Asks the Notes screen to start a note or search ("N" and "/"). */
 export function notesCommand(cmd: 'new' | 'search'): void {
@@ -25,12 +24,15 @@ const T2 = 'var(--t2)'
 const T3 = 'var(--t3)'
 const MONO = "var(--font-mono)"
 
+/** Where a new note belongs. */
+type NoteLink = { projectId: string | null; taskId: string | null }
+
 /**
- * Notes: the list (search, filters, sections) and the open note. On the
- * Notes screen ("main") all notes; in a task's workspace ("task") the
- * task's own, its project's, and the ones that mention its key.
+ * The notes list: search, filters, sections - each note opens in a tab
+ * (`onOpen`). On the Notes screen every note; in a task's workspace (its
+ * side bar) the task's own, its project's, and the ones that mention its key.
  */
-export function NotesPane({ task }: { task?: Task }): React.JSX.Element {
+export function NotesList({ task, activeId, onOpen, header, width }: { task?: Task; activeId: string | null; onOpen: (id: string) => void; header?: React.ReactNode; width?: number }): React.JSX.Element {
   const { state, dispatch } = useAppStore()
   const [query, setQueryState] = useState(() => (task ? (taskQuery.get(task.id) ?? '') : ''))
   const setQuery = (v: string): void => {
@@ -42,20 +44,7 @@ export function NotesPane({ task }: { task?: Task }): React.JSX.Element {
     lastFilter = f
     setFilterState(f)
   }
-  const [mode, setModeState] = useState<NoteMode>(lastMode)
-  const setMode = (m: NoteMode): void => {
-    lastMode = m
-    setModeState(m)
-  }
-  const [taskSel, setTaskSel] = useState<string | null>(() => (task ? (taskNote.get(task.id) ?? null) : null))
   const searchRef = useRef<HTMLInputElement>(null)
-
-  const select = (id: string): void => {
-    if (task) {
-      taskNote.set(task.id, id)
-      setTaskSel(id)
-    } else dispatch({ type: 'OPEN_NOTE', id })
-  }
 
   const ql = query.trim().toLowerCase()
   const lk = (n: Note): ReturnType<typeof linkOf> => linkOf(n, state.tasks, state.projects)
@@ -92,18 +81,15 @@ export function NotesPane({ task }: { task?: Task }): React.JSX.Element {
         : [[label[filter], shown]]
   }
   const visible = sections.flatMap(([, list]) => list)
-  const selId = task ? taskSel : state.noteId
-  const open = state.notes.find((n) => n.id === selId) ?? visible[0] ?? null
 
   /** A new note: in a task linked to it; on the Projects filter to the current project; otherwise personal. */
-  const newNote = async (title = '', link?: { projectId: string | null; taskId: string | null }): Promise<void> => {
-    const to = link ?? (task ? { projectId: task.projectId, taskId: task.id } : filter === 'projects' ? { projectId: state.projectId, taskId: null } : { projectId: null, taskId: null })
-    const note = await createNote(dispatch, { body: title ? `# ${title}\n` : '', ...to, pinned: false })
+  const newNote = async (): Promise<void> => {
+    const to: NoteLink = task ? { projectId: task.projectId, taskId: task.id } : filter === 'projects' ? { projectId: state.projectId, taskId: null } : { projectId: null, taskId: null }
+    const note = await createNote(dispatch, { body: '', ...to, pinned: false })
     if (!note) return
     setQuery('')
     if (!task && filter === 'pinned') setFilter('all')
-    if (mode === 'preview') setMode('split')
-    select(note.id)
+    onOpen(note.id)
   }
   // Markdown files or folders dropped on the list are imported (in a task: as its notes).
   const [dropping, setDropping] = useState(false)
@@ -118,13 +104,8 @@ export function NotesPane({ task }: { task?: Task }): React.JSX.Element {
     if (id) {
       setQuery('')
       if (!task && filter !== 'all') setFilter('all')
-      select(id)
+      onOpen(id)
     }
-  }
-  const duplicate = async (n: Note): Promise<void> => {
-    const s = splitNote(n.body)
-    const note = await createNote(dispatch, { body: joinNote(`${s.title || 'Untitled'} copy`, s.text), projectId: n.projectId, taskId: n.taskId, pinned: false })
-    if (note) select(note.id)
   }
 
   // "N" and "/" on the Notes screen.
@@ -139,20 +120,6 @@ export function NotesPane({ task }: { task?: Task }): React.JSX.Element {
     return () => window.removeEventListener('switchyard:notes', on)
   })
 
-  const links: LiveLinks = {
-    findNote: (name) => state.notes.find((x) => noteTitle(x).toLowerCase() === name.trim().toLowerCase()),
-    openNote: (name) => {
-      const hit = links.findNote(name)
-      if (hit) select(hit.id)
-      else newNote(name.trim(), open ? { projectId: open.projectId, taskId: open.taskId } : undefined)
-    },
-    findTask: (key) => state.tasks.find((t) => t.key === key),
-    openTask: (t) => (t.worktreePath ? dispatch({ type: 'OPEN_TASK', taskId: t.id }) : (dispatch({ type: 'NAV', view: 'board', projectId: t.projectId }), dispatch({ type: 'SET_BOARD_FOCUS', id: t.id }))),
-    openUrl: (url) => {
-      if (/^https?:\/\//i.test(url)) window.api.sys.openExternal(url)
-    }
-  }
-
   const counts: Record<Filter, number> = {
     all: state.notes.length,
     pinned: state.notes.filter((n) => n.pinned).length,
@@ -163,171 +130,208 @@ export function NotesPane({ task }: { task?: Task }): React.JSX.Element {
   const withItems = sections.filter(([, list]) => list.length)
 
   return (
-    <div style={{ width: '100%', height: '100%', minWidth: 0, minHeight: 0, boxSizing: 'border-box', display: 'grid', gridTemplateColumns: '288px minmax(0,1fr)', gridTemplateRows: 'minmax(0,1fr)', background: 'var(--bg-app)', color: T1 }}>
-      <div
-        onDragOver={(e) => {
-          if (!hasFiles(e)) return
-          e.preventDefault()
-          e.dataTransfer.dropEffect = 'copy'
-          if (!dropping) setDropping(true)
-        }}
-        onDragLeave={(e) => {
-          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropping(false)
-        }}
-        onDrop={onDrop}
-        style={{ position: 'relative', borderRight: '1px solid var(--bd-1)', display: 'flex', flexDirection: 'column', minHeight: 0, background: 'var(--bg-sunken)' }}
-      >
-        {dropping ? (
-          <div
-            style={{
-              position: 'absolute',
-              inset: 6,
-              zIndex: 2,
-              pointerEvents: 'none',
-              border: '1.5px dashed var(--c-blue)',
-              borderRadius: 8,
-              background: 'color-mix(in srgb, var(--bg-app) 88%, transparent)',
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 6,
-              padding: 20,
-              textAlign: 'center'
-            }}
+    <div
+      onDragOver={(e) => {
+        if (!hasFiles(e)) return
+        e.preventDefault()
+        e.dataTransfer.dropEffect = 'copy'
+        if (!dropping) setDropping(true)
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDropping(false)
+      }}
+      onDrop={onDrop}
+      style={{ position: 'relative', width, flex: width ? 'none' : 1, borderRight: width ? '1px solid var(--bd-1)' : 'none', display: 'flex', flexDirection: 'column', minHeight: 0, minWidth: 0, background: 'var(--bg-sunken)', color: T1 }}
+    >
+      {header}
+      {dropping ? (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 6,
+            zIndex: 2,
+            pointerEvents: 'none',
+            border: '1.5px dashed var(--c-blue)',
+            borderRadius: 8,
+            background: 'color-mix(in srgb, var(--bg-app) 88%, transparent)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 6,
+            padding: 20,
+            textAlign: 'center'
+          }}
+        >
+          <span style={{ font: '500 13.5px var(--font-ui)', color: T1 }}>{task ? `Import as notes for ${task.key}` : 'Import as notes'}</span>
+          <span style={{ font: '12px/1.5 var(--font-ui)', color: T3 }}>Markdown or text files, or a folder - an Obsidian vault, a Notion export</span>
+        </div>
+      ) : null}
+      <div style={{ padding: header ? '2px 10px 8px' : '12px 12px 8px', display: 'flex', flexDirection: 'column', gap: 9 }}>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <div style={{ flex: 1, minWidth: 0, height: 30, display: 'flex', alignItems: 'center', gap: 7, padding: '0 6px 0 9px', background: 'var(--bg-input)', border: '1px solid var(--bd-3)', borderRadius: 5, boxSizing: 'border-box' }}>
+            <svg width="13" height="13" viewBox="0 0 14 14" fill="none" style={{ stroke: 'var(--t3)', flex: 'none' }} strokeWidth="1.3" strokeLinecap="round">
+              <circle cx="6" cy="6" r="3.8" />
+              <path d="m8.8 8.8 3.2 3.2" />
+            </svg>
+            <input
+              ref={searchRef}
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  if (query) setQuery('')
+                  else e.currentTarget.blur()
+                } else if (e.key === 'Enter' && visible[0]) {
+                  e.preventDefault()
+                  onOpen(visible[0].id)
+                }
+              }}
+              spellCheck={false}
+              placeholder={task ? `Search notes for ${task.key}` : 'Search notes'}
+              style={{ flex: 1, minWidth: 0, height: '100%', background: 'transparent', border: 'none', outline: 'none', color: T1, font: '12.5px var(--font-ui)', padding: 0 }}
+            />
+            {query ? (
+              <HoverBox
+                onClick={() => setQuery('')}
+                title="Clear · Esc"
+                style={{ width: 18, height: 18, borderRadius: 3, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T3, cursor: 'pointer', fontSize: 13 }}
+                hover={{ color: T1, background: 'var(--bd-1)' }}
+              >
+                ×
+              </HoverBox>
+            ) : null}
+          </div>
+          <HoverBox
+            onClick={() => newNote()}
+            title={task ? `New note for ${task.key}` : 'New note · N'}
+            style={{ width: 30, height: 30, flex: 'none', boxSizing: 'border-box', border: '1px solid var(--bd-3)', borderRadius: 5, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T2, cursor: 'pointer' }}
+            hover={{ color: T1, border: '1px solid var(--bd-5)', background: 'var(--bg-panel)' }}
           >
-            <span style={{ font: '500 13.5px var(--font-ui)', color: T1 }}>{task ? `Import as notes for ${task.key}` : 'Import as notes'}</span>
-            <span style={{ font: '12px/1.5 var(--font-ui)', color: T3 }}>Markdown or text files, or a folder - an Obsidian vault, a Notion export</span>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M8 1.5H3.5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1V5L8 1.5z" />
+              <path d="M7 6.8v4M5 8.8h4" />
+            </svg>
+          </HoverBox>
+        </div>
+        {!task ? (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+            {(
+              [
+                ['all', 'All'],
+                ['pinned', 'Pinned'],
+                ['tasks', 'Tasks'],
+                ['projects', 'Projects'],
+                ['personal', 'Personal']
+              ] as [Filter, string][]
+            ).map(([k, l]) => {
+              const on = filter === k
+              return (
+                <HoverBox
+                  key={k}
+                  onClick={() => setFilter(k)}
+                  style={{
+                    height: 22,
+                    padding: '0 8px',
+                    borderRadius: 11,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 5,
+                    font: '12px var(--font-ui)',
+                    color: on ? T1 : T2,
+                    background: on ? 'var(--bd-1)' : 'transparent',
+                    border: `1px solid ${on ? 'var(--bd-5)' : 'var(--bd-2)'}`,
+                    boxSizing: 'border-box',
+                    cursor: 'pointer',
+                    userSelect: 'none'
+                  }}
+                  hover={{ color: T1 }}
+                >
+                  {l}
+                  <span style={{ font: `10.5px ${MONO}`, color: 'var(--t4)' }}>{counts[k]}</span>
+                </HoverBox>
+              )
+            })}
           </div>
         ) : null}
-        <div style={{ padding: '12px 12px 8px', display: 'flex', flexDirection: 'column', gap: 9 }}>
-          <div style={{ display: 'flex', gap: 6 }}>
-            <div style={{ flex: 1, minWidth: 0, height: 30, display: 'flex', alignItems: 'center', gap: 7, padding: '0 6px 0 9px', background: 'var(--bg-input)', border: '1px solid var(--bd-3)', borderRadius: 5, boxSizing: 'border-box' }}>
-              <svg width="13" height="13" viewBox="0 0 14 14" fill="none" style={{ stroke: 'var(--t3)' }} strokeWidth="1.3" strokeLinecap="round">
-                <circle cx="6" cy="6" r="3.8" />
-                <path d="m8.8 8.8 3.2 3.2" />
-              </svg>
-              <input
-                ref={searchRef}
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Escape') {
-                    e.preventDefault()
-                    e.stopPropagation()
-                    if (query) setQuery('')
-                    else e.currentTarget.blur()
-                  } else if (e.key === 'Enter' && visible[0]) {
-                    e.preventDefault()
-                    select(visible[0].id)
-                  }
-                }}
-                spellCheck={false}
-                placeholder={task ? `Search notes for ${task.key}` : 'Search notes'}
-                style={{ flex: 1, minWidth: 0, height: '100%', background: 'transparent', border: 'none', outline: 'none', color: T1, font: '12.5px var(--font-ui)', padding: 0 }}
-              />
-              {query ? (
-                <HoverBox
-                  onClick={() => setQuery('')}
-                  title="Clear · Esc"
-                  style={{ width: 18, height: 18, borderRadius: 3, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T3, cursor: 'pointer', fontSize: 13 }}
-                  hover={{ color: T1, background: 'var(--bd-1)' }}
-                >
-                  ×
-                </HoverBox>
-              ) : null}
-            </div>
-            <HoverBox
-              onClick={() => newNote()}
-              title={task ? 'New note' : 'New note · N'}
-              style={{ width: 30, height: 30, flex: 'none', boxSizing: 'border-box', border: '1px solid var(--bd-3)', borderRadius: 5, display: 'flex', alignItems: 'center', justifyContent: 'center', color: T2, cursor: 'pointer' }}
-              hover={{ color: T1, borderColor: 'var(--bd-5)', background: 'var(--bg-panel)' }}
-            >
-              <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M8 1.5H3.5a1 1 0 0 0-1 1v9a1 1 0 0 0 1 1h7a1 1 0 0 0 1-1V5L8 1.5z" />
-                <path d="M7 6.8v4M5 8.8h4" />
-              </svg>
-            </HoverBox>
-          </div>
-          {!task ? (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-              {(
-                [
-                  ['all', 'All'],
-                  ['pinned', 'Pinned'],
-                  ['tasks', 'Tasks'],
-                  ['projects', 'Projects'],
-                  ['personal', 'Personal']
-                ] as [Filter, string][]
-              ).map(([k, l]) => {
-                const on = filter === k
-                return (
-                  <HoverBox
-                    key={k}
-                    onClick={() => setFilter(k)}
-                    style={{
-                      height: 22,
-                      padding: '0 8px',
-                      borderRadius: 11,
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 5,
-                      font: '12px var(--font-ui)',
-                      color: on ? T1 : T2,
-                      background: on ? 'var(--bd-1)' : 'transparent',
-                      border: `1px solid ${on ? 'var(--bd-5)' : 'var(--bd-2)'}`,
-                      boxSizing: 'border-box',
-                      cursor: 'pointer',
-                      userSelect: 'none'
-                    }}
-                    hover={{ color: T1 }}
-                  >
-                    {l}
-                    <span style={{ font: `10.5px ${MONO}`, color: 'var(--t4)' }}>{counts[k]}</span>
-                  </HoverBox>
-                )
-              })}
-            </div>
-          ) : null}
-        </div>
-        <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '0 6px 12px' }}>
-          {withItems.map(([label, list]) => (
-            <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-              <div style={{ padding: '10px 8px 5px', display: 'flex', font: `500 11px ${MONO}`, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--t4)' }}>
-                <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
-                <span>{list.length}</span>
-              </div>
-              {list.map((n) => (
-                <NoteItem key={n.id} note={n} active={open?.id === n.id} query={ql} onClick={() => select(n.id)} />
-              ))}
-            </div>
-          ))}
-          {!withItems.length ? (
-            <div style={{ padding: '14px 10px', font: '12.5px/1.55 var(--font-ui)', color: T3, textWrap: 'pretty' } as React.CSSProperties}>
-              {ql ? `No notes match “${query}”.` : task ? `No notes for ${task.key} yet.` : 'No notes here yet.'}
-            </div>
-          ) : null}
-        </div>
       </div>
-
-      {open ? (
-        <NoteEditor key={open.id} note={open} mode={mode} onMode={setMode} links={links} onSelect={select} onDuplicate={duplicate} />
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: 40, background: 'var(--bg-console)', textAlign: 'center' }}>
-          <div style={{ font: '500 15px var(--font-ui)', color: T1 }}>{task ? `Notes for ${task.key}` : 'No note selected'}</div>
-          <div style={{ font: '13px/1.55 var(--font-ui)', color: T3, maxWidth: 380, textWrap: 'pretty' } as React.CSSProperties}>
-            {task
-              ? `Write down decisions, edge cases and context. Notes linked to a task are attached when an agent starts, and you can send them to ${task.agentKind ?? 'its agent'} any time.`
-              : 'Notes can be personal, or linked to a project or a task. Link a note to a task to give its agent the context.'}
+      <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '0 6px 12px' }}>
+        {withItems.map(([label, list]) => (
+          <div key={label} style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+            <div style={{ padding: '10px 8px 5px', display: 'flex', font: `500 11px ${MONO}`, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--t4)' }}>
+              <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</span>
+              <span>{list.length}</span>
+            </div>
+            {list.map((n) => (
+              <NoteItem key={n.id} note={n} active={activeId === n.id} query={ql} onClick={() => onOpen(n.id)} />
+            ))}
           </div>
-          <NewNoteButton onClick={() => newNote()} hint={task ? '' : 'N'} />
+        ))}
+        {!withItems.length ? (
+          <div style={{ padding: '14px 10px', font: '12.5px/1.55 var(--font-ui)', color: T3, textWrap: 'pretty' } as React.CSSProperties}>
+            {ql
+              ? `No notes match “${query}”.`
+              : task
+                ? `No notes for ${task.key} yet. Write down decisions, edge cases and context - notes linked to a task are attached when its agent starts.`
+                : 'No notes here yet.'}
+          </div>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * One note, as a tab: its editor. A [[link]] opens the linked note (making
+ * it when there's none by that name, linked like this one) in a tab too.
+ */
+export function NoteTab({ id, onOpen }: { id: string; onOpen: (id: string) => void }): React.JSX.Element {
+  const { state, dispatch } = useAppStore()
+  const [mode, setModeState] = useState<NoteMode>(lastMode)
+  const setMode = (m: NoteMode): void => {
+    lastMode = m
+    setModeState(m)
+  }
+  const note = state.notes.find((n) => n.id === id)
+
+  const create = async (body: string, link: NoteLink): Promise<void> => {
+    const made = await createNote(dispatch, { body, ...link, pinned: false })
+    if (made) onOpen(made.id)
+  }
+  const links: LiveLinks = {
+    findNote: (name) => state.notes.find((x) => noteTitle(x).toLowerCase() === name.trim().toLowerCase()),
+    openNote: (name) => {
+      const hit = links.findNote(name)
+      if (hit) onOpen(hit.id)
+      else create(`# ${name.trim()}\n`, { projectId: note?.projectId ?? null, taskId: note?.taskId ?? null })
+    },
+    findTask: (key) => state.tasks.find((t) => t.key === key),
+    openTask: (t) => (t.worktreePath ? dispatch({ type: 'OPEN_TASK', taskId: t.id }) : (dispatch({ type: 'NAV', view: 'board', projectId: t.projectId }), dispatch({ type: 'SET_BOARD_FOCUS', id: t.id }))),
+    openUrl: (url) => {
+      if (/^https?:\/\//i.test(url)) window.api.sys.openExternal(url)
+    }
+  }
+  const duplicate = (n: Note): void => {
+    const s = splitNote(n.body)
+    create(joinNote(`${s.title || 'Untitled'} copy`, s.text), { projectId: n.projectId, taskId: n.taskId })
+  }
+
+  return (
+    <div style={{ flex: 1, minHeight: 0, minWidth: 0, display: 'grid', gridTemplateColumns: 'minmax(0,1fr)', gridTemplateRows: 'minmax(0,1fr)' }}>
+      {note ? (
+        <NoteEditor key={note.id} note={note} mode={mode} onMode={setMode} links={links} onSelect={onOpen} onDuplicate={duplicate} />
+      ) : (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 40, font: '13px var(--font-ui)', color: T3, background: 'var(--bg-console)' }}>
+          {state.notes.length ? 'This note isn’t there any more.' : 'Loading…'}
         </div>
       )}
     </div>
   )
 }
 
-/** The white "New note" button (the Notes header and the empty state). */
+/** The white "New note" button (the Notes header). */
 export function NewNoteButton({ onClick, hint }: { onClick: () => void; hint: string }): React.JSX.Element {
   return (
     <HoverBox

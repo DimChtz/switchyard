@@ -111,6 +111,8 @@ export interface AppState {
   notes: Note[]
   /** The note open in the Notes screen. */
   noteId: string | null
+  /** Bumped by each OPEN_NOTE with a note: the Notes screen opens its tab (again, after it was closed). */
+  noteSeq: number
   /** Each project's base branch against origin (fetched in the background). */
   base: Record<string, BaseStatus>
   /** The archive of finished tasks, open for this project. */
