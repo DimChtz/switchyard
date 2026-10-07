@@ -10,7 +10,7 @@ vi.mock('./store', () => ({ getPrefs: () => prefs }))
 vi.mock('./log', () => ({ log: { info: () => {}, warn: () => {}, error: () => {} } }))
 
 import { gitAt, gitFailure, refClash } from './gitEnv'
-import { addWorktree, branchLeft, closeCheck, closeWithPr, commitsAfter, defaultBranchOf, mergeAndPrune, getDiffFiles, getWorktreeStatus, mergeWithoutCheckout, parseUnifiedDiff } from './git'
+import { addWorktree, branchLeft, closeCheck, createBranch, listBranches, closeWithPr, commitsAfter, defaultBranchOf, mergeAndPrune, getDiffFiles, getWorktreeStatus, mergeWithoutCheckout, parseUnifiedDiff } from './git'
 
 let dir = ''
 const git = (cwd: string, ...args: string[]): string => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd, stdio: 'pipe' }).toString().trim()
@@ -99,6 +99,38 @@ describe('a fetch that fails on a branch name clash', () => {
   it('keeps the last line when there is no error line', () => {
     expect(gitFailure(new Error('Something\nfatal: could not read from remote repository.'))).toBe('fatal: could not read from remote repository.')
     expect(gitFailure(new Error('just this'))).toBe('just this')
+  })
+})
+
+describe('starting on a branch that is there already', () => {
+  it('lists local branches and ones only on origin, with where each is checked out', async () => {
+    const up = repo()
+    git(up, 'branch', 'theirs')
+    const down = join(dir, 'down')
+    git(dir, 'clone', '-q', up, down)
+    git(down, 'branch', 'mine')
+    const wt = join(dir, 'mine-wt')
+    git(down, 'worktree', 'add', '-q', wt, 'mine')
+    const list = await listBranches(down, 'main')
+    const by = Object.fromEntries(list.map((b) => [b.name, b]))
+    expect(Object.keys(by).sort()).toEqual(['mine', 'theirs'])
+    expect([by.mine.local, by.mine.remote, !!by.mine.worktree, by.mine.mainCheckout]).toEqual([true, false, true, false])
+    expect([by.theirs.local, by.theirs.remote, by.theirs.worktree]).toEqual([false, true, null])
+  })
+
+  it("checks a branch that's only on origin out from there, not new from main", async () => {
+    const up = repo()
+    git(up, 'checkout', '-q', '-b', 'theirs')
+    writeFileSync(join(up, 't.txt'), 'theirs\n')
+    git(up, 'add', '-A')
+    git(up, 'commit', '-qm', 'their work')
+    git(up, 'checkout', '-q', 'main')
+    const down = join(dir, 'down')
+    git(dir, 'clone', '-q', up, down)
+    const r = await createBranch(down, 'theirs', 'main')
+    expect([r.existed, r.fromOrigin]).toEqual([true, true])
+    expect(git(down, 'log', '-1', '--format=%s', 'theirs')).toBe('their work')
+    expect(git(down, 'rev-parse', '--abbrev-ref', 'theirs@{upstream}')).toBe('origin/theirs')
   })
 })
 

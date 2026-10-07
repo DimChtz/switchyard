@@ -320,7 +320,8 @@ function reduce(state: AppState, action: Action): AppState {
           model: task.model ?? '',
           planFirst: task.planFirst ?? false,
           images: [],
-          inPlace: task.inPlace ?? false
+          inPlace: task.inPlace ?? false,
+          existingWorktree: null
         }
       }
     }
@@ -364,9 +365,9 @@ function reduce(state: AppState, action: Action): AppState {
       const task = state.tasks.find((t) => t.id === state.start!.taskId)
       const waiting = task ? waitsFor(task, state.tasks) : undefined
       if ((max > 0 && busy >= max) || waiting) {
-        const { taskId, agentKind, branch, message, repos, model, planFirst, images, inPlace } = state.start
+        const { taskId, agentKind, branch, message, repos, model, planFirst, images, inPlace, existingWorktree } = state.start
         return withToast(
-          { ...state, start: null, tasks: mapTask(state, taskId, (t) => ({ ...t, repos, queued: { agentKind, branch, message, at: Date.now(), model, planFirst, images, inPlace } })) },
+          { ...state, start: null, tasks: mapTask(state, taskId, (t) => ({ ...t, repos, queued: { agentKind, branch, message, at: Date.now(), model, planFirst, images, inPlace, existingWorktree } })) },
           waiting ? `Queued - starts from ${waiting.key}'s branch once ${waiting.key} is in Review.` : `Queued - ${busy} agent${busy > 1 ? 's are' : ' is'} working (limit ${max}).`
         )
       }
@@ -400,7 +401,7 @@ function reduce(state: AppState, action: Action): AppState {
       return {
         ...opened,
         tasks: mapTask(opened, task.id, (t) => ({ ...t, queued: null })),
-        start: { ...opened.start, agentKind: q.agentKind, branch: q.branch, message: q.message, model: q.model ?? '', planFirst: q.planFirst ?? false, images: q.images ?? [], inPlace: q.inPlace ?? false, phase: 'launch', step: 0, background: true, launchedAt: Date.now() }
+        start: { ...opened.start, agentKind: q.agentKind, branch: q.branch, message: q.message, model: q.model ?? '', planFirst: q.planFirst ?? false, images: q.images ?? [], inPlace: q.inPlace ?? false, existingWorktree: q.existingWorktree ?? null, phase: 'launch', step: 0, background: true, launchedAt: Date.now() }
       }
     }
 

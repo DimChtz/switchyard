@@ -33,6 +33,8 @@ export interface StartModalState {
   images: string[]
   /** No branch or worktree: it works in the project's own checkout, as it is (Task.inPlace). */
   inPlace: boolean
+  /** A worktree that's already there (no task holds it): the task takes it over, on its branch - nothing is created. */
+  existingWorktree: string | null
 }
 
 /** The launch flow's "Run setup" step, running the project's setup command. */
@@ -233,7 +235,7 @@ export type Action =
   | { type: 'OPEN_OUTSIDE'; projectId: string | null }
   | { type: 'UPDATE_PROJECT'; id: string; patch: Partial<Project> }
   | { type: 'REMOVE_PROJECT'; id: string }
-  | { type: 'SET_START_OPTIONS'; patch: Partial<Pick<StartModalState, 'model' | 'planFirst' | 'images' | 'inPlace'>> }
+  | { type: 'SET_START_OPTIONS'; patch: Partial<Pick<StartModalState, 'model' | 'planFirst' | 'images' | 'inPlace' | 'existingWorktree'>> }
   /** The project's scratchpad in the workspace (made the first time). */
   | { type: 'OPEN_SCRATCH'; projectId: string }
   /** An agent starts in the scratchpad (or another task without one): it becomes the task's. */

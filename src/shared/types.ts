@@ -151,7 +151,7 @@ export interface Task {
   /** The GitHub issue it came from; merging closes it. */
   issue?: { number: number; url: string } | null
   /** Waiting for a free agent slot (Settings → Agents: max working at once). */
-  queued?: { agentKind: AgentKind; branch: string; message: string; at: number; model?: string | null; planFirst?: boolean; images?: string[]; inPlace?: boolean } | null
+  queued?: { agentKind: AgentKind; branch: string; message: string; at: number; model?: string | null; planFirst?: boolean; images?: string[]; inPlace?: boolean; existingWorktree?: string | null } | null
   /** What done means: checked by the agent (verify_criterion) or you, with evidence. */
   criteria?: Criterion[]
   /** Its agent hit a usage limit: resumed on its own at `until` (unknown: tried again in an hour). */
@@ -883,9 +883,25 @@ export interface FileDiff {
 }
 
 /** What the launch flow's "Create branch" step did. */
+/** A branch to start a task on (Start → Branch): local, or only on origin. */
+export interface BranchInfo {
+  name: string
+  /** There's a local branch (else only origin/<name>: starting on it checks that out). */
+  local: boolean
+  remote: boolean
+  /** Its last commit: when (ms) and its subject. */
+  at: number
+  subject: string
+  /** Where it's checked out (a worktree, or the main checkout), if anywhere. */
+  worktree: string | null
+  mainCheckout: boolean
+}
+
 export interface BranchResult {
   /** The branch was already there and is reused. */
   existed: boolean
+  /** Made from origin's branch of that name (it was only there). */
+  fromOrigin?: boolean
   /** What it was created from. */
   base: string
   sha: string

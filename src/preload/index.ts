@@ -17,6 +17,7 @@ import type {
   MapTree,
   AgentKind,
   AgentStatusUpdate,
+  BranchInfo,
   BranchResult,
   Issue,
   Note,
@@ -226,6 +227,8 @@ const api = {
     /** Why the task can't close through its pull request without losing work, or null when it can. */
     closeCheck: (worktreePath: string, branch: string, baseBranch: string, prRef?: string): Promise<string | null> =>
       ipcRenderer.invoke(IPC.gitCloseCheck, worktreePath, branch, baseBranch, prRef),
+    /** Branches a task could start on (local, or only on origin), newest first, with where each is checked out. */
+    listBranches: (repoPath: string, baseBranch: string): Promise<BranchInfo[]> => ipcRenderer.invoke(IPC.gitListBranches, repoPath, baseBranch),
     branchLeft: (repoPath: string, branch: string, baseBranch: string): Promise<number | null> => ipcRenderer.invoke(IPC.gitBranchLeft, repoPath, branch, baseBranch),
     pruneStaleNow: (): Promise<string[]> => ipcRenderer.invoke(IPC.worktreesPruneNow),
     onPruned: (cb: (pruned: string[]) => void): (() => void) => {

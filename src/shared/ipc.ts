@@ -65,6 +65,7 @@ export const IPC = {
   gitCloseWithPr: 'git:closeWithPr',
   gitCloseCheck: 'git:closeCheck',
   gitBranchLeft: 'git:branchLeft',
+  gitListBranches: 'git:listBranches',
   gitPrMergeMethods: 'git:prMergeMethods',
   gitFindPr: 'git:findPr',
   gitMergePr: 'git:mergePr',

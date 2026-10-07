@@ -299,6 +299,78 @@ export function useContextMenu(items: () => MenuItem[]): { onContextMenu: (e: Re
 }
 
 /**
+ * A text field with a list to pick from (in place of a native <datalist>,
+ * whose popup the OS draws): type anything, or open the list with the
+ * chevron (or ↓) and pick. `items` is built when the list opens.
+ */
+export function Combo({
+  value,
+  onChange,
+  items,
+  placeholder,
+  disabled,
+  style,
+  inputStyle,
+  title,
+  menuWidth
+}: {
+  value: string
+  onChange: (v: string) => void
+  items: () => MenuItem[]
+  placeholder?: string
+  disabled?: boolean
+  style?: React.CSSProperties
+  inputStyle?: React.CSSProperties
+  title?: string
+  /** The list's width (default: the field's). */
+  menuWidth?: number
+}): React.JSX.Element {
+  const wrap = useRef<HTMLSpanElement>(null)
+  const input = useRef<HTMLInputElement>(null)
+  const [open, setOpen] = useState(false)
+  const list = open ? items() : []
+  return (
+    <span ref={wrap} title={title} style={{ display: 'flex', alignItems: 'center', minWidth: 0, ...style }}>
+      <input
+        ref={input}
+        value={value}
+        disabled={disabled}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowDown' && !open) {
+            e.preventDefault()
+            setOpen(true)
+          }
+        }}
+        style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', outline: 'none', color: 'inherit', font: 'inherit', padding: 0, ...inputStyle }}
+      />
+      {disabled ? null : (
+        <span
+          role="button"
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          onMouseDown={(e) => {
+            if (e.button !== 0) return
+            e.preventDefault()
+            input.current?.focus()
+            setOpen((o) => !o)
+          }}
+          style={{ flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', width: 20, height: 20, borderRadius: 4, cursor: 'pointer', color: 'var(--t3)' }}
+        >
+          <svg width="10" height="10" viewBox="0 0 10 10">
+            <path d="M2.5 3.8 5 6.3l2.5-2.5" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </span>
+      )}
+      {open && wrap.current && list.length ? (
+        <Menu anchor={{ el: wrap.current }} width={menuWidth ?? Math.max(wrap.current.offsetWidth, 220)} initialActive={list.findIndex((it) => it.checked)} items={list} onClose={() => setOpen(false)} />
+      ) : null}
+    </span>
+  )
+}
+
+/**
  * A dropdown picker (in place of a native <select>, whose popup the OS
  * draws). The trigger takes the look of where it sits through `style`.
  */

@@ -3,11 +3,13 @@ import { useAppStore } from '../store/AppStore'
 import { useHover } from '../lib/useHover'
 import { busyAgents } from '../lib/derive'
 import { noteTitle } from '../lib/notes'
-import { AGENTS } from '@shared/constants'
-import type { AgentKind, Project, Task } from '@shared/types'
-import { Button, FooterNote, Menu, Modal, ModalFooter, ModalHeader, SectionLabel, Segmented, type MenuAnchor } from './ui'
+import { AGENTS, branchFor } from '@shared/constants'
+import type { AgentKind, BranchInfo, GitWorktreeInfo, Project, Task } from '@shared/types'
+import { Button, Combo, FooterNote, Menu, Modal, ModalFooter, ModalHeader, SectionLabel, Segmented, Select, type MenuAnchor, type MenuItem } from './ui'
+import { prefsFor } from '../lib/projectPrefs'
+import { timeAgo } from '../lib/status'
 import { useHeadBranch } from '../lib/headBranch'
-import { repoDir } from '../lib/multiRepo'
+import { repoDir, reposOf } from '../lib/multiRepo'
 import { baseFor, parentFinished, parentOf, waitsFor } from '@shared/stack'
 import { MODEL_SUGGESTIONS, canPlanFirst } from '../lib/agentControl'
 import { droppedImages, fileName, pastedImages } from '../lib/attachments'
@@ -127,6 +129,11 @@ function ConfigPhase({ task, project, head, wtPath, agentName, baseBehind = 0 }:
   }, [])
 
   const headHere = useHeadBranch(start.inPlace ? project.repoPath : null)
+  const { branches, free } = useStartPlaces(project, task)
+  // The branch named is one that's there already (local, or only on origin): the task continues on it.
+  const picked = start.existingWorktree ? (branches.find((b) => b.name === start.branch) ?? { name: start.branch, local: true, remote: false, at: 0, subject: '', worktree: start.existingWorktree, mainCheckout: false }) : branches.find((b) => b.name === start.branch.trim())
+  const newBranchName = branchFor(prefsFor(state, task.projectId).branchPattern, task.title, task.key)
+  const multi = start.repos.length > 0
 
   const running = (kind: AgentKind): number =>
     state.tasks.filter((t) => t.agentKind === kind && (t.st === 'working' || t.st === 'waiting' || t.st === 'failed')).length
@@ -145,21 +152,14 @@ function ConfigPhase({ task, project, head, wtPath, agentName, baseBehind = 0 }:
           }}
         >
           <SectionLabel style={{ padding: '0 8px 8px' }}>Agent</SectionLabel>
-          {AGENTS.filter((a) => !state.prefs.agentsOff.includes(a.kind)).map((a, i) => {
-            const ai = info[a.kind]
-            const meta = !ai ? '…' : !ai.installed ? 'not installed' : `${ai.version ? ai.version + ' · ' : ''}${running(a.kind)} running`
-            return (
-              <AgentRow
-                key={a.kind}
-                n={i + 1}
-                name={a.name}
-                note={a.note}
-                meta={meta}
-                selected={start.agentKind === a.kind}
-                onClick={() => dispatch({ type: 'SET_START_AGENT', agentKind: a.kind })}
-              />
-            )
-          })}
+          <AgentPicker
+            agents={AGENTS.filter((a) => !state.prefs.agentsOff.includes(a.kind)).map((a) => {
+              const ai = info[a.kind]
+              return { kind: a.kind, name: a.name, note: a.note, meta: !ai ? '…' : !ai.installed ? 'not installed' : `${ai.version ? ai.version + ' · ' : ''}${running(a.kind)} running`, missing: ai?.installed === false }
+            })}
+            value={start.agentKind}
+            onChange={(agentKind) => dispatch({ type: 'SET_START_AGENT', agentKind })}
+          />
         </div>
         <div
           style={{
@@ -206,40 +206,56 @@ function ConfigPhase({ task, project, head, wtPath, agentName, baseBehind = 0 }:
             </>
           ) : (
             <>
-              <RepoPicker task={task} project={project} agentName={agentName} />
+              {/* (Another repository gets a new worktree on the branch, next to this one's: not with one that's already there.) */}
+              {start.existingWorktree ? null : <RepoPicker task={task} project={project} agentName={agentName} />}
               <span style={{ color: 'var(--t4)', fontFamily: 'var(--font-ui)' }}>Branch</span>
-              <input
-                value={start.branch}
-                onChange={(e) => dispatch({ type: 'SET_START_BRANCH', branch: e.target.value })}
-                style={{
-                  background: 'transparent',
-                  border: 'none',
-                  borderBottom: '1px dashed var(--bd-4)',
-                  outline: 'none',
-                  color: 'var(--t1)',
-                  font: `12.5px ${MONO}`,
-                  padding: '2px 0'
-                }}
-              />
-              <span style={{ color: 'var(--t4)', fontFamily: 'var(--font-ui)' }}>From</span>
-              <span style={{ color: 'var(--t2)', display: 'flex', gap: 10, alignItems: 'baseline', minWidth: 0 }}>
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{head}</span>
-                {baseBehind ? <PullBase projectId={project.id} behind={baseBehind} /> : null}
-              </span>
+              <BranchField task={task} project={project} branches={branches} free={free} />
+              {picked ? (
+                <>
+                  <span />
+                  <span style={{ font: '11.5px/1.45 var(--font-ui)', color: !start.existingWorktree && picked.worktree ? 'var(--c-amber)' : 'var(--t3)', textWrap: 'pretty' } as React.CSSProperties}>
+                    {start.existingWorktree
+                      ? `Takes over that worktree as it is, on ${start.branch} - its commits and changes stay; nothing is created. Done removes it like any task's.`
+                      : picked.worktree
+                        ? picked.mainCheckout
+                          ? `${picked.name} is checked out in the project folder - a branch can't be out in two places. Switch that folder to another branch, or pick another one here.`
+                          : `${picked.name} is checked out in ${picked.worktree} - pick it from the list to take that worktree over, or pick another branch.`
+                        : picked.local
+                        ? `An existing branch: the task continues on it, from ${picked.subject ? `“${picked.subject}”` : 'its last commit'} (${timeAgo(picked.at)} ago).`
+                        : `Only on origin: checked out from there (tracking origin/${picked.name}), and the task continues on it.`}
+                  </span>
+                </>
+              ) : null}
+              {picked ? null : (
+                <>
+                  <span style={{ color: 'var(--t4)', fontFamily: 'var(--font-ui)' }}>From</span>
+                  <span style={{ color: 'var(--t2)', display: 'flex', gap: 10, alignItems: 'baseline', minWidth: 0 }}>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{head}</span>
+                    {baseBehind ? <PullBase projectId={project.id} behind={baseBehind} /> : null}
+                  </span>
+                </>
+              )}
               <span style={{ color: 'var(--t4)', fontFamily: 'var(--font-ui)' }}>Worktree</span>
-              <span
-                style={{
-                  color: 'var(--t2)',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap'
-                }}
-              >
-                {wtPath}
-              </span>
+              {free.length && !multi ? (
+                <Select
+                  value={start.existingWorktree ?? ''}
+                  title={start.existingWorktree ?? wtPath}
+                  options={[['', `New · ${wtPath}`], ...free.map((w): [string, string] => [w.path, `${w.branch || '(detached)'} · ${w.path}`])]}
+                  onChange={(path) => {
+                    const w = free.find((x) => x.path === path)
+                    dispatch({ type: 'SET_START_OPTIONS', patch: { existingWorktree: w ? w.path : null } })
+                    // Its branch is the task's; back to a new worktree: a new branch name again.
+                    dispatch({ type: 'SET_START_BRANCH', branch: w ? w.branch : newBranchName })
+                    if (w && start.repos.length) dispatch({ type: 'SET_START_REPOS', repos: [] })
+                  }}
+                  style={{ ...FIELD, padding: '2px 0', background: 'transparent', border: 'none', borderBottom: '1px dashed var(--bd-4)' }}
+                />
+              ) : (
+                <span style={{ color: 'var(--t2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{wtPath}</span>
+              )}
               <span style={{ color: 'var(--t4)', fontFamily: 'var(--font-ui)' }}>Setup</span>
               <span style={{ color: 'var(--t2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {startRepos(state, task).map((p) => p.setupCmd).filter(Boolean).join(' · ') || '—'}
+                {start.existingWorktree ? 'skipped - that worktree is set up already' : startRepos(state, task).map((p) => p.setupCmd).filter(Boolean).join(' · ') || '—'}
               </span>
             </>
           )}
@@ -306,6 +322,8 @@ function ConfigPhase({ task, project, head, wtPath, agentName, baseBehind = 0 }:
                 ? `${parent.key} is still in progress - this starts from its branch as it is now; Update brings in its later commits.`
                 : start.inPlace
                   ? `Launches ${agentName} in ${project.name}'s folder and opens the workspace.`
+                  : start.existingWorktree
+                    ? `Takes over the worktree, launches ${agentName} there, opens the workspace.`
                   : `Creates the worktree and branch, runs setup, launches ${agentName}, opens the workspace.`}
         </FooterNote>
         <Button size="lg" onClick={() => dispatch({ type: 'CLOSE_START_MODAL' })}>
@@ -418,63 +436,67 @@ function HoverSpan({
   )
 }
 
-function AgentRow({
-  n,
-  name,
-  note,
-  meta,
-  selected,
-  onClick
-}: {
-  n: number
+interface AgentChoice {
+  kind: AgentKind
   name: string
   note: string
   meta: string
-  selected: boolean
-  onClick: () => void
-}): React.JSX.Element {
+  missing: boolean
+}
+
+/**
+ * The agent: the chosen one as a row, the others in a dropdown (the number
+ * keys pick them too, as the list shows).
+ */
+function AgentPicker({ agents, value, onChange }: { agents: AgentChoice[]; value: AgentKind; onChange: (k: AgentKind) => void }): React.JSX.Element {
   const [hover, hoverProps] = useHover()
+  const [menu, setMenu] = useState<MenuAnchor | null>(null)
+  const i = Math.max(0, agents.findIndex((a) => a.kind === value))
+  const a = agents[i]
   return (
-    <div
-      onClick={onClick}
-      {...hoverProps}
-      style={{
-        display: 'grid',
-        gridTemplateColumns: '22px 1fr auto',
-        gap: 12,
-        alignItems: 'center',
-        padding: '9px 10px',
-        borderRadius: 6,
-        background: hover ? 'var(--bd-row)' : selected ? 'color-mix(in srgb, var(--c-blue) 8%, transparent)' : 'transparent',
-        boxShadow: `inset 0 0 0 1px ${selected ? 'color-mix(in srgb, var(--c-blue) 45%, transparent)' : 'transparent'}`,
-        cursor: 'pointer'
-      }}
-    >
-      <span
+    <>
+      <div
+        role="button"
+        aria-haspopup="listbox"
+        aria-expanded={!!menu}
+        onMouseDown={(e) => {
+          if (e.button !== 0) return
+          const el = e.currentTarget
+          setMenu((m) => (m ? null : { el }))
+        }}
+        {...hoverProps}
         style={{
-          font: `500 11.5px ${MONO}`,
-          color: selected ? 'var(--c-blue)' : 'var(--t3)',
-          textAlign: 'center',
-          border: '1px solid var(--bd-4)',
-          borderRadius: 4,
-          lineHeight: '18px'
+          display: 'grid',
+          gridTemplateColumns: '22px 1fr auto 12px',
+          gap: 12,
+          alignItems: 'center',
+          padding: '9px 10px',
+          borderRadius: 6,
+          background: hover || menu ? 'var(--bd-row)' : 'color-mix(in srgb, var(--c-blue) 8%, transparent)',
+          boxShadow: 'inset 0 0 0 1px color-mix(in srgb, var(--c-blue) 45%, transparent)',
+          cursor: 'pointer'
         }}
       >
-        {n}
-      </span>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-        <span
-          style={{
-            font: '500 13.5px var(--font-ui)',
-            color: selected ? 'var(--t1)' : 'var(--t2)'
-          }}
-        >
-          {name}
-        </span>
-        <span style={{ font: '12px var(--font-ui)', color: 'var(--t3)' }}>{note}</span>
+        <span style={{ font: `500 11.5px ${MONO}`, color: 'var(--c-blue)', textAlign: 'center', border: '1px solid var(--bd-4)', borderRadius: 4, lineHeight: '18px' }}>{i + 1}</span>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
+          <span style={{ font: '500 13.5px var(--font-ui)', color: 'var(--t1)' }}>{a?.name ?? value}</span>
+          <span style={{ font: '12px var(--font-ui)', color: 'var(--t3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{a?.note}</span>
+        </div>
+        <span style={{ font: `11.5px ${MONO}`, color: a?.missing ? 'var(--c-amber)' : 'var(--t4)' }}>{a?.meta}</span>
+        <svg width="10" height="10" viewBox="0 0 10 10" style={{ color: 'var(--t3)' }}>
+          <path d="M2.5 3.8 5 6.3l2.5-2.5" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
       </div>
-      <span style={{ font: `11.5px ${MONO}`, color: 'var(--t4)' }}>{meta}</span>
-    </div>
+      {menu ? (
+        <Menu
+          anchor={menu}
+          width={(menu as { el: HTMLElement }).el.offsetWidth}
+          initialActive={i}
+          items={agents.map((x, n) => ({ label: x.name, sub: x.meta, shortcut: String(n + 1), checked: x.kind === value, onClick: () => onChange(x.kind) }))}
+          onClose={() => setMenu(null)}
+        />
+      ) : null}
+    </>
   )
 }
 
@@ -506,9 +528,9 @@ function LaunchPhase({ task, project, head, wtPath, agentName }: PhaseProps): Re
       ? `${start.branch} · already there, reused`
       : `${start.branch} from ${bi.base} @ ${bi.sha}${bi.behindRemote ? ` · ${bi.base} is ${bi.behindRemote} behind origin` : ''}`
   const steps: [string, string][] = [
-    ['Create branch', start.inPlace ? 'none - it works on what’s checked out in the project folder' : branchDetail],
-    ['Add worktree', start.inPlace ? `none - ${project.repoPath}` : start.copied.length ? `${wtPath} · copied ${start.copied.join(', ')}` : wtPath],
-    ['Run setup', start.inPlace ? 'skipped - the project folder is yours, set up already' : setupDetail],
+    ['Create branch', start.inPlace ? 'none - it works on what’s checked out in the project folder' : start.existingWorktree ? `none - ${start.branch}, as it is in that worktree` : bi?.fromOrigin ? `${start.branch} · checked out from origin/${start.branch}` : branchDetail],
+    ['Add worktree', start.inPlace ? `none - ${project.repoPath}` : start.existingWorktree ? `takes over ${start.existingWorktree}` : start.copied.length ? `${wtPath} · copied ${start.copied.join(', ')}` : wtPath],
+    ['Run setup', start.inPlace ? 'skipped - the project folder is yours, set up already' : start.existingWorktree ? 'skipped - that worktree is set up already' : setupDetail],
     [`Launch ${agentName}`, `with first message from ${task.key}`],
     ['Open workspace', '']
   ]
@@ -637,21 +659,19 @@ function ModelField(): React.JSX.Element {
   const { state, dispatch } = useAppStore()
   const start = state.start!
   const options = MODEL_SUGGESTIONS[start.agentKind] ?? []
-  const listId = `models-${start.agentKind}`
+  const set = (model: string): void => dispatch({ type: 'SET_START_OPTIONS', patch: { model } })
   return (
     <span style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-      <input
+      <Combo
         value={start.model}
-        list={listId}
+        onChange={set}
         placeholder="default"
-        onChange={(e) => dispatch({ type: 'SET_START_OPTIONS', patch: { model: e.target.value } })}
-        style={{ flex: 1, minWidth: 0, background: 'transparent', border: 'none', borderBottom: '1px dashed var(--bd-4)', outline: 'none', color: 'var(--t1)', font: `12.5px ${MONO}`, padding: '2px 0' }}
+        style={FIELD}
+        items={() => [
+          { label: 'Default', sub: "the agent's own", checked: !start.model.trim(), onClick: () => set('') },
+          ...options.map((m, i) => ({ label: m, checked: m === start.model.trim(), separatorBefore: i === 0, onClick: () => set(m) }))
+        ]}
       />
-      <datalist id={listId}>
-        {options.map((m) => (
-          <option key={m} value={m} />
-        ))}
-      </datalist>
       {canPlanFirst(start.agentKind) ? (
         <label title="It plans first and waits for your go-ahead before changing anything (plan mode)" style={{ display: 'flex', alignItems: 'center', gap: 5, font: '12px var(--font-ui)', color: 'var(--t2)', cursor: 'pointer', flex: 'none' }}>
           <input type="checkbox" checked={start.planFirst} onChange={(e) => dispatch({ type: 'SET_START_OPTIONS', patch: { planFirst: e.target.checked } })} />
@@ -714,5 +734,82 @@ function PullBase({ projectId, behind }: { projectId: string; behind: number }):
         {busy ? 'pulling…' : 'pull first'}
       </HoverSpan>
     </span>
+  )
+}
+
+/** The underlined field look of the Start modal's rows. */
+const FIELD: React.CSSProperties = { flex: 1, minWidth: 0, borderBottom: '1px dashed var(--bd-4)', color: 'var(--t1)', font: `12.5px ${MONO}`, padding: '0 0 1px' }
+
+const normPath = (p: string): string => p.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+
+/** Who has a folder: an open task (not this one) that works in it. */
+function holderOf(tasks: Task[], path: string, self: string): Task | undefined {
+  const p = normPath(path)
+  return tasks.find((t) => t.id !== self && t.col !== 'done' && [t.worktreePath, t.taskDir].some((x) => x && normPath(x) === p))
+}
+
+/** The project's branches, and the worktrees no open task holds (to take over). */
+function useStartPlaces(project: Project, task: Task): { branches: BranchInfo[]; free: GitWorktreeInfo[] } {
+  const { state } = useAppStore()
+  const [branches, setBranches] = useState<BranchInfo[]>([])
+  const [trees, setTrees] = useState<GitWorktreeInfo[]>([])
+  const base = baseFor(task, project, state.tasks)
+  useEffect(() => {
+    let cancelled = false
+    window.api.git.listBranches(project.repoPath, base).then((b) => !cancelled && setBranches(b)).catch(() => {})
+    window.api.git.listWorktrees(project.repoPath).then((w) => !cancelled && setTrees(w)).catch(() => {})
+    return () => {
+      cancelled = true
+    }
+  }, [project.repoPath, base])
+  const free = trees.filter((w) => !w.isMain && !w.prunable && !holderOf(state.tasks, w.path, task.id))
+  return { branches, free }
+}
+
+/**
+ * The branch: a new one (its name typed), or one that's there already -
+ * picked from the list (local ones, then ones only on origin). One checked
+ * out in a free worktree brings that worktree along; one checked out in the
+ * project folder or another task's can't be used.
+ */
+function BranchField({ task, project, branches, free }: { task: Task; project: Project; branches: BranchInfo[]; free: GitWorktreeInfo[] }): React.JSX.Element {
+  const { state, dispatch } = useAppStore()
+  const start = state.start!
+  const fresh = branchFor(prefsFor(state, task.projectId).branchPattern, task.title, task.key)
+  const base = baseFor(task, project, state.tasks)
+  const set = (branch: string, existingWorktree: string | null = null): void => {
+    dispatch({ type: 'SET_START_OPTIONS', patch: { existingWorktree } })
+    dispatch({ type: 'SET_START_BRANCH', branch })
+    if (existingWorktree && start.repos.length) dispatch({ type: 'SET_START_REPOS', repos: [] })
+  }
+  const item = (b: BranchInfo): MenuItem => {
+    const freeTree = b.worktree ? free.find((w) => normPath(w.path) === normPath(b.worktree!)) : undefined
+    // Another open task's branch (in its worktree - or its folder gone, the branch is still its).
+    const holder = (b.worktree ? holderOf(state.tasks, b.worktree, task.id) : undefined) ?? state.tasks.find((t) => t.id !== task.id && t.col !== 'done' && t.branch === b.name && reposOf(t).includes(project.id))
+    const blocked = b.mainCheckout || !!holder || (!!b.worktree && !freeTree)
+    return {
+      label: b.name,
+      sub: b.mainCheckout ? 'out in the project folder' : holder ? `${holder.key}'s` : freeTree ? 'in a worktree · takes it over' : b.at ? `${timeAgo(b.at)} ago` : '',
+      disabled: blocked,
+      checked: b.name === start.branch.trim(),
+      onClick: () => set(b.name, freeTree ? freeTree.path : null)
+    }
+  }
+  const local = branches.filter((b) => b.local)
+  const remote = branches.filter((b) => !b.local)
+  return (
+    <Combo
+      value={start.branch}
+      onChange={(v) => set(v)}
+      disabled={!!start.existingWorktree}
+      title={start.existingWorktree ? `The branch of ${start.existingWorktree} - pick New under Worktree for another` : 'A new branch, or pick one that’s there already'}
+      style={{ ...FIELD, color: start.existingWorktree ? 'var(--t2)' : 'var(--t1)' }}
+      menuWidth={460}
+      items={() => [
+        { label: fresh, sub: `new, from ${base}`, checked: start.branch.trim() === fresh, onClick: () => set(fresh) },
+        ...(local.length ? [{ label: 'Branches here', heading: true, onClick: () => {} }, ...local.map(item)] : []),
+        ...(remote.length ? [{ label: 'Only on origin', heading: true, onClick: () => {} }, ...remote.map(item)] : [])
+      ]}
+    />
   )
 }

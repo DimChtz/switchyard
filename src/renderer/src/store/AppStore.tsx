@@ -206,7 +206,8 @@ ${u.ask}` : ''}`, task.id, actions)
       window.api.pty.kill(agentSessionId(st.taskId))
       const newBranch = st.branchInfo && !st.branchInfo.existed ? st.branch : ''
       // (In the project's own checkout nothing was made - and that checkout is never removed.)
-      if (p && !st.inPlace && (st.worktreePath || newBranch)) {
+      // (Nor a worktree that was already there: the task was only going to take it over.)
+      if (p && !st.inPlace && !st.existingWorktree && (st.worktreePath || newBranch)) {
         window.api.git.discardWorktree(p.repoPath, st.worktreePath ?? '', newBranch).catch((err: unknown) =>
           rawDispatch({ type: 'TOAST', text: `Could not remove the worktree: ${errText(err)}` })
         )
@@ -621,10 +622,15 @@ ${u.ask}` : ''}`, task.id, actions)
     // The other repositories the task works in (Start modal → Repos).
     const extras = start.repos.map((id) => state.projects.find((p) => p.id === id)).filter((p): p is Project => !!p?.repoPath)
 
-    // In the project's own checkout: no branch, worktree or setup - straight to the agent there.
-    if (start.inPlace && start.step < 3) {
+    // In the project's own checkout, or a worktree that's already there: nothing is created or set
+    // up (that folder is as you left it) - straight to the agent there.
+    const given = start.inPlace ? project.repoPath : start.existingWorktree
+    if (given && start.step < 3) {
       return once(async () => {
-        if (start.step === 1) dispatch({ type: 'SET_START_WORKTREE_PATH', path: project.repoPath })
+        if (start.step === 1) {
+          if (!start.inPlace && !(await window.api.git.isCheckout(given))) throw new Error(`${given} isn't a git worktree any more.`)
+          dispatch({ type: 'SET_START_WORKTREE_PATH', path: given })
+        }
         next()
       })
     }

@@ -10,7 +10,7 @@ import { expandPath } from './repos'
 import { toPrDetails } from '@shared/pr'
 import { samePath } from './paths'
 import type { PrDetails } from '@shared/types'
-import type { BranchResult, FileDiff, DiffLine, DiffStat, GitWorktreeInfo, Issue, PullRequest, RemoteInfo, RepoInfo, WorktreeStatus } from '@shared/types'
+import type { BranchInfo, BranchResult, FileDiff, DiffLine, DiffStat, GitWorktreeInfo, Issue, PullRequest, RemoteInfo, RepoInfo, WorktreeStatus } from '@shared/types'
 
 /**
  * Where a task's worktree goes: a .worktrees folder inside the repository,
@@ -158,6 +158,11 @@ export async function createBranch(repoPath: string, branch: string, baseBranch:
   if (branches.all.includes(branch)) {
     return { existed: true, base: branch, sha: (await shortSha(repoPath, branch)) ?? '', behindRemote: 0 }
   }
+  // Only on origin (someone else's, or pushed from another machine): the task continues it, tracking origin's.
+  if (await gitYes(repoPath, ['rev-parse', '--verify', '--quiet', `refs/remotes/origin/${branch}`]).catch(() => false)) {
+    await git.raw(['branch', '--track', branch, `origin/${branch}`])
+    return { existed: true, fromOrigin: true, base: `origin/${branch}`, sha: (await shortSha(repoPath, branch)) ?? '', behindRemote: 0 }
+  }
   const base = branches.all.includes(baseBranch) ? baseBranch : 'HEAD'
   let behindRemote = 0
   if (base !== 'HEAD' && (await git.getRemotes()).some((r) => r.name === 'origin')) {
@@ -170,6 +175,36 @@ export async function createBranch(repoPath: string, branch: string, baseBranch:
   }
   await git.raw(['branch', branch, base])
   return { existed: false, base: base === 'HEAD' ? branches.current : base, sha: (await shortSha(repoPath, branch)) ?? '', behindRemote }
+}
+
+/**
+ * The branches a task could start on, newest first: local ones, and ones
+ * only on origin (as last fetched - no network here), with where each is
+ * checked out. HEAD and the base branch itself aren't offered.
+ */
+export async function listBranches(repoPath: string, baseBranch: string): Promise<BranchInfo[]> {
+  const out = await gitAt(repoPath).raw(['for-each-ref', '--sort=-committerdate', '--format=%(refname)%00%(committerdate:unix)%00%(subject)', 'refs/heads', 'refs/remotes/origin'])
+  const trees = await listWorktrees(repoPath).catch(() => [])
+  const byName = new Map<string, BranchInfo>()
+  for (const line of out.split('\n')) {
+    const [ref, at, subject] = line.split('\0')
+    if (!ref) continue
+    const local = ref.startsWith('refs/heads/')
+    const name = local ? ref.slice('refs/heads/'.length) : ref.slice('refs/remotes/origin/'.length)
+    if (!name || name === 'HEAD' || name === baseBranch) continue
+    const b = byName.get(name) ?? { name, local: false, remote: false, at: Number(at) * 1000 || 0, subject: subject ?? '', worktree: null, mainCheckout: false }
+    if (local) b.local = true
+    else b.remote = true
+    byName.set(name, b)
+  }
+  for (const w of trees) {
+    const b = w.branch ? byName.get(w.branch) : undefined
+    if (b) {
+      b.worktree = w.path
+      b.mainCheckout = w.isMain
+    }
+  }
+  return [...byName.values()].slice(0, 300)
 }
 
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
