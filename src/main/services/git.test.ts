@@ -73,11 +73,24 @@ describe('a fetch that fails on a branch name clash', () => {
     expect(err).not.toBe(null)
     expect(refClash(String((err as Error).message))).toBe(true)
     const said = gitFailure(err)
-    expect(said).toMatch(/^error: cannot lock ref 'refs\/remotes\/origin\/foo\/bar'/)
+    // (Older git names the ref; newer git only says some refs failed - and what to run.)
+    expect(said).toMatch(/^error: (cannot lock ref 'refs\/remotes\/origin\/foo\/bar'|some local refs could not be updated; try running 'git remote prune origin')/)
+    expect(said).toContain('git remote prune origin')
     expect(said).not.toContain('zzz-new')
     await gitAt(down).raw(['remote', 'prune', 'origin'])
     await gitAt(down).fetch(['origin', '--prune'])
     expect(git(down, 'branch', '-r')).toContain('origin/foo/bar')
+  })
+
+  it("puts newer git's wrapped advice on one line, after the specific error", () => {
+    const out = [
+      'error: some local refs could not be updated; try running',
+      " 'git remote prune origin' to remove any old, conflicting branches",
+      ' ! [new branch]      foo/bar    -> origin/foo/bar  (unable to update local ref)',
+      ' * [new branch]      zzz-new    -> origin/zzz-new'
+    ].join('\n')
+    expect(gitFailure(new Error(out))).toBe("error: some local refs could not be updated; try running 'git remote prune origin' to remove any old, conflicting branches")
+    expect(gitFailure(new Error(`error: cannot lock ref 'refs/remotes/origin/a/b': 'refs/remotes/origin/a' exists; cannot create 'refs/remotes/origin/a/b'\n${out}`))).toMatch(/^error: cannot lock ref .* · error: some local refs/)
   })
 
   it('keeps the last line when there is no error line', () => {

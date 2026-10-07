@@ -87,14 +87,17 @@ export function gitFailure(err: unknown, fallback = 'git failed'): string {
     .split(/\r?\n|\r/)
     .map((l) => l.trim())
     .filter(Boolean)
-  const said = lines.filter((l) => /^(fatal|error):/i.test(l))
+  // (A line ending "try running" goes on in the next one: the command to run.)
+  const joined = lines.map((l, i) => (/try running$/i.test(l) && lines[i + 1] ? `${l} ${lines[i + 1]}` : l))
+  // The specific line first ("cannot lock ref 'x'"), then the general ones ("some local refs could not be updated").
+  const said = joined.filter((l) => /^(fatal|error):/i.test(l)).sort((a, b) => Number(/some local refs/i.test(a)) - Number(/some local refs/i.test(b)))
   const refused = lines.filter((l) => l.startsWith('! '))
   const pick = said.length ? said : refused
   if (!pick.length) return lines.pop() ?? fallback
   let text = pick.slice(0, 2).join(' · ')
   if (pick.length > 2) text += ` (+${pick.length - 2} more)`
   // Branch names that can't both be files: x and x/y, or (macOS, Windows) names differing only in case.
-  if (refClash(lines.join('\n'))) text += ' - two branch names clash (x and x/y, or differing only in case); `git remote prune origin` clears stale ones'
+  if (refClash(lines.join('\n')) && !/remote prune/.test(text)) text += ' - two branch names clash (x and x/y, or differing only in case); `git remote prune origin` clears stale ones'
   return text
 }
 
