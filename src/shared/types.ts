@@ -151,7 +151,7 @@ export interface Task {
   /** The GitHub issue it came from; merging closes it. */
   issue?: { number: number; url: string } | null
   /** Waiting for a free agent slot (Settings → Agents: max working at once). */
-  queued?: { agentKind: AgentKind; branch: string; message: string; at: number; model?: string | null; planFirst?: boolean; images?: string[] } | null
+  queued?: { agentKind: AgentKind; branch: string; message: string; at: number; model?: string | null; planFirst?: boolean; images?: string[]; inPlace?: boolean } | null
   /** What done means: checked by the agent (verify_criterion) or you, with evidence. */
   criteria?: Criterion[]
   /** Its agent hit a usage limit: resumed on its own at `until` (unknown: tried again in an hour). */
@@ -169,6 +169,14 @@ export interface Task {
   archivedAt?: number | null
   /** Kept at the top of its column (when it was pinned: the latest goes first). */
   pinnedAt?: number | null
+  /**
+   * Works in the project's own checkout, on whatever is checked out there -
+   * no branch or worktree of its own (an exploration, an investigation).
+   * Nothing is merged or removed when it's done; `branch` stays null.
+   */
+  inPlace?: boolean
+  /** The project's scratchpad: always there, in its own checkout, off the board (see shared/scratch). */
+  scratch?: boolean
 }
 
 /**

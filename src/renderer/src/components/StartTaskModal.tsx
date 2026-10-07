@@ -5,7 +5,8 @@ import { busyAgents } from '../lib/derive'
 import { noteTitle } from '../lib/notes'
 import { AGENTS } from '@shared/constants'
 import type { AgentKind, Project, Task } from '@shared/types'
-import { Button, FooterNote, Menu, Modal, ModalFooter, ModalHeader, SectionLabel, type MenuAnchor } from './ui'
+import { Button, FooterNote, Menu, Modal, ModalFooter, ModalHeader, SectionLabel, Segmented, type MenuAnchor } from './ui'
+import { useHeadBranch } from '../lib/headBranch'
 import { repoDir } from '../lib/multiRepo'
 import { baseFor, parentFinished, parentOf, waitsFor } from '@shared/stack'
 import { MODEL_SUGGESTIONS, canPlanFirst } from '../lib/agentControl'
@@ -125,6 +126,8 @@ function ConfigPhase({ task, project, head, wtPath, agentName, baseBehind = 0 }:
     }
   }, [])
 
+  const headHere = useHeadBranch(start.inPlace ? project.repoPath : null)
+
   const running = (kind: AgentKind): number =>
     state.tasks.filter((t) => t.agentKind === kind && (t.st === 'working' || t.st === 'waiting' || t.st === 'failed')).length
 
@@ -173,41 +176,73 @@ function ConfigPhase({ task, project, head, wtPath, agentName, baseBehind = 0 }:
             alignItems: 'center'
           }}
         >
-          <RepoPicker task={task} project={project} agentName={agentName} />
-          <span style={{ color: 'var(--t4)', fontFamily: 'var(--font-ui)' }}>Branch</span>
-          <input
-            value={start.branch}
-            onChange={(e) => dispatch({ type: 'SET_START_BRANCH', branch: e.target.value })}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              borderBottom: '1px dashed var(--bd-4)',
-              outline: 'none',
-              color: 'var(--t1)',
-              font: `12.5px ${MONO}`,
-              padding: '2px 0'
-            }}
-          />
-          <span style={{ color: 'var(--t4)', fontFamily: 'var(--font-ui)' }}>From</span>
-          <span style={{ color: 'var(--t2)', display: 'flex', gap: 10, alignItems: 'baseline', minWidth: 0 }}>
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{head}</span>
-            {baseBehind ? <PullBase projectId={project.id} behind={baseBehind} /> : null}
+          <span style={{ color: 'var(--t4)', fontFamily: 'var(--font-ui)' }}>Works in</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, fontFamily: 'var(--font-ui)' }}>
+            <Segmented
+              value={start.inPlace ? 'here' : 'worktree'}
+              options={[
+                ['worktree', 'New branch & worktree'],
+                ['here', 'Project folder']
+              ]}
+              onChange={(v) => {
+                const inPlace = v === 'here'
+                dispatch({ type: 'SET_START_OPTIONS', patch: { inPlace } })
+                // Its other repositories get worktrees on its branch - there's none in the project folder.
+                if (inPlace && start.repos.length) dispatch({ type: 'SET_START_REPOS', repos: [] })
+              }}
+            />
           </span>
-          <span style={{ color: 'var(--t4)', fontFamily: 'var(--font-ui)' }}>Worktree</span>
-          <span
-            style={{
-              color: 'var(--t2)',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap'
-            }}
-          >
-            {wtPath}
-          </span>
-          <span style={{ color: 'var(--t4)', fontFamily: 'var(--font-ui)' }}>Setup</span>
-          <span style={{ color: 'var(--t2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {startRepos(state, task).map((p) => p.setupCmd).filter(Boolean).join(' · ') || '—'}
-          </span>
+          {start.inPlace ? (
+            <>
+              <span style={{ color: 'var(--t4)', fontFamily: 'var(--font-ui)' }}>Folder</span>
+              <span title={project.repoPath} style={{ color: 'var(--t2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {project.repoPath}
+                {headHere ? <span style={{ color: 'var(--t3)' }}> · on {headHere}</span> : null}
+              </span>
+              <span />
+              <span style={{ font: '11.5px/1.45 var(--font-ui)', color: 'var(--t3)', textWrap: 'pretty' } as React.CSSProperties}>
+                No branch, worktree or setup: {agentName} works on what&apos;s checked out there, alongside you. For explorations and investigations - nothing is merged or removed when it&apos;s done.
+              </span>
+            </>
+          ) : (
+            <>
+              <RepoPicker task={task} project={project} agentName={agentName} />
+              <span style={{ color: 'var(--t4)', fontFamily: 'var(--font-ui)' }}>Branch</span>
+              <input
+                value={start.branch}
+                onChange={(e) => dispatch({ type: 'SET_START_BRANCH', branch: e.target.value })}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  borderBottom: '1px dashed var(--bd-4)',
+                  outline: 'none',
+                  color: 'var(--t1)',
+                  font: `12.5px ${MONO}`,
+                  padding: '2px 0'
+                }}
+              />
+              <span style={{ color: 'var(--t4)', fontFamily: 'var(--font-ui)' }}>From</span>
+              <span style={{ color: 'var(--t2)', display: 'flex', gap: 10, alignItems: 'baseline', minWidth: 0 }}>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{head}</span>
+                {baseBehind ? <PullBase projectId={project.id} behind={baseBehind} /> : null}
+              </span>
+              <span style={{ color: 'var(--t4)', fontFamily: 'var(--font-ui)' }}>Worktree</span>
+              <span
+                style={{
+                  color: 'var(--t2)',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                {wtPath}
+              </span>
+              <span style={{ color: 'var(--t4)', fontFamily: 'var(--font-ui)' }}>Setup</span>
+              <span style={{ color: 'var(--t2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {startRepos(state, task).map((p) => p.setupCmd).filter(Boolean).join(' · ') || '—'}
+              </span>
+            </>
+          )}
           <span style={{ color: 'var(--t4)', fontFamily: 'var(--font-ui)' }}>Model</span>
           <ModelField />
           {taskNotes.length ? (
@@ -269,7 +304,9 @@ function ConfigPhase({ task, project, head, wtPath, agentName, baseBehind = 0 }:
               ? `${busy} agents are working (limit ${state.prefs.maxAgents}) - this waits in the queue and starts when one is free.`
               : parent && !parentFinished(task, state.tasks)
                 ? `${parent.key} is still in progress - this starts from its branch as it is now; Update brings in its later commits.`
-                : `Creates the worktree and branch, runs setup, launches ${agentName}, opens the workspace.`}
+                : start.inPlace
+                  ? `Launches ${agentName} in ${project.name}'s folder and opens the workspace.`
+                  : `Creates the worktree and branch, runs setup, launches ${agentName}, opens the workspace.`}
         </FooterNote>
         <Button size="lg" onClick={() => dispatch({ type: 'CLOSE_START_MODAL' })}>
           Cancel
@@ -469,9 +506,9 @@ function LaunchPhase({ task, project, head, wtPath, agentName }: PhaseProps): Re
       ? `${start.branch} · already there, reused`
       : `${start.branch} from ${bi.base} @ ${bi.sha}${bi.behindRemote ? ` · ${bi.base} is ${bi.behindRemote} behind origin` : ''}`
   const steps: [string, string][] = [
-    ['Create branch', branchDetail],
-    ['Add worktree', start.copied.length ? `${wtPath} · copied ${start.copied.join(', ')}` : wtPath],
-    ['Run setup', setupDetail],
+    ['Create branch', start.inPlace ? 'none - it works on what’s checked out in the project folder' : branchDetail],
+    ['Add worktree', start.inPlace ? `none - ${project.repoPath}` : start.copied.length ? `${wtPath} · copied ${start.copied.join(', ')}` : wtPath],
+    ['Run setup', start.inPlace ? 'skipped - the project folder is yours, set up already' : setupDetail],
     [`Launch ${agentName}`, `with first message from ${task.key}`],
     ['Open workspace', '']
   ]

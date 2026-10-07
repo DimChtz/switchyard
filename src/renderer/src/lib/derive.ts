@@ -48,9 +48,9 @@ export function onBoard(t: Task): boolean {
   return !t.archivedAt
 }
 
-/** The project's tasks - with those from other projects that work in its repository too. */
+/** The project's tasks - with those from other projects that work in its repository too. Not its scratchpad. */
 export function tasksForProject(state: AppState, projectId: string): Task[] {
-  return state.tasks.filter((t) => inProject(t, projectId))
+  return state.tasks.filter((t) => inProject(t, projectId) && !t.scratch)
 }
 
 export function liveTasks(state: AppState): Task[] {

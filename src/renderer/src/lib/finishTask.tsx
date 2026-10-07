@@ -5,7 +5,7 @@ import { choose, confirm, Segmented } from '../components/ui'
 import { errText } from './errors'
 import { baseOf } from './stack'
 import { checkoutsOf } from './multiRepo'
-import { finishWithPr, freshPr, mergeTask, taskDirty } from './taskActions'
+import { finishGone, finishInPlace, finishWithPr, freshPr, mergeTask, taskDirty } from './taskActions'
 
 type Dispatch = (action: Action) => void
 type Method = Prefs['prMergeMethod']
@@ -22,6 +22,7 @@ const METHOD_LABEL: Record<Method, string> = { squash: 'Squash', merge: 'Merge c
  * Leftover changes need a decision first.
  */
 export async function finishTask(task: Task, project: Project, prefs: Prefs, dispatch: Dispatch, projects: Project[] = [project]): Promise<boolean> {
+  if (task.inPlace) return finishInPlace(task, dispatch)
   const pr = await freshPr(task, dispatch)
   if (pr?.state === 'MERGED') return finishWithPr({ ...task, pr }, project, dispatch, projects)
   if (pr?.state === 'CLOSED') {
@@ -33,6 +34,8 @@ export async function finishTask(task: Task, project: Project, prefs: Prefs, dis
     return ok ? finishWithPr({ ...task, pr }, project, dispatch, projects) : false
   }
   if (pr) return finishOpenPr(task, pr, project, prefs, dispatch, projects)
+  // Its worktree folder deleted outside Switchyard: the branch is what's left to finish with.
+  if (task.worktreePath && !(await window.api.git.isCheckout(task.worktreePath).catch(() => true))) return finishGone(task, project, prefs, dispatch, projects)
   const dirty = await taskDirty(task, projects)
   if (dirty > 0) {
     dispatch({ type: 'OPEN_TASK', taskId: task.id, tab: 'changes' })

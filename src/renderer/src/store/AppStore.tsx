@@ -28,6 +28,7 @@ import { prefsFor } from '../lib/projectPrefs'
 import { discoverPr, finishWithPr } from '../lib/taskActions'
 import { closeNoteTabs, renameNoteTabs } from '../lib/wsStore'
 import { baseFor, parentFinished } from '@shared/stack'
+import { isStarted } from '@shared/scratch'
 import { knowTasks } from '../lib/stack'
 
 interface Ctx {
@@ -114,7 +115,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }): R
     // isn't in front - otherwise the toast already says it.
     if (task && !muted && !document.hasFocus()) {
       const name = AGENTS.find((a) => a.kind === task.agentKind)?.name ?? 'The agent'
-      if (action.type === 'AGENT_STATUS' && task.st === 'working' && task.branch && task.col !== 'done') {
+      if (action.type === 'AGENT_STATUS' && task.st === 'working' && isStarted(task) && task.col !== 'done') {
         const u = action.update
         if (s.prefs.notifyInput && (u.st === 'waiting' || u.st === 'failed')) {
           const what = u.st === 'failed' ? 'failed' : waitingText(u.askKind, u.ask)
@@ -204,7 +205,8 @@ ${u.ask}` : ''}`, task.id, actions)
       window.api.pty.kill(setupSessionId(st.taskId))
       window.api.pty.kill(agentSessionId(st.taskId))
       const newBranch = st.branchInfo && !st.branchInfo.existed ? st.branch : ''
-      if (p && (st.worktreePath || newBranch)) {
+      // (In the project's own checkout nothing was made - and that checkout is never removed.)
+      if (p && !st.inPlace && (st.worktreePath || newBranch)) {
         window.api.git.discardWorktree(p.repoPath, st.worktreePath ?? '', newBranch).catch((err: unknown) =>
           rawDispatch({ type: 'TOAST', text: `Could not remove the worktree: ${errText(err)}` })
         )
@@ -618,6 +620,14 @@ ${u.ask}` : ''}`, task.id, actions)
     const next = (): void => dispatch({ type: 'ADVANCE_LAUNCH_STEP' })
     // The other repositories the task works in (Start modal → Repos).
     const extras = start.repos.map((id) => state.projects.find((p) => p.id === id)).filter((p): p is Project => !!p?.repoPath)
+
+    // In the project's own checkout: no branch, worktree or setup - straight to the agent there.
+    if (start.inPlace && start.step < 3) {
+      return once(async () => {
+        if (start.step === 1) dispatch({ type: 'SET_START_WORKTREE_PATH', path: project.repoPath })
+        next()
+      })
+    }
 
     switch (start.step) {
       case 0: // Create branch - from the project's base branch, or the branch of the task it builds on (in each of the task's repositories).

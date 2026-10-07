@@ -62,6 +62,7 @@ export function useCommands(): { menus: MenuModel[]; run: (id: string) => void }
           { id: 'new-task', label: 'New task', key: k('new-task'), enabled: !!project },
           { id: 'new-project', label: 'New project…', key: k('new-project') },
           { id: 'outside-work', label: 'Bring in outside work…', key: k('outside-work'), enabled: !!project },
+          { id: 'open-scratch', label: 'Open scratchpad', enabled: !!project?.repoPath },
           { id: 'new-note', label: 'New note', key: k('new-note') },
           { id: 'open-project', label: 'Open project…', key: k('open-project'), enabled: state.projects.length > 0 },
           SEP,
@@ -178,6 +179,8 @@ export function useCommands(): { menus: MenuModel[]; run: (id: string) => void }
           return dispatch({ type: 'OPEN_ADD_PROJECT' })
         case 'outside-work':
           return project && dispatch({ type: 'OPEN_OUTSIDE', projectId: project.id })
+        case 'open-scratch':
+          return project && dispatch({ type: 'OPEN_SCRATCH', projectId: project.id })
         case 'open-project':
           return dispatch({ type: 'OPEN_PALETTE', query: 'Open board' })
         case 'project-settings':

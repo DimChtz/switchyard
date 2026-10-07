@@ -155,7 +155,8 @@ export async function startAgent(task: Task, project: Project, prefs: Prefs, mod
   const tools = prefs.agentTools ? await window.api.agents.toolLaunch(task.id, def.kind) : { args: [], env: {} }
   options.push(...tools.args)
   // Its own conversation when it's known (Claude Code's from its hooks; one brought in from outside).
-  const resumeArgs = task.session?.id && def.kind === 'claude' ? ['--resume', task.session.id] : task.session?.id && def.kind === 'codex' ? ['resume', task.session.id] : def.resumeArgs
+  // (In the project's own folder "the latest conversation here" may be one of yours: only its own, by id.)
+  const resumeArgs = task.session?.id && def.kind === 'claude' ? ['--resume', task.session.id] : task.session?.id && def.kind === 'codex' ? ['resume', task.session.id] : task.inPlace ? undefined : def.resumeArgs
 
   let args: string[]
   if (mode === 'resume' && resumeArgs) args = [...resumeArgs, ...prompt(followUp)]

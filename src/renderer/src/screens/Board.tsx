@@ -18,6 +18,7 @@ import { keyLabel } from '../lib/keys'
 import { shortcut } from '../lib/shortcuts'
 import { prefsFor } from '../lib/projectPrefs'
 import { inProject, isMulti, reposOf } from '../lib/multiRepo'
+import { isStarted } from '@shared/scratch'
 import {
   BUILTIN_VIEWS,
   boardFilterOf,
@@ -104,7 +105,7 @@ function Card({ task, focused, cost }: { task: Task; focused: boolean; cost: num
   // Description: its start, as plain text, until an agent picks the task up
   // (then the card shows what the agent is doing). It's written in the task
   // sheet. Done cards show the merge note in the same slot.
-  const started = !!(task.agentKind && task.st && task.branch && task.col !== 'done')
+  const started = !!(task.st && isStarted(task) && task.col !== 'done')
   const editable = !started && task.col !== 'done'
   const teaser = task.col === 'done' ? (task.doneNote ?? '') : started ? '' : plainText(task.desc ?? '')
   const addHint = editable && focused && !teaser
@@ -639,7 +640,7 @@ function ColumnCell({
           if (before !== id) dispatch({ type: 'MOVE_TASK', id, col, before })
           return
         }
-        if (col === 'progress' && !(task.agentKind && task.branch)) {
+        if (col === 'progress' && !isStarted(task)) {
           dispatch({ type: 'OPEN_START_MODAL', taskId: id })
         } else if (col === 'done' && task.worktreePath && task.col !== 'done') {
           const project = state.projects.find((p) => p.id === task.projectId)
@@ -970,7 +971,8 @@ export function Board(): React.JSX.Element | null {
     load()
     return window.api.store.onCommentsChanged(load)
   }, [state.view, state.projectId, f.review])
-  const all = project ? pinnedFirst(state.tasks.filter((t) => inProject(t, project.id) && !t.archivedAt)) : []
+  // (The scratchpad isn't a card: it's in the sidebar.)
+  const all = project ? pinnedFirst(state.tasks.filter((t) => inProject(t, project.id) && !t.archivedAt && !t.scratch)) : []
   const filtering = isFiltering(f)
   const shown = filtering ? all.filter((t) => matchesFilter(t, f, { cost: costs.get(t.id) ?? 0, openReview: openReview.has(t.id) })) : all
   const group = boardGroupOf(state)

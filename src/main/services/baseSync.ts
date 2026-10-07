@@ -1,7 +1,7 @@
 import { BrowserWindow } from 'electron'
 import { statSync } from 'fs'
 import { isAbsolute, join } from 'path'
-import { gitAt, gitYes } from './gitEnv'
+import { gitAt, gitFailure, gitYes, refClash } from './gitEnv'
 import { listWorktrees } from './git'
 import { getPrefs, getProjects } from './store'
 import { log } from './log'
@@ -70,12 +70,19 @@ export async function fetchNow(projectId?: string): Promise<BaseStatus[]> {
     projects.map(async (p) => {
       if (!(await hasOrigin(p.repoPath))) return
       try {
-        await gitAt(p.repoPath, { network: true }).fetch(['origin', '--prune', '--progress'])
+        const fetch = (): Promise<unknown> => gitAt(p.repoPath, { network: true }).fetch(['origin', '--prune', '--progress'])
+        await fetch().catch(async (err: unknown) => {
+          // A stale origin/x in the way of a new origin/x/y: origin's leftovers go (they're gone there), then again.
+          if (!refClash(String((err as Error)?.message ?? err))) throw err
+          log.info('base', `Pruning ${p.name}'s stale remote branches (they clashed with new ones)`)
+          await gitAt(p.repoPath, { network: true }).raw(['remote', 'prune', 'origin'])
+          await fetch()
+        })
         const was = statuses.get(p.id)
         if (was) was.error = null
       } catch (err) {
         log.warn('base', `Fetching ${p.name} failed`, err)
-        const msg = String((err as Error).message ?? err).trim().split('\n').pop() ?? 'fetch failed'
+        const msg = gitFailure(err, 'fetch failed')
         statuses.set(p.id, { ...(statuses.get(p.id) ?? { projectId: p.id, base: p.defaultBranch ?? 'main', hasRemote: true, behind: 0, ahead: 0, fetchedAt: 0, checkedOutAt: null }), error: msg })
       }
       await statusOf(p.id)

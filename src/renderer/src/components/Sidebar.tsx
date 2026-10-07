@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react'
-import type { AgentStatus, Task } from '@shared/types'
+import type { AgentStatus, Project, Task } from '@shared/types'
 import { useAppStore } from '../store/AppStore'
 import { useHover } from '../lib/useHover'
 import { statusColor } from '../lib/status'
 import { liveTasks, tasksForProject, agentShort } from '../lib/derive'
 import { IconButton, useContextMenu } from './ui'
-import { projectMenuItems, taskMenuItems } from '../lib/menus'
+import { folderItems, projectMenuItems, taskMenuItems } from '../lib/menus'
+import { scratchId } from '@shared/scratch'
 import { inParens, shortcut } from '../lib/shortcuts'
 import { prefsFor } from '../lib/projectPrefs'
 import { useInboxItems } from '../lib/inbox'
@@ -194,22 +195,56 @@ function ProjectRow({ projectId }: { projectId: string }): React.JSX.Element {
         </span>
         <span style={{ font: "11px var(--font-mono)", color: 'var(--t4)' }}>{tasks.length}</span>
       </div>
-      {live.length > 0 ? (
-        <div
-          style={{
-            margin: '2px 0 6px 13px',
-            borderLeft: '1px solid var(--bd-1)',
-            paddingLeft: 6,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 1
-          }}
-        >
-          {live.map((t) => (
-            <TaskRow key={t.id} taskId={t.id} />
-          ))}
-        </div>
-      ) : null}
+      <div
+        style={{
+          margin: '2px 0 6px 13px',
+          borderLeft: '1px solid var(--bd-1)',
+          paddingLeft: 6,
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 1
+        }}
+      >
+        {project.repoPath ? <ScratchRow project={project} /> : null}
+        {live.map((t) => (
+          <TaskRow key={t.id} taskId={t.id} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/** The project's scratchpad: terminals, agents and files in its own folder, outside any task. */
+function ScratchRow({ project }: { project: Project }): React.JSX.Element {
+  const { state, dispatch } = useAppStore()
+  const [hover, hoverProps] = useHover()
+  const task = state.tasks.find((t) => t.id === scratchId(project.id))
+  const active = state.view === 'workspace' && state.taskId === scratchId(project.id)
+  const live = !!task?.agentKind && (task.st === 'working' || task.st === 'waiting' || task.st === 'failed')
+  const ctx = useContextMenu(() => (task ? taskMenuItems(task, project, prefsFor(state, project.id), dispatch, { projects: state.projects }) : folderItems(project.repoPath, dispatch)))
+  return (
+    <div
+      onClick={() => dispatch({ type: 'OPEN_SCRATCH', projectId: project.id })}
+      onContextMenu={ctx.onContextMenu}
+      title={`Terminals, agents and files in ${project.repoPath} - outside any task`}
+      {...hoverProps}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 8,
+        height: 26,
+        padding: '0 8px',
+        borderRadius: 5,
+        background: active ? 'color-mix(in srgb, var(--ov) 6%, transparent)' : hover ? 'color-mix(in srgb, var(--ov) 5%, transparent)' : 'transparent',
+        color: active ? 'var(--t1)' : 'var(--t3)',
+        fontSize: 12.5,
+        cursor: 'pointer'
+      }}
+    >
+      <span style={{ width: 6, height: 6, borderRadius: 1.5, border: `1px solid ${live ? statusColor(task!.st) : 'var(--bd-5)'}`, background: live ? statusColor(task!.st) : 'transparent', flex: 'none', boxSizing: 'border-box' }} />
+      <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Scratchpad</span>
+      {task?.agentKind ? <span style={{ font: '10.5px var(--font-mono)', color: live ? statusColor(task.st) : 'var(--t4)' }}>{agentShort(task.agentKind)}</span> : null}
+      {ctx.menu}
     </div>
   )
 }

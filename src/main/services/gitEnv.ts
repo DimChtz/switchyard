@@ -77,6 +77,33 @@ export async function newestBase(cwd: string, baseBranch: string): Promise<strin
 }
 
 /**
+ * What went wrong, out of a failed git command's output. A fetch lists every
+ * ref it updated ("* [new branch] x -> origin/x") around the line that says
+ * what failed - the last line is often one of those, not the problem: the
+ * error/fatal lines (or a refused ref's "!" line) are what's said.
+ */
+export function gitFailure(err: unknown, fallback = 'git failed'): string {
+  const lines = String((err as Error)?.message ?? err)
+    .split(/\r?\n|\r/)
+    .map((l) => l.trim())
+    .filter(Boolean)
+  const said = lines.filter((l) => /^(fatal|error):/i.test(l))
+  const refused = lines.filter((l) => l.startsWith('! '))
+  const pick = said.length ? said : refused
+  if (!pick.length) return lines.pop() ?? fallback
+  let text = pick.slice(0, 2).join(' · ')
+  if (pick.length > 2) text += ` (+${pick.length - 2} more)`
+  // Branch names that can't both be files: x and x/y, or (macOS, Windows) names differing only in case.
+  if (refClash(lines.join('\n'))) text += ' - two branch names clash (x and x/y, or differing only in case); `git remote prune origin` clears stale ones'
+  return text
+}
+
+/** A fetch that failed on a stale remote-tracking ref clashing with a new branch name. */
+export function refClash(output: string): boolean {
+  return /exists; cannot create|some local refs could not be updated/i.test(output)
+}
+
+/**
  * Runs a git command whose answer is its exit code (merge-base
  * --is-ancestor, check-ignore…): true for 0, false for 1. simple-git can't
  * be asked this - a failure that prints nothing to stderr comes back as a

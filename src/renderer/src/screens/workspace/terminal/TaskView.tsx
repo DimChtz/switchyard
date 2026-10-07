@@ -92,9 +92,11 @@ export function TaskView({ task, project, chrome }: { task: Task; project: Proje
 
   const env: { label: string; v: string; sub: string; agent?: boolean }[] = [
     { label: 'Task', v: task.key, sub: task.title },
-    { label: 'Branch', v: task.branch ?? '—', sub: `from ${baseOf(task, project)}${wt?.behind ? ` · ${wt.behind} behind` : ''}` },
+    task.inPlace
+      ? { label: 'Branch', v: 'none of its own', sub: 'works on what’s checked out in the project folder' }
+      : { label: 'Branch', v: task.branch ?? '—', sub: `from ${baseOf(task, project)}${wt?.behind ? ` · ${wt.behind} behind` : ''}` },
     {
-      label: 'Worktree',
+      label: task.inPlace ? 'Folder' : 'Worktree',
       v: taskRoot(task) ?? '—',
       sub: !task.worktreePath ? 'not created' : (isMulti(task) ? `${reposOf(task).length} repos · ` : '') + (wt ? `${wt.ahead} commit${wt.ahead === 1 ? '' : 's'} · ${wt.dirty ? `${wt.dirty} uncommitted` : 'clean'}` : '…')
     },

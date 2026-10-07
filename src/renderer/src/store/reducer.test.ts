@@ -104,3 +104,29 @@ describe('moving a card within its column', () => {
     expect(s.tasks.filter((t) => t.col === 'ready').map((t) => t.id)).toEqual(['P-2', 'P-1', 'P-3'])
   })
 })
+
+describe('working in the project folder', () => {
+  it('starts with no branch or worktree of its own - in the project checkout', () => {
+    let s = start([task(1, { col: 'ready' })])
+    s = reducer(s, { type: 'OPEN_START_MODAL', taskId: 'P-1' })
+    s = reducer(s, { type: 'SET_START_OPTIONS', patch: { inPlace: true } })
+    s = reducer(s, { type: 'LAUNCH_START' })
+    s = reducer(s, { type: 'SET_START_WORKTREE_PATH', path: '/p' })
+    s = reducer(s, { type: 'FINISH_START' })
+    const t = s.tasks.find((x) => x.id === 'P-1')!
+    expect([t.col, t.branch, t.worktreePath, t.inPlace]).toEqual(['progress', null, '/p', true])
+    // Still a started task: its agent's news counts, and it doesn't ask to be started again.
+    s = reducer(s, { type: 'AGENT_STATUS', update: { taskId: 'P-1', st: 'waiting', ask: 'Go on?', askKind: 'message' } as never })
+    expect(s.tasks.find((x) => x.id === 'P-1')!.st).toBe('waiting')
+  })
+
+  it('opens the scratchpad, making it once - off the board, in the project folder', () => {
+    let s = reducer(start([task(1)]), { type: 'OPEN_SCRATCH', projectId: 'p' })
+    s = reducer(s, { type: 'OPEN_SCRATCH', projectId: 'p' })
+    const pads = s.tasks.filter((t) => t.scratch)
+    expect(pads.length).toBe(1)
+    expect([s.view, s.taskId, pads[0].worktreePath, pads[0].inPlace, pads[0].branch]).toEqual(['workspace', 'scratch-p', '/p', true, null])
+    // Its key doesn't use up a task number.
+    expect(add(s, 'next').tasks[0].key).toBe('P-2')
+  })
+})

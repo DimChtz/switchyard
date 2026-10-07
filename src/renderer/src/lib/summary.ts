@@ -173,7 +173,7 @@ export function buildSummary(input: {
   const worked = all.filter((r) => !r.finished).sort((a, b) => b.turns - a.turns || b.files - a.files)
 
   // Now: what waits for you.
-  const open = tasks.filter((t) => t.col !== 'done' && inProject(t.projectId))
+  const open = tasks.filter((t) => t.col !== 'done' && !t.scratch && inProject(t.projectId))
   const attention: AttentionRow[] = []
   // Clashing changes: each pair once, on the task with the most of them.
   const pairs = (input.conflicts?.pairs ?? []).filter((p) => p.conflicts.length && byId.has(p.a))

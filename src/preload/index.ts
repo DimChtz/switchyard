@@ -226,6 +226,7 @@ const api = {
     /** Why the task can't close through its pull request without losing work, or null when it can. */
     closeCheck: (worktreePath: string, branch: string, baseBranch: string, prRef?: string): Promise<string | null> =>
       ipcRenderer.invoke(IPC.gitCloseCheck, worktreePath, branch, baseBranch, prRef),
+    branchLeft: (repoPath: string, branch: string, baseBranch: string): Promise<number | null> => ipcRenderer.invoke(IPC.gitBranchLeft, repoPath, branch, baseBranch),
     pruneStaleNow: (): Promise<string[]> => ipcRenderer.invoke(IPC.worktreesPruneNow),
     onPruned: (cb: (pruned: string[]) => void): (() => void) => {
       const handler = (_e: Electron.IpcRendererEvent, pruned: string[]): void => cb(pruned)

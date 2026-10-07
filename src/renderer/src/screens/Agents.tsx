@@ -7,6 +7,7 @@ import { blockedTasks, workingTasks, doneTasks, agentShort, busyAgents, queuedTa
 import { usePtyTail } from '../lib/ptyTail'
 import { askText } from '../lib/agentControl'
 import type { Task } from '@shared/types'
+import { whereLabel } from '@shared/scratch'
 import { Button, useContextMenu } from '../components/ui'
 import { taskMenuItems } from '../lib/menus'
 import { shortcut } from '../lib/shortcuts'
@@ -61,7 +62,7 @@ function BlockedCard({ task }: { task: Task }): React.JSX.Element {
         </div>
         <div style={{ font: '500 14.5px var(--font-ui)' }}>{task.title}</div>
         <div style={{ font: "11.5px var(--font-mono)", color: 'var(--t3)' }}>
-          {project.name} · {task.branch}
+          {project.name} · {whereLabel(task)}
         </div>
       </div>
       <div
@@ -188,7 +189,7 @@ function WorkingCard({ task }: { task: Task }): React.JSX.Element {
         </span>
       </div>
       <div style={{ padding: '0 14px 12px', font: "11.5px var(--font-mono)", color: 'var(--t4)' }}>
-        {project.name} · {task.branch}
+        {project.name} · {whereLabel(task)}
       </div>
       {task.activity ? (
         <div style={{ padding: '0 14px 10px', font: '12.5px var(--font-ui)', color: 'var(--t2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
@@ -358,7 +359,7 @@ export function Agents(): React.JSX.Element {
                 <span style={{ color: 'var(--c-green)', fontFamily: 'var(--font-mono)' }}>✓</span>
                 <span style={{ color: 'var(--t1)' }}>{d.title}</span>
                 <span style={{ font: "12px var(--font-mono)", color: 'var(--t3)' }}>
-                  {project.name} · {d.branch}
+                  {project.name} · {whereLabel(d)}
                 </span>
                 <span style={{ font: "12px var(--font-mono)", color: 'var(--t2)' }}>
                   {agentShort(d.agentKind)} · {timeAgo(d.lastActivityAt)}

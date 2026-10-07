@@ -20,6 +20,7 @@ import { liveParent } from '@shared/stack'
 import { errText } from '../lib/errors'
 import { COLUMN_LABEL } from '@shared/constants'
 import { LayoutButtons } from './workspace/layout/LayoutButtons'
+import { useHeadBranch } from '../lib/headBranch'
 
 export function Workspace(): React.JSX.Element | null {
   const { state } = useAppStore()
@@ -40,10 +41,12 @@ function WorkspaceBody({ task, project }: { task: Task; project: Project }): Rea
   const repoProjects = reposOf(task)
     .map((id) => state.projects.find((p) => p.id === id))
     .filter((p): p is Project => !!p)
-  const attachable = state.projects.filter((p) => p.repoPath && !repoProjects.some((r) => r.id === p.id))
+  // (Not for one in the project's own checkout: there's no branch to have in the others.)
+  const attachable = task.inPlace ? [] : state.projects.filter((p) => p.repoPath && !repoProjects.some((r) => r.id === p.id))
   const [renaming, setRenaming] = useState<string | null>(null)
   const base = baseOf(task, project)
   const hasWorktree = !!(task.worktreePath && task.branch)
+  const headBranch = useHeadBranch(task.inPlace ? project.repoPath : null, task.lastActivityAt)
 
   useEffect(() => {
     window.api.git.remoteInfo(project.repoPath).then(setRemote)
@@ -137,6 +140,8 @@ function WorkspaceBody({ task, project }: { task: Task; project: Project }): Rea
   )
 
   const primary = useCallback((): void => {
+    // The scratchpad doesn't move anywhere.
+    if (task.scratch) return
     // Its pull request was merged on GitHub (in Review or still In Progress): it closes out.
     if (hasWorktree && task.pr?.state === 'MERGED' && (task.col === 'progress' || task.col === 'review')) {
       setBusy('finish')
@@ -148,6 +153,12 @@ function WorkspaceBody({ task, project }: { task: Task; project: Project }): Rea
       return
     }
     if (task.col === 'review') {
+      // In the project's own checkout: done is just done (nothing to merge).
+      if (task.inPlace) {
+        setBusy('finish')
+        finishTask(task, project, prefsFor(state, project.id), dispatch, state.projects).finally(() => setBusy(null))
+        return
+      }
       if (!hasWorktree) return dispatch({ type: 'TOAST', text: 'This task has no worktree to merge.' })
       if (!task.pr) {
         run('merge')
@@ -177,8 +188,9 @@ function WorkspaceBody({ task, project }: { task: Task; project: Project }): Rea
   }, [primary, task.col, task.pr?.state, state.start, state.palette, state.filePreview])
 
   const merged = task.pr?.state === 'MERGED'
-  const primaryLabel =
-    busy === 'merge'
+  const primaryLabel = task.scratch
+    ? null
+    : busy === 'merge'
         ? 'Merging…'
         : busy === 'finish'
           ? 'Finishing…'
@@ -187,7 +199,9 @@ function WorkspaceBody({ task, project }: { task: Task; project: Project }): Rea
             : task.col === 'progress'
               ? 'Move to Review'
               : task.col === 'review'
-                ? task.pr?.state === 'OPEN'
+                ? task.inPlace
+                  ? 'Finish'
+                  : task.pr?.state === 'OPEN'
                   ? 'Merge PR & finish'
                   : 'Merge & finish'
                 : task.col === 'done'
@@ -214,9 +228,17 @@ function WorkspaceBody({ task, project }: { task: Task; project: Project }): Rea
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: '0 1 auto', whiteSpace: 'nowrap', overflow: 'hidden' }}>
           <span style={{ fontSize: 13, color: 'var(--t3)', flex: 'none' }}>{repoProjects.map((p) => p.name).join(' + ')}</span>
           <span style={{ color: 'var(--bd-5)', flex: 'none' }}>/</span>
-          <span style={{ fontSize: 13, color: 'var(--t3)', flex: 'none' }}>{COLUMN_LABEL[task.col]}</span>
-          <span style={{ color: 'var(--bd-5)', flex: 'none' }}>/</span>
-          {renaming !== null ? (
+          {task.scratch ? null : (
+            <>
+              <span style={{ fontSize: 13, color: 'var(--t3)', flex: 'none' }}>{COLUMN_LABEL[task.col]}</span>
+              <span style={{ color: 'var(--bd-5)', flex: 'none' }}>/</span>
+            </>
+          )}
+          {task.scratch ? (
+            <span title="Terminals, agents and files in the project's own folder - outside any task" style={{ font: '500 13px var(--font-ui)', whiteSpace: 'nowrap' }}>
+              Scratchpad
+            </span>
+          ) : renaming !== null ? (
             <RenameInput
               value={renaming}
               onChange={setRenaming}
@@ -273,6 +295,10 @@ function WorkspaceBody({ task, project }: { task: Task; project: Project }): Rea
           {task.branch ? (
             <span title={task.branch} style={{ color: 'var(--t2)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               ⎇ {task.branch}
+            </span>
+          ) : task.inPlace ? (
+            <span title={`In ${task.worktreePath ?? project.repoPath} - on whatever is checked out there; no branch or worktree of its own`} style={{ color: 'var(--t2)', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              ⌂ project folder{headBranch ? ` · ${headBranch}` : ''}
             </span>
           ) : null}
           <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: task.agentKind ? statusColor(task.st) : 'var(--t3)', flex: 'none' }}>
@@ -468,7 +494,7 @@ function GoneLine({ task, onRecreated }: { task: Task; onRecreated: () => void }
   return (
     <AlertLine color="var(--c-red)" icon="⚠" title={task.worktreePath ?? undefined}>
       This task&apos;s worktree folder isn&apos;t there any more{task.pr?.state === 'MERGED' ? ` · PR #${task.pr.number ?? ''} is merged` : ''}
-      <AlertAction onClick={() => act((p) => finishGone(task, p, dispatch, state.projects))}>{busy ? 'working…' : 'finish task'}</AlertAction>
+      <AlertAction onClick={() => act((p) => finishGone(task, p, state.prefs, dispatch, state.projects))}>{busy ? 'working…' : 'finish task'}</AlertAction>
       {task.pr?.state === 'MERGED' ? null : <AlertAction onClick={() => act((p) => recreateWorktree(task, p, dispatch).then((ok) => (ok && onRecreated(), ok)))}>recreate worktree</AlertAction>}
     </AlertLine>
   )

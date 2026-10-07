@@ -7,7 +7,8 @@ import { join } from 'path'
 vi.mock('./store', () => ({ getPrefs: () => ({ worktreeRoot: '', syncMode: 'rebase' }) }))
 vi.mock('./log', () => ({ log: { info: () => {}, warn: () => {}, error: () => {} } }))
 
-import { addWorktree, closeCheck, closeWithPr, commitsAfter, defaultBranchOf, mergeAndPrune, getDiffFiles, getWorktreeStatus, mergeWithoutCheckout, parseUnifiedDiff } from './git'
+import { gitAt, gitFailure, refClash } from './gitEnv'
+import { addWorktree, branchLeft, closeCheck, closeWithPr, commitsAfter, defaultBranchOf, mergeAndPrune, getDiffFiles, getWorktreeStatus, mergeWithoutCheckout, parseUnifiedDiff } from './git'
 
 let dir = ''
 const git = (cwd: string, ...args: string[]): string => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd, stdio: 'pipe' }).toString().trim()
@@ -52,6 +53,36 @@ describe('git settings', () => {
     writeFileSync(join(r, 'a.txt'), 'one\n2\n')
     const files = await getDiffFiles(r, 'main')
     expect(files.map((f) => [f.path, f.added, f.deleted])).toEqual([['a.txt', 1, 1]])
+  })
+})
+
+describe('a fetch that fails on a branch name clash', () => {
+  it('says the error, not the last ref it listed - and a prune clears it', async () => {
+    const up = repo()
+    git(up, 'branch', 'foo')
+    const down = join(dir, 'down')
+    git(dir, 'clone', '-q', up, down)
+    // foo deleted upstream and foo/bar made: the stale origin/foo is in origin/foo/bar's way.
+    git(up, 'branch', '-D', 'foo')
+    git(up, 'branch', 'foo/bar')
+    git(up, 'branch', 'zzz-new')
+    const err = await gitAt(down)
+      .fetch(['origin', '--progress'])
+      .then(() => null)
+      .catch((e: unknown) => e)
+    expect(err).not.toBe(null)
+    expect(refClash(String((err as Error).message))).toBe(true)
+    const said = gitFailure(err)
+    expect(said).toMatch(/^error: cannot lock ref 'refs\/remotes\/origin\/foo\/bar'/)
+    expect(said).not.toContain('zzz-new')
+    await gitAt(down).raw(['remote', 'prune', 'origin'])
+    await gitAt(down).fetch(['origin', '--prune'])
+    expect(git(down, 'branch', '-r')).toContain('origin/foo/bar')
+  })
+
+  it('keeps the last line when there is no error line', () => {
+    expect(gitFailure(new Error('Something\nfatal: could not read from remote repository.'))).toBe('fatal: could not read from remote repository.')
+    expect(gitFailure(new Error('just this'))).toBe('just this')
   })
 })
 
@@ -232,6 +263,27 @@ describe('merging a finished task', () => {
     mainMovesOn(r)
     expect(await mergeAndPrune(r, wt, 'task', 'main')).toEqual({ merged: true })
     expect(readFileSync(join(r, 'n.txt'), 'utf-8')).toBe('new\n')
+  })
+
+  it('finishes a task whose worktree folder was deleted - its committed work is merged', async () => {
+    const { r, wt } = setup()
+    writeFileSync(join(wt, 'n.txt'), 'new\n')
+    git(wt, 'add', '-A')
+    git(wt, 'commit', '-qm', 'work')
+    rmSync(wt, { recursive: true, force: true })
+    expect(await branchLeft(r, 'task', 'main')).toBe(1)
+    expect(await mergeAndPrune(r, wt, 'task', 'main')).toEqual({ merged: true })
+    expect(readFileSync(join(r, 'n.txt'), 'utf-8')).toBe('new\n')
+    expect(git(r, 'worktree', 'list')).not.toContain('task-wt')
+  })
+
+  it('finishes a task whose worktree and branch are both gone', async () => {
+    const { r, wt } = setup()
+    rmSync(wt, { recursive: true, force: true })
+    git(r, 'worktree', 'prune')
+    git(r, 'branch', '-D', 'task')
+    expect(await branchLeft(r, 'task', 'main')).toBe(null)
+    expect(await mergeAndPrune(r, wt, 'task', 'main')).toEqual({ merged: false })
   })
 })
 

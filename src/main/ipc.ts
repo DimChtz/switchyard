@@ -227,6 +227,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.gitPrMergeMethods, (_e, cwd: string) => git.prMergeMethods(cwd))
   ipcMain.handle(IPC.gitMergePr, (_e, cwd: string, ref: string, method: git.PrMergeMethod) => git.mergePr(cwd, ref, method))
   ipcMain.handle(IPC.gitCloseCheck, (_e, worktreePath: string, branch: string, baseBranch: string, prRef?: string) => git.closeCheck(worktreePath, branch, baseBranch, prRef))
+  ipcMain.handle(IPC.gitBranchLeft, (_e, repoPath: string, branch: string, baseBranch: string) => git.branchLeft(repoPath, branch, baseBranch))
   ipcMain.handle(IPC.worktreesPruneNow, () => cleanup.pruneStale(true))
   cleanup.startCleanup()
 

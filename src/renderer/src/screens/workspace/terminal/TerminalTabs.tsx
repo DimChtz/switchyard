@@ -3,15 +3,18 @@ import { useAppStore } from '../../../store/AppStore'
 import { agentShort } from '../../../lib/derive'
 import { TerminalView } from '../../../components/TerminalView'
 import { AGENTS } from '@shared/constants'
-import { agentSessionId, projectEnv, setupSessionId, testsSessionId } from '../../../lib/agentControl'
+import { agentSessionId, projectEnv, setupSessionId, startAgent, testsSessionId } from '../../../lib/agentControl'
 import { Button } from '../../../components/ui'
 import { taskRoot } from '../../../lib/multiRepo'
 import { useShells } from '../../../lib/wsStore'
-import type { PtyInfo, Project, Task } from '@shared/types'
+import { prefsFor } from '../../../lib/projectPrefs'
+import { errText } from '../../../lib/errors'
+import type { AgentKind, PtyInfo, Project, Task } from '@shared/types'
 
 /** The agent's session as a tab: its real terminal, or a way to start it again. */
 export function AgentTab({ task, visible }: { task: Task; visible: boolean }): React.JSX.Element {
-  const { dispatch } = useAppStore()
+  const { state, dispatch } = useAppStore()
+  const project = state.projects.find((p) => p.id === task.projectId)
   const agentDef = AGENTS.find((a) => a.kind === task.agentKind)
   const sessionId = agentSessionId(task.id)
   // The agent is started by the launch flow (or Resume/Restart), never just
@@ -40,6 +43,8 @@ export function AgentTab({ task, visible }: { task: Task; visible: boolean }): R
   }, [sessionId, task.st])
 
   if (session === 'loading') return <div style={{ flex: 1, minHeight: 0 }} />
+  // The scratchpad: any agent, started here and now (none yet, or the last one exited).
+  if (task.scratch && (!session || !session.running)) return <ScratchAgents task={task} project={project} ended={session ? (session.exitCode ?? 0) : null} />
   if (session)
     return (
       <>
@@ -68,6 +73,68 @@ export function AgentTab({ task, visible }: { task: Task; visible: boolean }): R
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--t4)', fontSize: 13, padding: 20, textAlign: 'center' }}>
       {task.worktreePath ? 'No agent on this task.' : 'This task has no worktree yet.'}
+    </div>
+  )
+}
+
+/**
+ * The scratchpad's agent: pick one and it starts in the project's folder
+ * with no task to work on - you tell it what to do. `ended`: the exit code
+ * of the one that ran before (null: none has).
+ */
+function ScratchAgents({ task, project, ended }: { task: Task; project: Project | undefined; ended: number | null }): React.JSX.Element {
+  const { state, dispatch } = useAppStore()
+  const [installed, setInstalled] = useState<Partial<Record<AgentKind, boolean>> | null>(null)
+  const [busy, setBusy] = useState<AgentKind | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    window.api.agents
+      .detectInstalled()
+      .then((i) => !cancelled && setInstalled(i))
+      .catch(() => !cancelled && setInstalled({}))
+    return () => {
+      cancelled = true
+    }
+  }, [])
+  const agents = AGENTS.filter((a) => !state.prefs.agentsOff.includes(a.kind))
+  const go = (kind: AgentKind, resume: boolean): void => {
+    if (busy || !project) return
+    setBusy(kind)
+    dispatch({ type: 'SET_TASK_AGENT', taskId: task.id, agentKind: kind })
+    // A fresh session has no first message: it's waiting for yours.
+    startAgent({ ...task, agentKind: kind, firstMessage: null, session: resume ? task.session : null }, project, prefsFor(state, project.id), resume ? 'resume' : 'fresh')
+      .catch((err: unknown) => dispatch({ type: 'TOAST', text: `Could not start ${AGENTS.find((a) => a.kind === kind)?.name ?? kind}: ${errText(err)}` }))
+      .finally(() => setBusy(null))
+  }
+  const last = AGENTS.find((a) => a.kind === task.agentKind)
+  return (
+    <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, padding: 20, textAlign: 'center' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <div style={{ font: '500 14px var(--font-ui)', color: 'var(--t1)' }}>{ended === null || !last ? 'Start an agent in the scratchpad' : `${last.name} ${ended === 0 ? 'exited' : `exited with code ${ended}`}`}</div>
+        <div style={{ font: '12.5px var(--font-ui)', color: 'var(--t3)', maxWidth: 420, textWrap: 'pretty' } as React.CSSProperties}>
+          It works in {project?.name ?? 'the project'}&apos;s own folder, on whatever is checked out there - no task, branch or worktree. Tell it what to do once it&apos;s up.
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+        {/* Only its own conversation (known by id): "the latest one here" could be one of yours in this folder. */}
+        {last && task.session?.id && (last.kind === 'claude' || last.kind === 'codex') ? (
+          <Button variant="primary" size="lg" disabled={!!busy} onClick={() => go(last.kind, true)}>
+            Resume {last.name}
+          </Button>
+        ) : null}
+        {agents.map((a) => (
+          <Button
+            key={a.kind}
+            size="lg"
+            variant={ended === null && a.kind === (project?.agentKind ?? state.prefs.defaultAgent) ? 'primary' : undefined}
+            disabled={!!busy || installed?.[a.kind] === false}
+            title={installed?.[a.kind] === false ? `${a.name} isn't installed` : undefined}
+            onClick={() => go(a.kind, false)}
+          >
+            {busy === a.kind ? 'Starting…' : `${ended !== null && a.kind === last?.kind ? 'New' : 'Start'} ${a.name}`}
+          </Button>
+        ))}
+      </div>
     </div>
   )
 }

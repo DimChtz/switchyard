@@ -6,6 +6,7 @@ import { agentShort, busyAgents, nextTaskKey, raiseKeyHigh } from '../lib/derive
 import { clock, waitingText } from '../lib/status'
 import { prefsFor } from '../lib/projectPrefs'
 import { waitsFor, wouldLoop } from '@shared/stack'
+import { isStarted, makeScratch, scratchId } from '@shared/scratch'
 import { remember, travel } from './history'
 
 let toastSeq = 0
@@ -127,7 +128,7 @@ function reduce(state: AppState, action: Action): AppState {
       // Within its column: only its place changes.
       if (action.col === task.col) return action.before === undefined ? state : { ...state, tasks: placeTask(state.tasks, task.id, action.before) }
 
-      if (action.col === 'progress' && !(task.agentKind && task.branch)) {
+      if (action.col === 'progress' && !isStarted(task)) {
         // Caller is expected to dispatch OPEN_START_MODAL instead in this case.
         return state
       }
@@ -318,7 +319,8 @@ function reduce(state: AppState, action: Action): AppState {
           taskDir: null,
           model: task.model ?? '',
           planFirst: task.planFirst ?? false,
-          images: []
+          images: [],
+          inPlace: task.inPlace ?? false
         }
       }
     }
@@ -362,9 +364,9 @@ function reduce(state: AppState, action: Action): AppState {
       const task = state.tasks.find((t) => t.id === state.start!.taskId)
       const waiting = task ? waitsFor(task, state.tasks) : undefined
       if ((max > 0 && busy >= max) || waiting) {
-        const { taskId, agentKind, branch, message, repos, model, planFirst, images } = state.start
+        const { taskId, agentKind, branch, message, repos, model, planFirst, images, inPlace } = state.start
         return withToast(
-          { ...state, start: null, tasks: mapTask(state, taskId, (t) => ({ ...t, repos, queued: { agentKind, branch, message, at: Date.now(), model, planFirst, images } })) },
+          { ...state, start: null, tasks: mapTask(state, taskId, (t) => ({ ...t, repos, queued: { agentKind, branch, message, at: Date.now(), model, planFirst, images, inPlace } })) },
           waiting ? `Queued - starts from ${waiting.key}'s branch once ${waiting.key} is in Review.` : `Queued - ${busy} agent${busy > 1 ? 's are' : ' is'} working (limit ${max}).`
         )
       }
@@ -398,7 +400,7 @@ function reduce(state: AppState, action: Action): AppState {
       return {
         ...opened,
         tasks: mapTask(opened, task.id, (t) => ({ ...t, queued: null })),
-        start: { ...opened.start, agentKind: q.agentKind, branch: q.branch, message: q.message, model: q.model ?? '', planFirst: q.planFirst ?? false, images: q.images ?? [], phase: 'launch', step: 0, background: true, launchedAt: Date.now() }
+        start: { ...opened.start, agentKind: q.agentKind, branch: q.branch, message: q.message, model: q.model ?? '', planFirst: q.planFirst ?? false, images: q.images ?? [], inPlace: q.inPlace ?? false, phase: 'launch', step: 0, background: true, launchedAt: Date.now() }
       }
     }
 
@@ -484,19 +486,21 @@ function reduce(state: AppState, action: Action): AppState {
 
     case 'FINISH_START': {
       if (!state.start) return state
-      const { taskId, agentKind, branch, background, worktreePath, message, repos, taskDir, model, planFirst } = state.start
+      const { taskId, agentKind, branch, background, worktreePath, message, repos, taskDir, model, planFirst, inPlace } = state.start
       const task = state.tasks.find((t) => t.id === taskId)
       if (!task) return { ...state, start: null }
-      const worktreeId = `wt-${taskId.toLowerCase()}`
+      const worktreeId = inPlace ? null : `wt-${taskId.toLowerCase()}`
       const nextTasks = mapTask(state, taskId, (t) => ({
         ...t,
         col: 'progress',
         agentKind,
-        branch,
+        // In the project's own checkout: no branch of its own (nothing to merge, push or remove).
+        branch: inPlace ? null : branch,
+        inPlace,
         worktreeId,
         worktreePath,
-        repos,
-        taskDir,
+        repos: inPlace ? [] : repos,
+        taskDir: inPlace ? null : taskDir,
         firstMessage: message,
         model: model.trim() || null,
         planFirst,
@@ -559,7 +563,7 @@ function reduce(state: AppState, action: Action): AppState {
       const { update } = action
       const task = state.tasks.find((t) => t.id === update.taskId)
       // Ignore sessions for tasks that aren't (or are no longer) started.
-      if (!task || !task.agentKind || !task.branch || task.col === 'done') return state
+      if (!task || !isStarted(task) || task.col === 'done') return state
       // A paused agent was interrupted on purpose - it going idle is expected.
       if (task.st === 'paused' && update.st === 'waiting') return state
       const activity = update.activity !== undefined ? update.activity : task.activity ?? null
@@ -760,6 +764,22 @@ function reduce(state: AppState, action: Action): AppState {
 
     case 'SET_START_OPTIONS':
       return state.start ? { ...state, start: { ...state.start, ...action.patch } } : state
+
+    case 'OPEN_SCRATCH': {
+      const project = state.projects.find((p) => p.id === action.projectId)
+      if (!project?.repoPath) return state
+      const id = scratchId(project.id)
+      const have = state.tasks.find((t) => t.id === id)
+      // Its folder follows the project's (the repository moved, say).
+      const tasks = !have ? [...state.tasks, makeScratch(project)] : have.worktreePath !== project.repoPath ? mapTask(state, id, (t) => ({ ...t, worktreePath: project.repoPath })) : state.tasks
+      return { ...state, tasks, view: 'workspace', projectId: project.id, taskId: id, palette: null }
+    }
+
+    case 'SET_TASK_AGENT':
+      return {
+        ...state,
+        tasks: mapTask(state, action.taskId, (t) => ({ ...t, agentKind: action.agentKind, st: 'done', ask: null, askKind: null, session: null, activity: null, lastActivityAt: Date.now() }))
+      }
 
     case 'BASE_STATUS': {
       const base = { ...state.base }

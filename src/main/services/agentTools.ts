@@ -345,7 +345,11 @@ const TOOLS: Tool[] = [
       const lines = [
         `${task.key}: ${task.title}`,
         task.desc ? `Description: ${task.desc}` : '',
-        `Board column: ${COLUMN_LABEL[task.col]}. Branch: ${task.branch ?? '-'}.`,
+        task.scratch
+          ? "This is the project's scratchpad, not a task: you work in the project's own folder, on whatever is checked out there. Do what you're asked; there's nothing to merge or hand in."
+          : task.inPlace
+            ? `Board column: ${COLUMN_LABEL[task.col]}. No branch of its own: you work in the project's own folder, on whatever is checked out there (the person works there too - don't switch branches or commit unless asked).`
+            : `Board column: ${COLUMN_LABEL[task.col]}. Branch: ${task.branch ?? '-'}.`,
         parent
           ? parent.col === 'done'
             ? `It built on ${parent.key} "${parent.title}", which is merged now.`

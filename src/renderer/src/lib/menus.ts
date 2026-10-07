@@ -32,6 +32,8 @@ export function taskMenuItems(
   dispatch: Dispatch,
   opts: { rename?: () => void; editDesc?: () => void; inWorkspace?: boolean; projects?: Project[] } = {}
 ): MenuItem[] {
+  // The scratchpad: just the folder it's in.
+  if (task.scratch) return [...(opts.inWorkspace ? [] : [{ label: 'Open scratchpad', onClick: () => dispatch({ type: 'OPEN_SCRATCH', projectId: task.projectId }) }]), ...folderItems(task.worktreePath ?? project?.repoPath ?? '', dispatch)]
   const startable = !task.worktreePath && (task.col === 'backlog' || task.col === 'ready')
   const open: MenuItem[] = opts.inWorkspace
     ? []
@@ -61,8 +63,8 @@ export function taskMenuItems(
     { label: task.pinnedAt ? 'Unpin' : 'Pin to top', onClick: () => dispatch({ type: 'PIN_TASK', taskId: task.id, pinned: !task.pinnedAt }) },
     ...(opts.rename ? [{ label: 'Rename', onClick: opts.rename }] : []),
     ...(opts.editDesc ? [{ label: 'Edit description', onClick: opts.editDesc }] : []),
-    // A next step that needs this one's changes: its branch starts from this one's.
-    ...(task.col !== 'done'
+    // A next step that needs this one's changes: its branch starts from this one's (one in the project folder has none).
+    ...(task.col !== 'done' && !task.inPlace
       ? [
           {
             label: 'New task building on this',
@@ -94,6 +96,7 @@ export function projectMenuItems(project: Project, tasks: Task[], dispatch: Disp
   const muted = opts.muted?.includes(project.id)
   return [
     { label: 'Open board', onClick: () => dispatch({ type: 'NAV', view: 'board', projectId: project.id }) },
+    { label: 'Open scratchpad', onClick: () => dispatch({ type: 'OPEN_SCRATCH', projectId: project.id }) },
     {
       label: 'New task',
       onClick: () => {

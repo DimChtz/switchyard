@@ -3,7 +3,7 @@ import type { Action } from '../store/types'
 import { agentSessionId, killTaskSessions, projectEnv, runCommandSession, setupSessionId, startAgent } from './agentControl'
 import { checkoutsOf, repoDir, taskRoot } from './multiRepo'
 import { errText } from './errors'
-import { confirm, type MenuItem } from '../components/ui'
+import { choose, confirm, type MenuItem } from '../components/ui'
 import { baseOf, unmergedParent } from './stack'
 
 type Dispatch = (action: Action) => void
@@ -231,13 +231,29 @@ export async function freshPr(task: Task, dispatch: Dispatch): Promise<Task['pr'
 
 /**
  * Done, for a task whose worktree folder was deleted outside Switchyard:
- * through its pull request when it has one (merged: the branch goes too);
- * otherwise git forgets the worktree and the branch stays - nothing of the
- * work that's committed is lost.
+ * through its pull request when it has one (merged: the branch goes too).
+ * Otherwise its branch decides: commits the base doesn't have - asked
+ * whether to merge them or keep the branch; nothing left to merge - it goes.
+ * Either way git forgets the worktree, and nothing committed is lost.
  */
-export async function finishGone(task: Task, project: Project, dispatch: Dispatch, projects: Project[] = [project]): Promise<boolean> {
+export async function finishGone(task: Task, project: Project, prefs: Prefs, dispatch: Dispatch, projects: Project[] = [project]): Promise<boolean> {
   const pr = await freshPr(task, dispatch)
   if (pr) return finishWithPr({ ...task, pr }, project, dispatch, projects)
+  const base = baseOf(task, project)
+  const left = task.branch ? await window.api.git.branchLeft(project.repoPath, task.branch, base).catch(() => null) : null
+  // (The merge copes with the missing folder; it's pruned, there's nothing to keep.)
+  const merge = (): Promise<boolean> => mergeTask(task, project, { ...prefs, pruneAfterMerge: true }, dispatch, false, projects)
+  if (left === 0) return merge()
+  if (left) {
+    const answer = await choose({
+      title: `${task.key}'s worktree is gone - merge its branch?`,
+      body: `${task.branch} has ${left} commit${left > 1 ? 's' : ''} ${base} doesn't. Merge ${left > 1 ? 'them' : 'it'} into ${base} and finish, or finish and keep the branch.`,
+      confirmLabel: `Merge into ${base} & finish`,
+      altLabel: 'Finish, keep branch'
+    })
+    if (!answer) return false
+    if (answer === 'confirm') return merge()
+  }
   try {
     await killTaskSessions(task.id)
     for (const c of checkoutsOf(task, projects)) await window.api.git.pruneWorktrees(c.project.repoPath)
@@ -253,6 +269,18 @@ export async function finishGone(task: Task, project: Project, dispatch: Dispatc
     dispatch({ type: 'TOAST', text: `Could not finish: ${errText(err)}` })
     return false
   }
+}
+
+/**
+ * Done, for a task that worked in the project's own checkout: its sessions
+ * stop and that's all - nothing to merge, and the checkout (with whatever
+ * it changed there) stays as it is.
+ */
+export async function finishInPlace(task: Task, dispatch: Dispatch): Promise<boolean> {
+  if (task.scratch) return false
+  await killTaskSessions(task.id)
+  dispatch({ type: 'FINISH_TASK', taskId: task.id, note: 'Worked in the project folder · nothing merged', toast: `${task.key} is done - it worked in the project folder, so there was nothing to merge.` })
+  return true
 }
 
 /** Checks the task's branch out again where its worktree was (from the base branch when the branch is gone too). */
@@ -277,7 +305,8 @@ export async function recreateWorktree(task: Task, project: Project, dispatch: D
  */
 export async function deleteTask(task: Task, project: Project, dispatch: Dispatch, removeWorktree: boolean, projects: Project[] = [project]): Promise<void> {
   await killTaskSessions(task.id)
-  if (removeWorktree && task.worktreePath && task.branch) {
+  // (One in the project's own checkout has no worktree of its own: that folder is never removed.)
+  if (removeWorktree && task.worktreePath && task.branch && !task.inPlace) {
     try {
       for (const w of worktreesOf(task, projects).slice(1)) await window.api.git.discardWorktree(w.project.repoPath, w.path, task.branch)
       await window.api.git.discardWorktree(project.repoPath, task.worktreePath, task.branch)
@@ -314,12 +343,14 @@ export async function removeProject(project: Project, tasks: Task[], dispatch: D
 
 /** The task menus' two Delete items: asks first, saying what goes and what stays. */
 export function deleteTaskItems(task: Task, project: Project | undefined, dispatch: Dispatch, projects: Project[] = project ? [project] : []): MenuItem[] {
+  if (task.scratch) return []
   const repoNames = checkoutsOf(task, projects).map((c) => c.project.name)
+  const own = !!task.worktreePath && !task.inPlace
   const ask = async (removeWorktree: boolean): Promise<void> => {
     if (!project) return
     const ok = await confirm({
       title: `Delete ${task.key} “${task.title}”?`,
-      body: !task.worktreePath
+      body: !own
         ? 'The task is removed from the board.'
         : removeWorktree
           ? `Its ${repoNames.length > 1 ? `worktrees in ${repoNames.join(' and ')}` : 'worktree'} and branch ${task.branch ?? ''} are removed too - uncommitted work included. This can't be undone.`
@@ -331,8 +362,8 @@ export function deleteTaskItems(task: Task, project: Project | undefined, dispat
     if (ok) await deleteTask(task, project, dispatch, removeWorktree, projects)
   }
   return [
-    { label: task.worktreePath ? 'Delete task, keep worktree…' : 'Delete task…', danger: true, separatorBefore: true, onClick: () => ask(false) },
-    ...(task.worktreePath ? [{ label: 'Delete task and worktree…', danger: true, onClick: () => ask(true) }] : [])
+    { label: own ? 'Delete task, keep worktree…' : 'Delete task…', danger: true, separatorBefore: true, onClick: () => ask(false) },
+    ...(own ? [{ label: 'Delete task and worktree…', danger: true, onClick: () => ask(true) }] : [])
   ]
 }
 

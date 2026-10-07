@@ -1,5 +1,5 @@
 import { gitAt, gitArgs, gitEnv, gitYes, newestBase } from './gitEnv'
-import { basename, isAbsolute, join } from 'path'
+import { basename, dirname, isAbsolute, join } from 'path'
 import { promises as fs } from 'fs'
 import { tmpdir } from 'os'
 import { execFile } from 'child_process'
@@ -220,14 +220,15 @@ export async function pruneWorktrees(repoPath: string): Promise<void> {
  * as it was.
  */
 export async function mergeAndPrune(repoPath: string, worktreePath: string, branch: string, baseBranch: string, prune = true, message?: string): Promise<{ merged: boolean }> {
-  const dirty = (await gitAt(worktreePath).status()).files.length
+  // A worktree folder deleted outside Switchyard has nothing uncommitted to lose; its commits are on the branch.
+  const dirty = (await isWorktree(worktreePath)) ? (await gitAt(worktreePath).status()).files.length : 0
   if (dirty > 0) {
     throw new Error(`The worktree has ${dirty} uncommitted change${dirty > 1 ? 's' : ''} - commit or discard them first (Changes tab).`)
   }
   const main = gitAt(repoPath)
   // Nothing the base doesn't have already (no commits of its own, or merged some other way - a
-  // squash on GitHub, say): no merge, so no empty merge commit on the base.
-  const merged = !(await nothingToMerge(repoPath, branch, baseBranch))
+  // squash on GitHub, say): no merge, so no empty merge commit on the base. No branch at all: nothing either.
+  const merged = (await branchExists(repoPath, branch)) && !(await nothingToMerge(repoPath, branch, baseBranch))
   if (merged) {
     // The base branch checked out somewhere: merge there, so its files follow.
     // Checked out nowhere (you're on another branch): merge without a checkout.
@@ -241,6 +242,24 @@ export async function mergeAndPrune(repoPath: string, worktreePath: string, bran
   // -D when nothing was merged: its commits may be in the base only as a squash, which -d doesn't see.
   await main.raw(['branch', merged ? '-d' : '-D', branch]).catch(() => {})
   return { merged }
+}
+
+function branchExists(repoPath: string, branch: string): Promise<boolean> {
+  return gitYes(repoPath, ['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`]).catch(() => false)
+}
+
+/**
+ * The commits on `branch` that merging it into the base would bring: 0 when
+ * there's nothing to merge, null when the branch doesn't exist.
+ */
+export async function branchLeft(repoPath: string, branch: string, baseBranch: string): Promise<number | null> {
+  if (!(await branchExists(repoPath, branch))) return null
+  if (await nothingToMerge(repoPath, branch, baseBranch)) return 0
+  const n = await gitAt(repoPath)
+    .raw(['rev-list', '--count', `refs/heads/${baseBranch}..refs/heads/${branch}`])
+    .then((out) => Number(out.trim()) || 0)
+    .catch(() => 0)
+  return Math.max(n, 1)
 }
 
 /**
@@ -577,8 +596,22 @@ export async function remoteInfo(repoPath: string): Promise<RemoteInfo | null> {
 }
 
 async function gh(args: string[], cwd: string): Promise<string> {
-  const { stdout } = await execFileP('gh', args, { cwd, windowsHide: true, timeout: 60_000, maxBuffer: 32 * 1024 * 1024, env: gitEnv({ GH_PROMPT_DISABLED: '1', GH_NO_UPDATE_NOTIFIER: '1' }) })
+  const { stdout } = await execFileP('gh', args, { cwd: await existingDir(cwd), windowsHide: true, timeout: 60_000, maxBuffer: 32 * 1024 * 1024, env: gitEnv({ GH_PROMPT_DISABLED: '1', GH_NO_UPDATE_NOTIFIER: '1' }) })
   return stdout.trim()
+}
+
+/**
+ * `dir`, or the nearest folder above it that exists: a task's worktree may be
+ * deleted outside Switchyard, and its pull request (asked about by URL) can
+ * still be looked at, merged and finished with.
+ */
+async function existingDir(dir: string): Promise<string> {
+  for (let d = dir; ; ) {
+    if (await fs.stat(d).then((s) => s.isDirectory()).catch(() => false)) return d
+    const up = dirname(d)
+    if (up === d) return dir
+    d = up
+  }
 }
 
 let ghReady: { ok: boolean; at: number } | null = null
