@@ -3,7 +3,8 @@ import { useAppStore } from '../store/AppStore'
 import { killTaskSessions } from '../lib/agentControl'
 import { useHover } from '../lib/useHover'
 import { statusColor, timeAgo } from '../lib/status'
-import { agentShort, staleWorktrees, type WorktreeRow } from '../lib/derive'
+import { agentShort, nextTaskKey, staleWorktrees, type WorktreeRow } from '../lib/derive'
+import { titleFromBranch } from '../lib/outside'
 import { useRealWorktrees } from '../lib/realGit'
 import { errText } from '../lib/errors'
 import { keyLabel, revealLabel } from '../lib/keys'
@@ -63,6 +64,23 @@ async function removeWorktree(wt: WorktreeRow, task: Task | null, project: Proje
   }
 }
 
+/**
+ * A worktree no task holds, as a new task: it's made (named after its
+ * branch) and the Start dialog opens with this worktree picked - the task
+ * takes it over as it is, on its branch.
+ */
+function startHere(wt: WorktreeRow, project: Project, tasks: Task[], dispatch: (a: Action) => void): void {
+  const key = nextTaskKey(tasks, project)
+  const now = Date.now()
+  dispatch({
+    type: 'ADD_TASK',
+    task: { id: key, key, projectId: project.id, title: titleFromBranch(wt.branch), desc: '', col: 'ready', agentKind: null, st: null, worktreeId: null, worktreePath: null, branch: null, ask: null, doneNote: null, firstMessage: null, createdAt: now, startedAt: null, lastActivityAt: now }
+  })
+  dispatch({ type: 'OPEN_START_MODAL', taskId: key })
+  dispatch({ type: 'SET_START_OPTIONS', patch: { existingWorktree: wt.path } })
+  dispatch({ type: 'SET_START_BRANCH', branch: wt.branch })
+}
+
 /** A shell in the worktree: a new tab in the task's workspace, else the system terminal. */
 function openTerminalIn(wt: WorktreeRow, task: Task | null, dispatch: (a: Action) => void): void {
   if (task) {
@@ -88,7 +106,9 @@ function Row({ wt, onChanged }: { wt: WorktreeRow; onChanged: () => void }): Rea
           { label: 'Open workspace', onClick: () => dispatch({ type: 'OPEN_TASK', taskId: task.id }) },
           { label: 'Browse files', onClick: () => dispatch({ type: 'OPEN_TASK', taskId: task.id, tab: 'files' }) }
         ]
-      : []),
+      : project && wt.branch
+        ? [{ label: 'Start a task here…', onClick: () => startHere(wt, project, state.tasks, dispatch) }]
+        : []),
     { label: task ? 'Open terminal here' : 'Open in terminal', shortcut: keyLabel('⌘T'), onClick: () => openTerminalIn(wt, task, dispatch) },
     { label: revealLabel, separatorBefore: true, onClick: () => window.api.sys.showItem(wt.path).catch(toastErr) },
     { label: 'Open in Editor', onClick: () => window.api.sys.openInEditor(wt.path).catch(toastErr) },
@@ -273,9 +293,14 @@ function DetailPanel({ worktrees, onChanged }: { worktrees: WorktreeRow[]; onCha
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-start' }}>
             <div style={{ font: '12.5px var(--font-ui)', color: 'var(--t4)' }}>No task linked to this worktree.</div>
-            <Button size="sm" onClick={() => dispatch({ type: 'OPEN_OUTSIDE', projectId: project.id })} title="Make it a task on the board - with its agent's conversation, if it has one">
-              Bring in as a task…
-            </Button>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <Button size="sm" variant="primary" onClick={() => startHere(wt, project, state.tasks, dispatch)} title="A new task that takes this worktree over as it is, on its branch - the Start dialog opens with it picked">
+                Start a task here…
+              </Button>
+              <Button size="sm" onClick={() => dispatch({ type: 'OPEN_OUTSIDE', projectId: project.id })} title="Make it a task on the board - with its agent's conversation, if it has one">
+                Bring in as a task…
+              </Button>
+            </div>
           </div>
         )}
       </div>

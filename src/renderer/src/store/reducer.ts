@@ -7,6 +7,7 @@ import { clock, waitingText } from '../lib/status'
 import { prefsFor } from '../lib/projectPrefs'
 import { waitsFor, wouldLoop } from '@shared/stack'
 import { isStarted, makeScratch, scratchId } from '@shared/scratch'
+import { branchProblem } from '@shared/branchName'
 import { remember, travel } from './history'
 
 let toastSeq = 0
@@ -321,7 +322,8 @@ function reduce(state: AppState, action: Action): AppState {
           planFirst: task.planFirst ?? false,
           images: [],
           inPlace: task.inPlace ?? false,
-          existingWorktree: null
+          existingWorktree: null,
+          baseBranch: task.baseBranch ?? null
         }
       }
     }
@@ -359,15 +361,18 @@ function reduce(state: AppState, action: Action): AppState {
 
     case 'LAUNCH_START': {
       if (!state.start || state.start.phase !== 'config') return state
+      // A new branch git wouldn't take (the dialog says why; ⌘↵ gets here too).
+      const bad = state.start.inPlace || state.start.existingWorktree ? null : branchProblem(state.start.branch)
+      if (bad) return withToast(state, bad)
       // All slots taken (Settings → Agents), or the task it builds on hasn't started: it waits in the queue.
       const max = state.prefs.maxAgents
       const busy = busyAgents(state.tasks)
       const task = state.tasks.find((t) => t.id === state.start!.taskId)
       const waiting = task ? waitsFor(task, state.tasks) : undefined
       if ((max > 0 && busy >= max) || waiting) {
-        const { taskId, agentKind, branch, message, repos, model, planFirst, images, inPlace, existingWorktree } = state.start
+        const { taskId, agentKind, branch, message, repos, model, planFirst, images, inPlace, existingWorktree, baseBranch } = state.start
         return withToast(
-          { ...state, start: null, tasks: mapTask(state, taskId, (t) => ({ ...t, repos, queued: { agentKind, branch, message, at: Date.now(), model, planFirst, images, inPlace, existingWorktree } })) },
+          { ...state, start: null, tasks: mapTask(state, taskId, (t) => ({ ...t, repos, queued: { agentKind, branch, message, at: Date.now(), model, planFirst, images, inPlace, existingWorktree, baseBranch } })) },
           waiting ? `Queued - starts from ${waiting.key}'s branch once ${waiting.key} is in Review.` : `Queued - ${busy} agent${busy > 1 ? 's are' : ' is'} working (limit ${max}).`
         )
       }
@@ -401,7 +406,7 @@ function reduce(state: AppState, action: Action): AppState {
       return {
         ...opened,
         tasks: mapTask(opened, task.id, (t) => ({ ...t, queued: null })),
-        start: { ...opened.start, agentKind: q.agentKind, branch: q.branch, message: q.message, model: q.model ?? '', planFirst: q.planFirst ?? false, images: q.images ?? [], inPlace: q.inPlace ?? false, existingWorktree: q.existingWorktree ?? null, phase: 'launch', step: 0, background: true, launchedAt: Date.now() }
+        start: { ...opened.start, agentKind: q.agentKind, branch: q.branch, message: q.message, model: q.model ?? '', planFirst: q.planFirst ?? false, images: q.images ?? [], inPlace: q.inPlace ?? false, existingWorktree: q.existingWorktree ?? null, baseBranch: q.baseBranch ?? opened.start.baseBranch, phase: 'launch', step: 0, background: true, launchedAt: Date.now() }
       }
     }
 
@@ -487,7 +492,7 @@ function reduce(state: AppState, action: Action): AppState {
 
     case 'FINISH_START': {
       if (!state.start) return state
-      const { taskId, agentKind, branch, background, worktreePath, message, repos, taskDir, model, planFirst, inPlace } = state.start
+      const { taskId, agentKind, branch, background, worktreePath, message, repos, taskDir, model, planFirst, inPlace, baseBranch } = state.start
       const task = state.tasks.find((t) => t.id === taskId)
       if (!task) return { ...state, start: null }
       const worktreeId = inPlace ? null : `wt-${taskId.toLowerCase()}`
@@ -498,6 +503,7 @@ function reduce(state: AppState, action: Action): AppState {
         // In the project's own checkout: no branch of its own (nothing to merge, push or remove).
         branch: inPlace ? null : branch,
         inPlace,
+        baseBranch: inPlace ? null : baseBranch,
         worktreeId,
         worktreePath,
         repos: inPlace ? [] : repos,

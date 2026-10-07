@@ -28,9 +28,15 @@ export function liveParent(task: Pick<Task, 'buildsOn'>, projectId: string, task
   return p && p.branch && p.col !== 'done' && worksIn(p, projectId) ? p : undefined
 }
 
-/** The branch a task branches from, compares against and merges into, in a repository. */
-export function baseFor(task: Pick<Task, 'buildsOn'>, project: Pick<Project, 'id' | 'defaultBranch'>, tasks: Task[]): string {
-  return liveParent(task, project.id, tasks)?.branch ?? project.defaultBranch ?? 'main'
+/**
+ * The branch a task branches from, compares against and merges into, in a
+ * repository: the task it builds on's (until that's merged), else the one
+ * picked at Start for its home repository (develop, a release branch), else
+ * the project's default.
+ */
+export function baseFor(task: Pick<Task, 'buildsOn'> & Partial<Pick<Task, 'baseBranch' | 'projectId'>>, project: Pick<Project, 'id' | 'defaultBranch'>, tasks: Task[]): string {
+  const own = task.baseBranch && task.projectId === project.id ? task.baseBranch : null
+  return liveParent(task, project.id, tasks)?.branch ?? own ?? project.defaultBranch ?? 'main'
 }
 
 /** The parent it waits for before it can start: one that has no branch yet. */

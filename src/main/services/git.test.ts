@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { execFileSync } from 'child_process'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
@@ -10,7 +10,7 @@ vi.mock('./store', () => ({ getPrefs: () => prefs }))
 vi.mock('./log', () => ({ log: { info: () => {}, warn: () => {}, error: () => {} } }))
 
 import { gitAt, gitFailure, refClash } from './gitEnv'
-import { addWorktree, branchLeft, closeCheck, createBranch, listBranches, closeWithPr, commitsAfter, defaultBranchOf, mergeAndPrune, getDiffFiles, getWorktreeStatus, mergeWithoutCheckout, parseUnifiedDiff } from './git'
+import { addWorktree, branchLeft, closeCheck, createBranch, listBranches, prTemplate, closeWithPr, commitsAfter, defaultBranchOf, mergeAndPrune, getDiffFiles, getWorktreeStatus, mergeWithoutCheckout, parseUnifiedDiff } from './git'
 
 let dir = ''
 const git = (cwd: string, ...args: string[]): string => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd, stdio: 'pipe' }).toString().trim()
@@ -131,6 +131,21 @@ describe('starting on a branch that is there already', () => {
     expect([r.existed, r.fromOrigin]).toEqual([true, true])
     expect(git(down, 'log', '-1', '--format=%s', 'theirs')).toBe('their work')
     expect(git(down, 'rev-parse', '--abbrev-ref', 'theirs@{upstream}')).toBe('origin/theirs')
+  })
+})
+
+describe('pull request templates', () => {
+  it("finds the repository's template where GitHub looks - .github first, any case, or a folder of them", async () => {
+    const r = repo()
+    expect(await prTemplate(r)).toBe(null)
+    writeFileSync(join(r, 'PULL_REQUEST_TEMPLATE.md'), '## Root\n')
+    expect(await prTemplate(r)).toBe('## Root\n')
+    mkdirSync(join(r, '.github', 'PULL_REQUEST_TEMPLATE'), { recursive: true })
+    writeFileSync(join(r, '.github', 'PULL_REQUEST_TEMPLATE', 'b.md'), '## B\n')
+    writeFileSync(join(r, '.github', 'PULL_REQUEST_TEMPLATE', 'a.md'), '## A\n')
+    expect(await prTemplate(r)).toBe('## A\n')
+    writeFileSync(join(r, '.github', 'pull_request_template.md'), '## Summary\n\n## Testing\n')
+    expect(await prTemplate(r)).toBe('## Summary\n\n## Testing\n')
   })
 })
 

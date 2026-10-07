@@ -9,6 +9,7 @@ import { Button, Combo, FooterNote, Menu, Modal, ModalFooter, ModalHeader, Secti
 import { prefsFor } from '../lib/projectPrefs'
 import { timeAgo } from '../lib/status'
 import { useHeadBranch } from '../lib/headBranch'
+import { branchProblem } from '@shared/branchName'
 import { repoDir, reposOf } from '../lib/multiRepo'
 import { baseFor, parentFinished, parentOf, waitsFor } from '@shared/stack'
 import { MODEL_SUGGESTIONS, canPlanFirst } from '../lib/agentControl'
@@ -36,7 +37,7 @@ function ModalBody({ task, project }: { task: Task; project: Project }): React.J
   const { state, dispatch } = useAppStore()
   const start = state.start!
   // Building on another task: from its branch (once it has one).
-  const base = baseFor(task, project, state.tasks)
+  const base = baseFor({ ...task, baseBranch: state.start!.baseBranch }, project, state.tasks)
   const parent = parentOf(task, state.tasks)
   const waiting = waitsFor(task, state.tasks)
   const from = (b: string): string => (parent && b !== (project.defaultBranch ?? 'main') ? `${b} · ${parent.key}` : b)
@@ -133,6 +134,14 @@ function ConfigPhase({ task, project, head, wtPath, agentName, baseBehind = 0 }:
   // The branch named is one that's there already (local, or only on origin): the task continues on it.
   const picked = start.existingWorktree ? (branches.find((b) => b.name === start.branch) ?? { name: start.branch, local: true, remote: false, at: 0, subject: '', worktree: start.existingWorktree, mainCheckout: false }) : branches.find((b) => b.name === start.branch.trim())
   const newBranchName = branchFor(prefsFor(state, task.projectId).branchPattern, task.title, task.key)
+  // A new branch's name: git's rules, and no clash with the branches there (the base among them).
+  const baseName = baseFor({ ...task, baseBranch: start.baseBranch }, project, state.tasks)
+  const problem =
+    start.inPlace || start.existingWorktree
+      ? null
+      : start.branch.trim() === baseName
+        ? `That's the branch the task starts from - give it one of its own, or pick “Project folder” to work on ${baseName} itself.`
+        : branchProblem(start.branch, [...branches.map((b) => b.name), project.defaultBranch ?? 'main', baseName])
   const multi = start.repos.length > 0
 
   const running = (kind: AgentKind): number =>
@@ -210,7 +219,12 @@ function ConfigPhase({ task, project, head, wtPath, agentName, baseBehind = 0 }:
               {start.existingWorktree ? null : <RepoPicker task={task} project={project} agentName={agentName} />}
               <span style={{ color: 'var(--t4)', fontFamily: 'var(--font-ui)' }}>Branch</span>
               <BranchField task={task} project={project} branches={branches} free={free} />
-              {picked ? (
+              {problem ? (
+                <>
+                  <span />
+                  <span style={{ font: '11.5px/1.45 var(--font-ui)', color: 'var(--c-red)', textWrap: 'pretty' } as React.CSSProperties}>{problem}</span>
+                </>
+              ) : picked ? (
                 <>
                   <span />
                   <span style={{ font: '11.5px/1.45 var(--font-ui)', color: !start.existingWorktree && picked.worktree ? 'var(--c-amber)' : 'var(--t3)', textWrap: 'pretty' } as React.CSSProperties}>
@@ -230,7 +244,23 @@ function ConfigPhase({ task, project, head, wtPath, agentName, baseBehind = 0 }:
                 <>
                   <span style={{ color: 'var(--t4)', fontFamily: 'var(--font-ui)' }}>From</span>
                   <span style={{ color: 'var(--t2)', display: 'flex', gap: 10, alignItems: 'baseline', minWidth: 0 }}>
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{head}</span>
+                    {/* Building on another task: its branch. Otherwise main - or any local branch (develop, a release branch). */}
+                    {parent || waiting ? (
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{head}</span>
+                    ) : (
+                      <Select
+                        value={baseName}
+                        title="The branch it starts from - and compares with, and merges into (its pull request's base)"
+                        options={[
+                          [project.defaultBranch ?? 'main', baseName === (project.defaultBranch ?? 'main') ? head : (project.defaultBranch ?? 'main')],
+                          ...branches
+                            .filter((b) => b.local && b.name !== (project.defaultBranch ?? 'main') && b.name !== start.branch.trim())
+                            .map((b): [string, string] => [b.name, b.name === baseName ? head : b.name])
+                        ]}
+                        onChange={(v) => dispatch({ type: 'SET_START_OPTIONS', patch: { baseBranch: v === (project.defaultBranch ?? 'main') ? null : v } })}
+                        style={{ ...FIELD, flex: '0 1 auto', padding: '0 0 1px', background: 'transparent', border: 'none', borderBottom: '1px dashed var(--bd-4)', color: 'var(--t2)' }}
+                      />
+                    )}
                     {baseBehind ? <PullBase projectId={project.id} behind={baseBehind} /> : null}
                   </span>
                 </>
@@ -329,7 +359,7 @@ function ConfigPhase({ task, project, head, wtPath, agentName, baseBehind = 0 }:
         <Button size="lg" onClick={() => dispatch({ type: 'CLOSE_START_MODAL' })}>
           Cancel
         </Button>
-        <Button size="lg" variant="primary" hint="⌘↵" onClick={() => dispatch({ type: 'LAUNCH_START' })}>
+        <Button size="lg" variant="primary" hint="⌘↵" disabled={!!problem} title={problem ?? undefined} onClick={() => dispatch({ type: 'LAUNCH_START' })}>
           {waiting ? `Queue after ${waiting.key} ·` : full ? 'Queue for' : 'Start with'} {agentName}
         </Button>
       </ModalFooter>
@@ -753,15 +783,15 @@ function useStartPlaces(project: Project, task: Task): { branches: BranchInfo[];
   const { state } = useAppStore()
   const [branches, setBranches] = useState<BranchInfo[]>([])
   const [trees, setTrees] = useState<GitWorktreeInfo[]>([])
-  const base = baseFor(task, project, state.tasks)
+  // All of them (the base ones too: they're what "From" offers).
   useEffect(() => {
     let cancelled = false
-    window.api.git.listBranches(project.repoPath, base).then((b) => !cancelled && setBranches(b)).catch(() => {})
+    window.api.git.listBranches(project.repoPath, '').then((b) => !cancelled && setBranches(b)).catch(() => {})
     window.api.git.listWorktrees(project.repoPath).then((w) => !cancelled && setTrees(w)).catch(() => {})
     return () => {
       cancelled = true
     }
-  }, [project.repoPath, base])
+  }, [project.repoPath])
   const free = trees.filter((w) => !w.isMain && !w.prunable && !holderOf(state.tasks, w.path, task.id))
   return { branches, free }
 }
@@ -776,7 +806,7 @@ function BranchField({ task, project, branches, free }: { task: Task; project: P
   const { state, dispatch } = useAppStore()
   const start = state.start!
   const fresh = branchFor(prefsFor(state, task.projectId).branchPattern, task.title, task.key)
-  const base = baseFor(task, project, state.tasks)
+  const base = baseFor({ ...task, baseBranch: start.baseBranch }, project, state.tasks)
   const set = (branch: string, existingWorktree: string | null = null): void => {
     dispatch({ type: 'SET_START_OPTIONS', patch: { existingWorktree } })
     dispatch({ type: 'SET_START_BRANCH', branch })
@@ -795,8 +825,10 @@ function BranchField({ task, project, branches, free }: { task: Task; project: P
       onClick: () => set(b.name, freeTree ? freeTree.path : null)
     }
   }
-  const local = branches.filter((b) => b.local)
-  const remote = branches.filter((b) => !b.local)
+  // (Not the branch it starts from, nor the project's main one: a task's branch is its own.)
+  const own = branches.filter((b) => b.name !== base && b.name !== (project.defaultBranch ?? 'main'))
+  const local = own.filter((b) => b.local)
+  const remote = own.filter((b) => !b.local)
   return (
     <Combo
       value={start.branch}

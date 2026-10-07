@@ -57,21 +57,25 @@ jobs:
         run: gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --draft --title "Switchyard ${GITHUB_REF_NAME#v}" --notes-file release-notes.md
 
   build:
+    name: build (${{ matrix.label }})
     needs: check
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: windows-latest
+            label: Windows
             target: --win
             smoke: dist/win-unpacked/switchyard.exe --smoke-test
           # Apple Silicon and Intel in one build (one latest-mac.yml for the updater). The
           # runner is Apple Silicon: that's the one started.
           - os: macos-latest
+            label: macOS
             target: --mac --arm64 --x64
             smoke: dist/mac-arm64/Switchyard.app/Contents/MacOS/Switchyard --smoke-test
             smokeTarget: --mac --arm64
           - os: ubuntu-24.04
+            label: Linux
             target: --linux
             smoke: xvfb-run -a dist/linux-unpacked/switchyard --smoke-test --no-sandbox
     runs-on: ${{ matrix.os }}

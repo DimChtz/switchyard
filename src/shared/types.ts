@@ -151,13 +151,15 @@ export interface Task {
   /** The GitHub issue it came from; merging closes it. */
   issue?: { number: number; url: string } | null
   /** Waiting for a free agent slot (Settings → Agents: max working at once). */
-  queued?: { agentKind: AgentKind; branch: string; message: string; at: number; model?: string | null; planFirst?: boolean; images?: string[]; inPlace?: boolean; existingWorktree?: string | null } | null
+  queued?: { agentKind: AgentKind; branch: string; message: string; at: number; model?: string | null; planFirst?: boolean; images?: string[]; inPlace?: boolean; existingWorktree?: string | null; baseBranch?: string | null } | null
   /** What done means: checked by the agent (verify_criterion) or you, with evidence. */
   criteria?: Criterion[]
   /** Its agent hit a usage limit: resumed on its own at `until` (unknown: tried again in an hour). */
   sleeping?: { until: number | null; reason: string; since: number } | null
   /** The outside work it was brought in from (an OutsideItem's id: a worktree, branch or conversation). */
   outside?: string | null
+  /** The branch it starts from, compares against and merges into, in its home repository (picked at Start); unset: the project's default. */
+  baseBranch?: string | null
   /** The task it builds on: its branch starts from that one's, and compares against it until it's merged (see shared/stack). */
   buildsOn?: string | null
   /** Chosen in the Start modal: the agent's model (empty: its default), and whether it plans first. */

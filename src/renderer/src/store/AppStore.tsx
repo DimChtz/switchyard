@@ -629,7 +629,8 @@ ${u.ask}` : ''}`, task.id, actions)
       return once(async () => {
         if (start.step === 1) {
           if (!start.inPlace && !(await window.api.git.isCheckout(given))) throw new Error(`${given} isn't a git worktree any more.`)
-          dispatch({ type: 'SET_START_WORKTREE_PATH', path: given })
+          // (Git writes Windows paths with forward slashes: the task keeps the system's own.)
+          dispatch({ type: 'SET_START_WORKTREE_PATH', path: /^[A-Za-z]:\//.test(given) ? given.replace(/\//g, '\\') : given })
         }
         next()
       })
@@ -638,7 +639,7 @@ ${u.ask}` : ''}`, task.id, actions)
     switch (start.step) {
       case 0: // Create branch - from the project's base branch, or the branch of the task it builds on (in each of the task's repositories).
         return once(async () => {
-          const info = await window.api.git.createBranch(project.repoPath, start.branch, baseFor(task, project, state.tasks))
+          const info = await window.api.git.createBranch(project.repoPath, start.branch, baseFor({ ...task, baseBranch: start.baseBranch }, project, state.tasks))
           dispatch({ type: 'SET_START_BRANCH_INFO', info })
           const made: Made[] = []
           for (const extra of extras) {
@@ -735,6 +736,7 @@ ${u.ask}` : ''}`, task.id, actions)
             agentKind: start.agentKind,
             worktreePath: start.worktreePath,
             taskDir: start.taskDir,
+            baseBranch: start.baseBranch,
             repos: start.repos,
             firstMessage: message,
             model: start.model.trim() || null,

@@ -679,6 +679,9 @@ export async function pushBranch(worktreePath: string, branch: string): Promise<
  * the user finishes it in the browser.
  */
 export async function createPr(worktreePath: string, repoPath: string, branch: string, baseBranch: string, title: string, body: string): Promise<PullRequest> {
+  // The repository's own pull request template comes first; what Switchyard knows goes under it.
+  const template = await prTemplate(worktreePath)
+  if (template) body = body.trim() ? `${template.trim()}\n\n---\n\n${body}` : template
   const remote = await remoteInfo(repoPath)
   if (!remote?.github) throw new Error(`Pushed ${branch}, but origin isn't on GitHub - open the pull request from your Git host.`)
   if (await hasGh()) {
@@ -694,6 +697,33 @@ export async function createPr(worktreePath: string, repoPath: string, branch: s
   }
   const url = `${remote.github}/compare/${encodeURIComponent(baseBranch)}...${encodeURIComponent(branch)}?expand=1&title=${encodeURIComponent(title)}&body=${encodeURIComponent(body)}`
   return { url, number: null, state: null, created: false }
+}
+
+/**
+ * The repository's pull request template, where GitHub looks for one: the
+ * root, .github/ or docs/ (any case), or the first of several in a
+ * PULL_REQUEST_TEMPLATE folder. Null without one.
+ */
+export async function prTemplate(checkout: string): Promise<string | null> {
+  const read = (p: string): Promise<string | null> => fs.readFile(p, 'utf-8').catch(() => null)
+  for (const dir of ['.github', '', 'docs']) {
+    const at = join(checkout, dir)
+    const names = await fs.readdir(at).catch(() => [] as string[])
+    const file = names.find((n) => n.toLowerCase() === 'pull_request_template.md')
+    if (file) {
+      const text = await read(join(at, file))
+      if (text?.trim()) return text
+    }
+    const folder = names.find((n) => n.toLowerCase() === 'pull_request_template')
+    if (folder) {
+      const many = (await fs.readdir(join(at, folder)).catch(() => [] as string[])).filter((n) => n.toLowerCase().endsWith('.md')).sort()
+      for (const n of many) {
+        const text = await read(join(at, folder, n))
+        if (text?.trim()) return text
+      }
+    }
+  }
+  return null
 }
 
 export type PrMergeMethod = 'squash' | 'merge' | 'rebase'

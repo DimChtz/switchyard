@@ -10,7 +10,7 @@ export function knowTasks(tasks: Task[]): void {
 }
 
 /** The branch a task compares against and merges into in a repository: the default one, or the branch of the task it builds on. */
-export function baseOf(task: Pick<Task, 'buildsOn'>, project: Pick<Project, 'id' | 'defaultBranch'>): string {
+export function baseOf(task: Pick<Task, 'buildsOn'> & Partial<Pick<Task, 'baseBranch' | 'projectId'>>, project: Pick<Project, 'id' | 'defaultBranch'>): string {
   return baseFor(task, project, known)
 }
 
