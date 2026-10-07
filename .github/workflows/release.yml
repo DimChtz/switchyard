@@ -1,7 +1,8 @@
 # Releases: push a version tag (git tag v0.1.1 && git push origin v0.1.1) whose number
 # matches package.json's "version". The installers for Windows, macOS and Linux are
-# built and uploaded, with the latest*.yml files the updater reads, to one draft
-# release. Publish the draft on GitHub and installed copies update to it.
+# built, started once each (--smoke-test), and uploaded with the latest*.yml files the
+# updater reads to one draft release. Publish the draft on GitHub and installed copies
+# update to it.
 name: Release
 
 on:
@@ -17,9 +18,12 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
+        with:
+          # The whole history: the release notes list the commits since the last release.
+          fetch-depth: 0
       - uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
       - name: The tag is package.json's version
         run: |
@@ -30,12 +34,27 @@ jobs:
           fi
       - run: npm ci
       - run: npm run typecheck
+      - run: npm run lint
       - run: npm test
+      # What changed: the commits since the previous version's tag (not the version bumps themselves).
+      - name: Release notes
+        run: |
+          prev="$(git describe --tags --abbrev=0 "${GITHUB_REF_NAME}^" 2>/dev/null || true)"
+          {
+            echo "## What's changed"
+            echo
+            git log --no-merges --format='- %s' "${prev:+$prev..}${GITHUB_REF_NAME}" | grep -v '^- Release ' || true
+            if [ -n "$prev" ]; then
+              echo
+              echo "**Full changelog:** https://github.com/${GITHUB_REPOSITORY}/compare/${prev}...${GITHUB_REF_NAME}"
+            fi
+          } > release-notes.md
+          cat release-notes.md
       # One draft for the three builds to add to (each creating its own could make duplicates).
       - name: Draft release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --draft --title "Switchyard ${GITHUB_REF_NAME#v}" --generate-notes
+        run: gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || gh release create "$GITHUB_REF_NAME" --draft --title "Switchyard ${GITHUB_REF_NAME#v}" --notes-file release-notes.md
 
   build:
     needs: check
@@ -45,17 +64,22 @@ jobs:
         include:
           - os: windows-latest
             target: --win
-          # Apple Silicon and Intel in one build (one latest-mac.yml for the updater).
+            smoke: dist/win-unpacked/switchyard.exe --smoke-test
+          # Apple Silicon and Intel in one build (one latest-mac.yml for the updater). The
+          # runner is Apple Silicon: that's the one started.
           - os: macos-latest
             target: --mac --arm64 --x64
+            smoke: dist/mac-arm64/Switchyard.app/Contents/MacOS/Switchyard --smoke-test
+            smokeTarget: --mac --arm64
           - os: ubuntu-24.04
             target: --linux
+            smoke: xvfb-run -a dist/linux-unpacked/switchyard --smoke-test --no-sandbox
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
       - run: npm ci
       # npm installs the terminal's native part for this Mac only (Apple Silicon); the Intel build needs its own too.
@@ -63,6 +87,18 @@ jobs:
         if: runner.os == 'macOS'
         run: npm install --no-save --force "@lydell/node-pty-darwin-x64@$(node -p "require('@lydell/node-pty/package.json').version")"
       - run: npx electron-vite build
+      - name: A virtual screen (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update -q && sudo apt-get install -y -q xvfb
+      # The packaged app (unpacked, no installer) is started once: it renders, a terminal
+      # runs, it quits - a broken package never gets uploaded.
+      - name: Smoke test the packaged app
+        shell: bash
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: |
+          npx electron-builder ${{ matrix.smokeTarget || matrix.target }} --dir --publish never
+          ${{ matrix.smoke }}
       - name: Build and upload
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

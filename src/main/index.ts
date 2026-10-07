@@ -10,6 +10,7 @@ import { loadShellPath } from './services/shellEnv'
 import { initUserSettings, watchProjectSettings, watchUserSettings } from './services/settings'
 import { startupTheme, watchThemes } from './services/themes'
 import { killAll as killAllPty, runningAgents } from './services/pty'
+import { SMOKE, runSmoke, smokeDataFolder } from './smoke'
 
 if (is.dev && process.env['SWITCHYARD_DEBUG_PORT']) {
   app.commandLine.appendSwitch('remote-debugging-port', process.env['SWITCHYARD_DEBUG_PORT'])
@@ -19,6 +20,8 @@ if (is.dev && process.env['SWITCHYARD_DEBUG_PORT']) {
 if (is.dev && process.env['SWITCHYARD_USER_DATA']) {
   app.setPath('userData', process.env['SWITCHYARD_USER_DATA'])
 }
+// --smoke-test (CI): a throwaway data folder, then a check of the whole app - see smoke.ts.
+smokeDataFolder()
 
 // One copy at a time: two would share the store file and both run the
 // worktree cleanup. Starting it again brings the open window forward.
@@ -56,7 +59,7 @@ function savedBounds(): WindowBounds | null {
   return visible ? b : null
 }
 
-function createWindow(): void {
+function createWindow(): BrowserWindow {
   const isMac = process.platform === 'darwin'
   const bounds = savedBounds()
   // The page applies the theme; until then the window's background and title bar match it.
@@ -153,6 +156,7 @@ function createWindow(): void {
   } else {
     mainWindow.loadFile(join(__dirname, '../renderer/index.html'))
   }
+  return mainWindow
 }
 
 /** Only web pages leave the app, in the browser - not file: or other schemes a page could ask for. */
@@ -221,7 +225,8 @@ function start(): void {
     registerIpcHandlers()
     // Before the window: its agents list includes the plugins' ones.
     initPlugins()
-    createWindow()
+    const win = createWindow()
+    if (SMOKE) return runSmoke(win)
     // Started by double-clicking a plugin package (Windows, Linux): Settings asks to install it.
     for (const p of packagesIn(process.argv)) openedWith(p)
 

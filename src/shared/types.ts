@@ -666,6 +666,8 @@ export interface Prefs {
   worktreeRoot: string
   branchPattern: string
   pruneAfterMerge: boolean
+  /** Done deletes the task's local branch once its work is in the base branch (merged here, or its PR merged). Off: it's kept. */
+  deleteBranchOnFinish: boolean
   /** A task whose pull request is merged (on GitHub) goes to Done by itself. */
   finishOnPrMerge: boolean
   /** How Switchyard merges a pull request on GitHub (Done asks first; the repository may allow fewer). */

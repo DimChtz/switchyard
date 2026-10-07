@@ -240,7 +240,8 @@ export async function mergeAndPrune(repoPath: string, worktreePath: string, bran
   // Checked clean above - --force only gets ignored files (node_modules, .env) out of the way.
   await dropWorktree(repoPath, worktreePath)
   // -D when nothing was merged: its commits may be in the base only as a squash, which -d doesn't see.
-  await main.raw(['branch', merged ? '-d' : '-D', branch]).catch(() => {})
+  // (Kept when Settings → Git says so.)
+  if (getPrefs(repoPath).deleteBranchOnFinish !== false) await main.raw(['branch', merged ? '-d' : '-D', branch]).catch(() => {})
   return { merged }
 }
 
@@ -860,7 +861,7 @@ export async function closeWithPr(repoPath: string, worktreePath: string, branch
   const refused = await closeCheck(worktreePath, branch, baseBranch, prRef)
   if (refused) throw new Error(refused)
   await dropWorktree(repoPath, worktreePath)
-  if (merged) await gitAt(repoPath).raw(['branch', '-D', branch]).catch(() => {})
+  if (merged && getPrefs(repoPath).deleteBranchOnFinish !== false) await gitAt(repoPath).raw(['branch', '-D', branch]).catch(() => {})
 }
 
 /** A folder that's a git checkout (a worktree has a .git file). */

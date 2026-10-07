@@ -309,6 +309,7 @@ function GlobalSettings({ section, scope, onScope }: { section: string; scope: P
             <TextField value={pf.branchPattern} placeholder="feature/{slug}" onChange={(v) => set({ branchPattern: v })} />
           </Row>
           {tog('Prune worktree after merge', 'Off keeps the folder and branch after Merge & finish', 'pruneAfterMerge')}
+          {tog('Delete the local branch when a task is done', 'Once its work is in main (merged here, or its pull request merged on GitHub). Off keeps the branch - the worktree folder still goes', 'deleteBranchOnFinish')}
           {tog('Finish tasks when their pull request is merged', "Merged on GitHub: the task goes to Done and its worktree is removed - not while its agent is working, and never with work that isn't in the PR", 'finishOnPrMerge')}
           <Row k="prMergeMethod" label="Merge pull requests with" sub="When Done merges a task's pull request on GitHub (it asks first; the repository may allow fewer)">
             <Seg value={pf.prMergeMethod} options={[['squash', 'Squash'], ['merge', 'Merge commit'], ['rebase', 'Rebase']]} onChange={(v) => set({ prMergeMethod: v as Prefs['prMergeMethod'] })} />

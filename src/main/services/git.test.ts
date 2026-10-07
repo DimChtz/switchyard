@@ -4,7 +4,9 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'fs
 import { tmpdir } from 'os'
 import { join } from 'path'
 
-vi.mock('./store', () => ({ getPrefs: () => ({ worktreeRoot: '', syncMode: 'rebase' }) }))
+// (Settings a test changes: reset after each.)
+const prefs = vi.hoisted(() => ({ worktreeRoot: '', syncMode: 'rebase', deleteBranchOnFinish: true }))
+vi.mock('./store', () => ({ getPrefs: () => prefs }))
 vi.mock('./log', () => ({ log: { info: () => {}, warn: () => {}, error: () => {} } }))
 
 import { gitAt, gitFailure, refClash } from './gitEnv'
@@ -29,6 +31,7 @@ beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'sy-git-'))
 })
 afterEach(() => {
+  prefs.deleteBranchOnFinish = true
   rmSync(dir, { recursive: true, force: true })
 })
 
@@ -288,6 +291,17 @@ describe('merging a finished task', () => {
     expect(await mergeAndPrune(r, wt, 'task', 'main')).toEqual({ merged: true })
     expect(readFileSync(join(r, 'n.txt'), 'utf-8')).toBe('new\n')
     expect(git(r, 'worktree', 'list')).not.toContain('task-wt')
+  })
+
+  it('keeps the branch when Settings say so (the worktree still goes)', async () => {
+    const { r, wt } = setup()
+    writeFileSync(join(wt, 'n.txt'), 'new\n')
+    git(wt, 'add', '-A')
+    git(wt, 'commit', '-qm', 'work')
+    prefs.deleteBranchOnFinish = false
+    expect(await mergeAndPrune(r, wt, 'task', 'main')).toEqual({ merged: true })
+    expect(existsSync(wt)).toBe(false)
+    expect(git(r, 'branch', '--list', 'task')).toContain('task')
   })
 
   it('finishes a task whose worktree and branch are both gone', async () => {

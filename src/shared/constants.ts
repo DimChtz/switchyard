@@ -88,6 +88,7 @@ export const DEFAULT_PREFS: Prefs = {
   worktreeRoot: '',
   branchPattern: 'feature/{slug}',
   pruneAfterMerge: true,
+  deleteBranchOnFinish: true,
   finishOnPrMerge: true,
   prMergeMethod: 'squash',
   confirmRemove: true,

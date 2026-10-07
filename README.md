@@ -61,6 +61,8 @@ Then add a project: a local git repository, or one cloned by URL.
 | `npm run release:win` / `release:mac` / `release:linux` | Packages and uploads to a draft GitHub release (see below). |
 | `npm run plugin:pack -- <folder> [-o <out>]` | Packs a plugin folder into a `.syplugin` file. |
 
+Every push to `main` and every pull request runs the type check, lint and the tests on Windows, macOS and Linux (`.github/workflows/ci.yml`). A packaged app can check itself: started with `--smoke-test`, it uses a throwaway data folder, renders, runs a terminal and quits with exit code 0 (1 and the reason when something failed).
+
 ### Releasing updates
 
 Installed copies update themselves from this repository's GitHub Releases. They check at start and every few hours, download in the background, and install when Switchyard quits. **Help → Check for updates** checks right away.
@@ -69,7 +71,7 @@ To release a version:
 
 1. Bump `version` in `package.json` (for example `0.1.1`) and commit it.
 2. Tag the commit and push the tag: `git tag v0.1.1 && git push origin v0.1.1`.
-3. GitHub Actions (`.github/workflows/release.yml`) checks the code, then builds Windows, macOS (Apple Silicon and Intel) and Linux and uploads them, with the `latest*.yml` files the updater reads, to a **draft** release.
+3. GitHub Actions (`.github/workflows/release.yml`) checks the code, then builds Windows, macOS (Apple Silicon and Intel) and Linux, starts each packaged app once (`--smoke-test`), and uploads them, with the `latest*.yml` files the updater reads, to a **draft** release. Its notes list the commits since the previous version.
 4. Publish the draft on GitHub. Installed copies only see published releases.
 
 `npm run release:win` (and `:mac` / `:linux`) does the same for one platform from your machine, with `GH_TOKEN` set to a token that can write releases.
