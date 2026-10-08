@@ -10,7 +10,25 @@ vi.mock('./store', () => ({ getPrefs: () => prefs }))
 vi.mock('./log', () => ({ log: { info: () => {}, warn: () => {}, error: () => {} } }))
 
 import { gitAt, gitFailure, refClash } from './gitEnv'
-import { addWorktree, branchLeft, closeCheck, createBranch, listBranches, prTemplate, closeWithPr, commitsAfter, defaultBranchOf, mergeAndPrune, getDiffFiles, getWorktreeStatus, mergeWithoutCheckout, parseUnifiedDiff } from './git'
+import {
+  addWorktree,
+  branchLeft,
+  closeCheck,
+  commitFiles,
+  createBranch,
+  listBranches,
+  prTemplate,
+  closeWithPr,
+  commitsAfter,
+  defaultBranchOf,
+  mergeAndPrune,
+  getDiffFiles,
+  getWorktreeStatus,
+  mergeWithoutCheckout,
+  parseUnifiedDiff,
+  revertFile,
+  revertHunk
+} from './git'
 
 let dir = ''
 const git = (cwd: string, ...args: string[]): string => execFileSync('git', ['-c', 'user.name=t', '-c', 'user.email=t@t', ...args], { cwd, stdio: 'pipe' }).toString().trim()
@@ -56,6 +74,100 @@ describe('git settings', () => {
     writeFileSync(join(r, 'a.txt'), 'one\n2\n')
     const files = await getDiffFiles(r, 'main')
     expect(files.map((f) => [f.path, f.added, f.deleted])).toEqual([['a.txt', 1, 1]])
+  })
+})
+
+describe('the Changes diff', () => {
+  it('shows a big new file in full, and UTF-16 text as text', async () => {
+    const r = repo()
+    // ~770 KB of markdown: over the size new files used to be skipped at.
+    writeFileSync(join(r, 'big.md'), Array.from({ length: 7000 }, (_, i) => `- line ${i} ${'x'.repeat(100)}`).join('\n') + '\n')
+    writeFileSync(join(r, 'wide.txt'), Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from('héllo\r\nworld\r\n', 'utf16le')]))
+    const files = await getDiffFiles(r, 'main')
+    const big = files.find((f) => f.path === 'big.md')!
+    expect([big.added, big.lines.length, big.lines[6999].text]).toEqual([7000, 7000, `- line 6999 ${'x'.repeat(100)}`])
+    expect(files.find((f) => f.path === 'wide.txt')!.lines.map((l) => l.text)).toEqual(['héllo', 'world'])
+  })
+
+  it('compares with the base, origin, or the last commit', async () => {
+    const up = repo()
+    const down = join(dir, 'down')
+    git(dir, 'clone', '-q', up, down)
+    git(down, 'checkout', '-qb', 'task')
+    writeFileSync(join(down, 'pushed.txt'), 'p\n')
+    git(down, 'add', '-A')
+    git(down, 'commit', '-qm', 'pushed')
+    git(down, 'push', '-qu', 'origin', 'task')
+    writeFileSync(join(down, 'local.txt'), 'l\n')
+    git(down, 'add', '-A')
+    git(down, 'commit', '-qm', 'local')
+    writeFileSync(join(down, 'a.txt'), 'one\nchanged\n')
+    const paths = async (scope: 'branch' | 'unpushed' | 'uncommitted'): Promise<string[]> => (await getDiffFiles(down, 'main', scope)).map((f) => f.path)
+    expect(await paths('branch')).toEqual(['a.txt', 'local.txt', 'pushed.txt'])
+    expect(await paths('unpushed')).toEqual(['a.txt', 'local.txt'])
+    expect(await paths('uncommitted')).toEqual(['a.txt'])
+    // Never pushed: everything since it left the base.
+    git(down, 'checkout', '-qb', 'fresh')
+    expect(await paths('unpushed')).toEqual(['a.txt', 'local.txt', 'pushed.txt'])
+    // One commit: just what it changed.
+    const sha = git(down, 'rev-parse', 'HEAD~1')
+    expect((await getDiffFiles(down, 'main', { commit: sha })).map((f) => [f.path, f.uncommitted])).toEqual([['pushed.txt', false]])
+  })
+
+  it('shows a move as one file, and whitespace changes only when asked', async () => {
+    const r = repo()
+    writeFileSync(join(r, 'b.txt'), 'x\n')
+    git(r, 'add', '-A')
+    git(r, 'commit', '-qm', 'b')
+    git(r, 'checkout', '-qb', 'task')
+    git(r, 'mv', 'b.txt', 'c.txt')
+    writeFileSync(join(r, 'a.txt'), 'one\n  two\n')
+    const files = await getDiffFiles(r, 'main')
+    expect(files.map((f) => [f.path, f.oldPath, f.lines.length])).toEqual([
+      ['a.txt', undefined, 4],
+      ['c.txt', 'b.txt', 0]
+    ])
+    expect((await getDiffFiles(r, 'main', 'branch', { ignoreSpace: true })).map((f) => f.path)).toEqual(['c.txt'])
+  })
+
+  it('commits just the picked files', async () => {
+    const r = repo()
+    writeFileSync(join(r, 'a.txt'), 'changed\n')
+    writeFileSync(join(r, 'new.txt'), 'new\n')
+    writeFileSync(join(r, 'later.txt'), 'later\n')
+    await commitFiles(r, ['a.txt', 'new.txt'], 'some')
+    expect(git(r, 'show', '--name-only', '--format=', 'HEAD').split('\n').sort()).toEqual(['a.txt', 'new.txt'])
+    expect(git(r, 'status', '--porcelain')).toBe('?? later.txt')
+  })
+
+  it('undoes one hunk, or a whole file back to the base', async () => {
+    const r = repo()
+    writeFileSync(join(r, 'long.txt'), Array.from({ length: 30 }, (_, i) => `l${i}`).join('\n') + '\n')
+    git(r, 'add', '-A')
+    git(r, 'commit', '-qm', 'long')
+    git(r, 'checkout', '-qb', 'task')
+    const changed = Array.from({ length: 30 }, (_, i) => (i === 2 ? 'TOP' : i === 26 ? 'BOTTOM' : `l${i}`))
+    writeFileSync(join(r, 'long.txt'), changed.join('\n') + '\n')
+    git(r, 'commit', '-qam', 'both')
+    writeFileSync(join(r, 'a.txt'), 'one\ntwo')
+    let file = (await getDiffFiles(r, 'main')).find((f) => f.path === 'long.txt')!
+    const second = file.lines.findIndex((l, i) => i > 0 && l.kind === '@')
+    await revertHunk(r, 'long.txt', file.lines.slice(second))
+    expect(readFileSync(join(r, 'long.txt'), 'utf-8').split('\n')[26]).toBe('l26')
+    expect(readFileSync(join(r, 'long.txt'), 'utf-8').split('\n')[2]).toBe('TOP')
+    // A hunk ending without a newline.
+    file = (await getDiffFiles(r, 'main')).find((f) => f.path === 'a.txt')!
+    expect(file.lines.some((l) => l.noEol)).toBe(true)
+    await revertHunk(r, 'a.txt', file.lines)
+    expect(readFileSync(join(r, 'a.txt'), 'utf-8')).toBe('one\ntwo\n')
+    // The whole file back to main: an uncommitted change.
+    await revertFile(r, 'main', 'branch', 'long.txt')
+    expect(readFileSync(join(r, 'long.txt'), 'utf-8').split('\n')[2]).toBe('l2')
+    expect(git(r, 'status', '--porcelain')).toBe('M long.txt')
+    // A file the branch added: gone.
+    writeFileSync(join(r, 'added.txt'), 'x\n')
+    await revertFile(r, 'main', 'branch', 'added.txt')
+    expect(existsSync(join(r, 'added.txt'))).toBe(false)
   })
 })
 

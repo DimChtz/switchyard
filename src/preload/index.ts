@@ -30,6 +30,9 @@ import type {
   PullRequest,
   RemoteInfo,
   PtyInfo,
+  DiffLine,
+  DiffOptions,
+  DiffScope,
   DiffStat,
   FileDiff,
   FileEntry,
@@ -202,8 +205,14 @@ const api = {
       ipcRenderer.invoke(IPC.gitWorktreeStatus, worktreePath, baseBranch),
     log: (worktreePath: string, limit?: number): Promise<{ hash: string; message: string; date: string }[]> =>
       ipcRenderer.invoke(IPC.gitLog, worktreePath, limit),
-    diffFiles: (worktreePath: string, baseBranch: string): Promise<FileDiff[]> =>
-      ipcRenderer.invoke(IPC.gitDiffFiles, worktreePath, baseBranch),
+    diffFiles: (worktreePath: string, baseBranch: string, scope?: DiffScope, opts?: DiffOptions): Promise<FileDiff[]> =>
+      ipcRenderer.invoke(IPC.gitDiffFiles, worktreePath, baseBranch, scope, opts),
+    commitFiles: (worktreePath: string, paths: string[], message: string): Promise<string> => ipcRenderer.invoke(IPC.gitCommitFiles, worktreePath, paths, message),
+    revertFile: (worktreePath: string, baseBranch: string, scope: DiffScope, path: string, oldPath?: string): Promise<void> =>
+      ipcRenderer.invoke(IPC.gitRevertFile, worktreePath, baseBranch, scope, path, oldPath),
+    revertHunk: (worktreePath: string, path: string, lines: DiffLine[], oldPath?: string): Promise<void> => ipcRenderer.invoke(IPC.gitRevertHunk, worktreePath, path, lines, oldPath),
+    diffImage: (worktreePath: string, baseBranch: string, scope: DiffScope, path: string, side: 'old' | 'new', oldPath?: string): Promise<string | null> =>
+      ipcRenderer.invoke(IPC.gitDiffImage, worktreePath, baseBranch, scope, path, side, oldPath),
     diffStat: (worktreePath: string, baseBranch: string): Promise<DiffStat> =>
       ipcRenderer.invoke(IPC.gitDiffStat, worktreePath, baseBranch),
     rebase: (worktreePath: string, baseBranch: string): Promise<void> => ipcRenderer.invoke(IPC.gitRebase, worktreePath, baseBranch),

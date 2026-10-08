@@ -19,6 +19,8 @@ export function FileEditor({ path, visible }: { path: string; visible: boolean }
   const { task } = f
   const viewRef = useRef<EditorView | null>(null)
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
+  const [, setRecheck] = useState(0)
+  const waited = useRef(0)
 
   useEffect(() => f.ensureLoaded(path), [path, f.ensureLoaded]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -45,10 +47,21 @@ export function FileEditor({ path, visible }: { path: string; visible: boolean }
     const jump = f.jump
     if (!jump || jump.path !== path || !visible || loading || !view) return
     const doc = view.state.doc
+    // The editor takes the text on its own schedule (after this render): until it has it, look again shortly.
+    if (doc.lines !== lines && waited.current < 40) {
+      const t = setTimeout(() => {
+        waited.current++
+        setRecheck((n) => n + 1)
+      }, 50)
+      return () => clearTimeout(t)
+    }
+    waited.current = 0
     if (jump.line >= doc.lines) return f.jumped()
     const from = Math.min(doc.line(jump.line + 1).from + jump.col, doc.length)
     const to = Math.min(from + jump.len, doc.length)
     view.dispatch({ selection: { anchor: from, head: to }, effects: EditorView.scrollIntoView(from, { y: 'center' }) })
+    // (A tab that was just shown isn't laid out yet: scroll again once it is.)
+    requestAnimationFrame(() => view.dispatch({ effects: EditorView.scrollIntoView(from, { y: 'center' }) }))
     view.focus()
     f.jumped()
   })

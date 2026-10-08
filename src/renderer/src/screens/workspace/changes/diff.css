@@ -1,0 +1,163 @@
+/* The Changes diff: rows, syntax colors, changed words. */
+
+.sy-diff {
+  font: 12.5px/21px var(--font-mono);
+  color: var(--t2);
+}
+.sy-diff:focus {
+  outline: none;
+}
+/* Without wrapping, the rows are as wide as the longest line (the view scrolls sideways). */
+.sy-diff.nowrap .sy-diff-body {
+  width: max-content;
+  min-width: 100%;
+}
+
+.sy-dr {
+  display: grid;
+  grid-template-columns: 46px 46px 20px minmax(0, 1fr);
+  cursor: text;
+}
+.sy-diff.nowrap .sy-dr {
+  grid-template-columns: 46px 46px 20px max-content;
+}
+.sy-dr.split {
+  grid-template-columns: 46px 18px minmax(0, 1fr) 46px 18px minmax(0, 1fr);
+}
+.sy-dr.click:hover {
+  filter: brightness(1.35);
+}
+.sy-dr .num {
+  text-align: right;
+  padding-right: 10px;
+  color: var(--t5);
+  user-select: none;
+}
+.sy-dr .num.go {
+  cursor: pointer;
+}
+.sy-dr .num.go:hover {
+  color: var(--c-blue);
+  text-decoration: underline;
+}
+.sy-dr .sign {
+  user-select: none;
+}
+.sy-dr .txt {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  min-width: 0;
+  padding-right: 16px;
+}
+.sy-diff.nowrap .sy-dr .txt {
+  white-space: pre;
+}
+.sy-dr .side-l {
+  border-right: 1px solid var(--bd-1);
+}
+
+.sy-dr.add,
+.sy-dr .add {
+  background: color-mix(in srgb, var(--c-green) 8%, transparent);
+}
+.sy-dr.del,
+.sy-dr .del {
+  background: color-mix(in srgb, var(--c-red) 8%, transparent);
+}
+.sy-dr .none {
+  background: color-mix(in srgb, var(--ov) 2.5%, transparent);
+}
+.sy-dr.add {
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--c-green) 60%, transparent);
+}
+.sy-dr.del {
+  box-shadow: inset 2px 0 0 color-mix(in srgb, var(--c-red) 60%, transparent);
+}
+.sy-dr.picked,
+.sy-dr .picked {
+  background: color-mix(in srgb, var(--c-blue) 14%, transparent);
+  box-shadow: inset 2px 0 0 var(--c-blue);
+}
+.sy-dr .add .w {
+  background: color-mix(in srgb, var(--c-green) 26%, transparent);
+  border-radius: 2px;
+}
+.sy-dr .del .w,
+.sy-dr.del .w {
+  background: color-mix(in srgb, var(--c-red) 28%, transparent);
+  border-radius: 2px;
+}
+.sy-dr.add .w {
+  background: color-mix(in srgb, var(--c-green) 26%, transparent);
+  border-radius: 2px;
+}
+
+.sy-hunk {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 26px;
+  padding: 0 12px 0 16px;
+  margin-top: 4px;
+  background: color-mix(in srgb, var(--c-blue) 6%, transparent);
+  border-top: 1px solid color-mix(in srgb, var(--c-blue) 14%, transparent);
+  border-bottom: 1px solid color-mix(in srgb, var(--c-blue) 10%, transparent);
+  color: var(--t3);
+  font: 11.5px var(--font-mono);
+  position: sticky;
+  left: 0;
+}
+.sy-hunk .ctx {
+  color: var(--t2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.sy-hunk .act {
+  opacity: 0.45;
+  transition: opacity 0.12s;
+}
+.sy-hunk:hover .act {
+  opacity: 1;
+}
+
+.sy-gap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 12px 0 16px;
+  color: var(--t4);
+  font: 11.5px var(--font-mono);
+  background: color-mix(in srgb, var(--ov) 2%, transparent);
+  position: sticky;
+  left: 0;
+}
+.sy-gap button {
+  all: unset;
+  cursor: pointer;
+  padding: 1px 7px;
+  border-radius: 4px;
+  color: var(--c-blue);
+}
+.sy-gap button:hover {
+  background: color-mix(in srgb, var(--c-blue) 12%, transparent);
+}
+
+.sy-chunk {
+  content-visibility: auto;
+}
+
+/* Syntax (the same colors as the file editor's). */
+.syn-k { color: var(--syn-keyword); }
+.syn-p { color: var(--syn-property); }
+.syn-f { color: var(--syn-function); }
+.syn-t { color: var(--syn-type); }
+.syn-n { color: var(--syn-number); }
+.syn-o { color: var(--syn-tag); }
+.syn-c { color: var(--syn-comment); font-style: italic; }
+.syn-s { color: var(--syn-string); }
+.syn-h { color: var(--t1); font-weight: 600; }
+.syn-b { font-weight: 600; }
+.syn-i { font-style: italic; }

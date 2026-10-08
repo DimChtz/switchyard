@@ -40,11 +40,19 @@ import type { PluginCommandContext } from '@shared/plugins'
 import { unwatchFolder, watchFolder } from './services/watch'
 import { detectProjectMeta } from './services/projectMeta'
 import type { TextSearchOptions } from '@shared/textSearch'
-import type { ActivityEvent, AgentKind, MenuModel, MenuRole, NoteDraft, NotifyAction, Notice, Prefs, Project, PtySpawnOptions, ReviewComment, Task } from '@shared/types'
+import type { ActivityEvent, AgentKind, DiffLine, DiffOptions, DiffScope, MenuModel, MenuRole, NoteDraft, NotifyAction, Notice, Prefs, Project, PtySpawnOptions, ReviewComment, Task } from '@shared/types'
 
 import type { Theme } from '@shared/themes'
 
 type NoteLink = { projectId: string | null; taskId: string | null }
+
+/** A diff scope from the window: one of the names, or a commit's id. */
+function diffScope(s: unknown): DiffScope {
+  if (s === 'unpushed' || s === 'uncommitted') return s
+  const commit = (s as { commit?: unknown } | null)?.commit
+  if (typeof commit === 'string' && /^[0-9a-f]{4,64}$/i.test(commit)) return { commit }
+  return 'branch'
+}
 
 export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.storeGetProjects, () => store.getProjects())
@@ -190,7 +198,9 @@ export function registerIpcHandlers(): void {
     git.getWorktreeStatus(worktreePath, baseBranch)
   )
   ipcMain.handle(IPC.gitLog, (_e, worktreePath: string, limit?: number) => git.getLog(worktreePath, limit))
-  ipcMain.handle(IPC.gitDiffFiles, (_e, worktreePath: string, baseBranch: string) => git.getDiffFiles(worktreePath, baseBranch))
+  ipcMain.handle(IPC.gitDiffFiles, (_e, worktreePath: string, baseBranch: string, scope?: unknown, opts?: DiffOptions) =>
+    git.getDiffFiles(worktreePath, baseBranch, diffScope(scope), { ignoreSpace: !!opts?.ignoreSpace })
+  )
   ipcMain.handle(IPC.gitDiffStat, (_e, worktreePath: string, baseBranch: string) => git.getDiffStat(worktreePath, baseBranch))
   ipcMain.handle(IPC.gitRebase, (_e, worktreePath: string, baseBranch: string) => git.rebaseOnto(worktreePath, baseBranch))
   ipcMain.handle(IPC.gitMergeAndPrune, (_e, repoPath: string, worktreePath: string, branch: string, baseBranch: string, prune?: boolean, message?: string) =>
@@ -213,6 +223,14 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.gitCreateBranch, (_e, repoPath: string, branch: string, baseBranch: string) => git.createBranch(repoPath, branch, baseBranch))
   ipcMain.handle(IPC.gitCommitAll, (_e, worktreePath: string, message: string) => git.commitAll(worktreePath, message))
   ipcMain.handle(IPC.gitDiscardFile, (_e, worktreePath: string, path: string) => git.discardFile(worktreePath, path))
+  ipcMain.handle(IPC.gitCommitFiles, (_e, worktreePath: string, paths: string[], message: string) => git.commitFiles(worktreePath, paths, message))
+  ipcMain.handle(IPC.gitRevertFile, (_e, worktreePath: string, baseBranch: string, scope: unknown, path: string, oldPath?: string) =>
+    git.revertFile(worktreePath, baseBranch, diffScope(scope), path, oldPath)
+  )
+  ipcMain.handle(IPC.gitRevertHunk, (_e, worktreePath: string, path: string, lines: DiffLine[], oldPath?: string) => git.revertHunk(worktreePath, path, lines, oldPath))
+  ipcMain.handle(IPC.gitDiffImage, (_e, worktreePath: string, baseBranch: string, scope: unknown, path: string, side: 'old' | 'new', oldPath?: string) =>
+    git.diffImage(worktreePath, baseBranch, diffScope(scope), path, side === 'old' ? 'old' : 'new', oldPath)
+  )
   ipcMain.handle(IPC.gitRemoteInfo, (_e, repoPath: string) => git.remoteInfo(repoPath))
   ipcMain.handle(IPC.gitPush, (_e, worktreePath: string, branch: string) => git.pushBranch(worktreePath, branch))
   ipcMain.handle(IPC.gitCreatePr, (_e, worktreePath: string, repoPath: string, branch: string, baseBranch: string, title: string, body: string) =>

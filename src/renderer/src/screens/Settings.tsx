@@ -399,6 +399,13 @@ function GlobalSettings({ section, scope, onScope }: { section: string; scope: P
           {tog('Highlight matching brackets', '', 'editorBracketMatching')}
           {tog('Show whitespace', 'Dots for spaces, arrows for tabs', 'editorWhitespace')}
         </Group>
+        <Group title="Diffs">
+          <Row k="diffLayout" label="Layout" sub="How the Changes tab shows a file's diff">
+            <Seg value={pf.diffLayout} options={[['unified', 'Unified'], ['split', 'Side by side']]} onChange={(v) => set({ diffLayout: v === 'split' ? 'split' : 'unified' })} />
+          </Row>
+          {tog('Wrap long lines', 'Instead of scrolling sideways', 'diffWrap')}
+          {tog('Hide whitespace changes', 'Lines that only changed indentation or spacing are left out', 'diffIgnoreSpace')}
+        </Group>
         <Group title="Saving">
           <Row k="editorAutoSave" label="Auto save" sub="Off saves with Ctrl+S or the Save button">
             <Seg

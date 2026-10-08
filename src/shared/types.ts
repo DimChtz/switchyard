@@ -603,6 +603,8 @@ export interface DiffLine {
   text: string
   oldLine: number | null
   newLine: number | null
+  /** The file ends on this line without a newline ("\ No newline at end of file"). */
+  noEol?: true
 }
 
 export interface GitWorktreeInfo {
@@ -752,6 +754,12 @@ export interface Prefs {
   editorTabSize: number
   editorUseTabs: boolean
   editorWordWrap: boolean
+  /** The Changes diffs: one column, or old and new side by side. */
+  diffLayout: 'unified' | 'split'
+  /** Long lines in diffs wrap (else they scroll sideways). */
+  diffWrap: boolean
+  /** Whitespace-only changes left out of diffs. */
+  diffIgnoreSpace: boolean
   editorLineNumbers: boolean
   editorActiveLine: boolean
   /** A theme's id, or "system": light or dark as the OS is. */
@@ -930,6 +938,24 @@ export interface FileDiff {
   lines: DiffLine[]
   /** Has changes not committed yet (these can be committed or discarded). */
   uncommitted: boolean
+  /** `lines` holds only the start of a very long diff (`added`/`deleted` still count all of it). */
+  truncated?: boolean
+  /** Moved here from this path. */
+  oldPath?: string
+  /** Git can't show it as text (an image, an archive…). */
+  binary?: boolean
+}
+
+/**
+ * What the Changes tab compares the worktree with: everything since the branch left its base
+ * (like the pull request), what isn't on origin's copy of the branch yet, or just what isn't committed.
+ * A commit's id: only what that commit changed.
+ */
+export type DiffScope = 'branch' | 'unpushed' | 'uncommitted' | { commit: string }
+
+/** How a diff is read: whitespace-only changes left out or not. */
+export interface DiffOptions {
+  ignoreSpace?: boolean
 }
 
 /** What the launch flow's "Create branch" step did. */

@@ -2,12 +2,16 @@ import React, { createContext, useContext, useEffect, useRef, useState } from 'r
 import { useAppStore } from '../../../store/AppStore'
 import { agentShort } from '../../../lib/derive'
 import { errText } from '../../../lib/errors'
-import { commitMessageFor } from '../../../lib/taskActions'
+import { commitMessageFor, pushTask } from '../../../lib/taskActions'
+import { hunkAt, hunkLabel } from '../../../lib/diffView'
 import { commentMessage, followUpMessage, inOrder, nextRefs, reviewMessage } from '../../../lib/review'
 import { confirm } from '../../../components/ui'
 import { checkoutsOf, splitRepoPath } from '../../../lib/multiRepo'
 import { baseOf } from '../../../lib/stack'
-import type { FileDiff, Project, ReviewComment, Task } from '@shared/types'
+import type { DiffScope, FileDiff, Project, ReviewComment, Task } from '@shared/types'
+
+/** Each task's scope while the app runs (the Changes view comes and goes with the side bar). */
+const scopes = new Map<string, DiffScope>()
 
 export interface Commit {
   hash: string
@@ -18,7 +22,14 @@ export interface Commit {
 export interface ChangesApi {
   task: Task
   base: string
-  /** The changed files vs the base (null while they're read). */
+  /** The task's folder (files' paths are from here). */
+  root: string
+  /** What the files are compared with: the base, origin's copy of the branch, or the last commit. */
+  scope: DiffScope
+  setScope: (s: DiffScope) => void
+  /** The scope in a few words ("vs main", "not pushed yet"…). */
+  scopeNote: string
+  /** The changed files in the scope (null while they're read). */
   files: FileDiff[] | null
   /** Them in the order the Changes list shows them: folder by folder, the top folder's first. */
   ordered: FileDiff[]
@@ -41,8 +52,19 @@ export interface ChangesApi {
   commitMsg: string
   setCommitMsg: (s: string) => void
   committing: boolean
-  commit: () => void
+  commit: (push?: boolean) => void
+  /** Uncommitted files left out of the next commit (all of them go in otherwise). */
+  excluded: Set<string>
+  toggleExcluded: (path: string) => void
   discard: (path: string) => void
+  /** The file back to how it is where the diff starts (its changes undone, uncommitted). */
+  revertFile: (f: FileDiff) => void
+  /** One hunk of a file undone in the worktree. `at`: its "@@" line. */
+  revertHunk: (f: FileDiff, at: number) => void
+  /** An image's old or new side, as a data URL (null when that side has none). */
+  image: (f: FileDiff, side: 'old' | 'new') => Promise<string | null>
+  /** Whitespace-only changes left out (then hunks can't be reverted: they aren't what's in the file). */
+  ignoreSpace: boolean
   /** The branch's own commits, newest first. */
   commits: Commit[]
   /** The agent's name, or "the agent". */
@@ -80,13 +102,25 @@ export function ChangesProvider({ task, project, root, children }: { task: Task;
   const [committing, setCommitting] = useState(false)
   const [commits, setCommits] = useState<Commit[]>([])
   const base = baseOf(task, project)
+  const [scope, setScopeState] = useState<DiffScope>(() => scopes.get(task.id) ?? 'branch')
+  const setScope = (s: DiffScope): void => {
+    scopes.set(task.id, s)
+    setScopeState(s)
+  }
+  useEffect(() => setScopeState(scopes.get(task.id) ?? 'branch'), [task.id])
+  const scopeNote =
+    typeof scope === 'object' ? `in ${scope.commit.slice(0, 7)}` : scope === 'uncommitted' ? 'not committed yet' : scope === 'unpushed' ? 'not pushed yet' : `vs ${base}`
+  const ignoreSpace = !!state.prefs.diffIgnoreSpace
+  const [excluded, setExcluded] = useState<Set<string>>(new Set())
   const viewedKeys = useRef(new Map<string, string>())
 
   const refresh = (): void => {
+    // (A commit is the home repository's: the others have nothing in it.)
+    const from = typeof scope === 'object' ? checkouts.slice(0, 1) : checkouts
     Promise.all(
-      checkouts.map((c) =>
+      from.map((c) =>
         window.api.git
-          .diffFiles(c.path!, baseOf(task, c.project))
+          .diffFiles(c.path!, baseOf(task, c.project), scope, { ignoreSpace })
           .then((list) => (c.dir ? list.map((d) => ({ ...d, path: `${c.dir}/${d.path}` })) : list))
           .catch(() => [] as FileDiff[])
       )
@@ -105,7 +139,7 @@ export function ChangesProvider({ task, project, root, children }: { task: Task;
     if (home?.path)
       window.api.git
         .worktreeStatus(home.path, baseOf(task, home.project))
-        .then((s) => (s.ahead ? window.api.git.log(home.path!, Math.min(s.ahead, 8)) : []))
+        .then((s) => (s.ahead ? window.api.git.log(home.path!, Math.min(s.ahead, 50)) : []))
         .then(setCommits)
         .catch(() => setCommits([]))
   }
@@ -131,7 +165,7 @@ export function ChangesProvider({ task, project, root, children }: { task: Task;
   useEffect(() => {
     refresh()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [root, checkoutsKey, base, task.id])
+  }, [root, checkoutsKey, base, task.id, typeof scope === 'object' ? scope.commit : scope, ignoreSpace])
 
   // The agent answered comments: their threads have it.
   useEffect(
@@ -156,25 +190,87 @@ export function ChangesProvider({ task, project, root, children }: { task: Task;
   }
 
   const uncommitted = (files ?? []).filter((f) => f.uncommitted)
-  const commit = async (): Promise<void> => {
-    if (committing || uncommitted.length === 0) return
+  const toggleExcluded = (path: string): void =>
+    setExcluded((s) => {
+      const next = new Set(s)
+      if (next.has(path)) next.delete(path)
+      else next.add(path)
+      return next
+    })
+  const commit = async (push = false): Promise<void> => {
+    const picked = uncommitted.filter((f) => !excluded.has(f.path))
+    if (committing || picked.length === 0) return
     setCommitting(true)
     try {
-      // Each repository with uncommitted changes gets the commit.
-      const repos = [...new Set(uncommitted.map((f) => inRepo(f.path)?.path).filter((x): x is string => !!x))]
+      const message = commitMessageFor(task)
+      // Each repository with uncommitted changes gets the commit: all of them, or just the picked files.
+      const repos = new Map<string, string[]>()
+      for (const f of picked) {
+        const r = inRepo(f.path)
+        if (!r) continue
+        repos.set(r.path, [...(repos.get(r.path) ?? []), r.rel, ...(f.oldPath ? [inRepo(f.oldPath)?.rel ?? f.oldPath] : [])])
+      }
+      const all = picked.length === uncommitted.length
       const shas: string[] = []
-      for (const path of repos) shas.push(await window.api.git.commitAll(path, commitMsg.trim() || commitMessageFor(task)))
+      for (const [path, rels] of repos) shas.push(all ? await window.api.git.commitAll(path, commitMsg.trim() || message) : await window.api.git.commitFiles(path, rels, commitMsg.trim() || message))
       setCommitMsg('')
+      setExcluded(new Set())
       dispatch({
         type: 'TOAST',
-        text: `Committed ${uncommitted.length} file${uncommitted.length > 1 ? 's' : ''} · ${shas.map((s) => s.slice(0, 7)).join(', ')}${repos.length > 1 ? ` (${repos.length} repos)` : ''}`
+        text: `Committed ${picked.length} file${picked.length > 1 ? 's' : ''} · ${shas.map((s) => s.slice(0, 7)).join(', ')}${repos.size > 1 ? ` (${repos.size} repos)` : ''}`
       })
+      if (push) await pushTask(task, dispatch, false, state.projects)
       refresh()
     } catch (err) {
       dispatch({ type: 'TOAST', text: `Could not commit: ${errText(err)}` })
     } finally {
       setCommitting(false)
     }
+  }
+
+  const revertFile = async (f: FileDiff): Promise<void> => {
+    const r = inRepo(f.path)
+    if (!r) return
+    const name = f.path.split('/').pop()
+    const since = typeof scope === 'object' ? `before ${scope.commit.slice(0, 7)}` : scope === 'branch' ? `on ${base}` : scope === 'unpushed' ? 'on origin' : 'in the last commit'
+    const ok = await confirm({
+      title: `Undo the changes to ${name}?`,
+      body:
+        f.status === 'added'
+          ? `It's new, so it's deleted. ${f.uncommitted ? 'Its uncommitted changes can’t be brought back.' : 'Committed work stays in the history; the deletion is a change to commit.'}`
+          : `It goes back to how it is ${since}. ${f.uncommitted ? 'Its uncommitted changes can’t be brought back.' : 'Committed work stays in the history; the undo is a change to commit.'}`,
+      detail: f.path,
+      confirmLabel: 'Undo changes',
+      danger: true
+    })
+    if (!ok) return
+    try {
+      const c = checkouts.find((x) => x.path === r.path)
+      await window.api.git.revertFile(r.path, baseOf(task, c?.project ?? project), scope, r.rel, f.oldPath ? (inRepo(f.oldPath)?.rel ?? undefined) : undefined)
+      dispatch({ type: 'TOAST', text: `Undid the changes to ${name}.` })
+      refresh()
+    } catch (err) {
+      dispatch({ type: 'TOAST', text: `Could not undo: ${errText(err)}` })
+    }
+  }
+
+  const revertHunk = async (f: FileDiff, at: number): Promise<void> => {
+    const r = inRepo(f.path)
+    if (!r) return
+    try {
+      await window.api.git.revertHunk(r.path, r.rel, hunkAt(f.lines, at), f.oldPath ? (inRepo(f.oldPath)?.rel ?? undefined) : undefined)
+      dispatch({ type: 'TOAST', text: `Undid ${hunkLabel(f.lines[at].text).where} of ${f.path.split('/').pop()}.` })
+      refresh()
+    } catch (err) {
+      dispatch({ type: 'TOAST', text: `Could not undo the change: ${errText(err)}` })
+    }
+  }
+
+  const image = (f: FileDiff, side: 'old' | 'new'): Promise<string | null> => {
+    const r = inRepo(f.path)
+    if (!r) return Promise.resolve(null)
+    const c = checkouts.find((x) => x.path === r.path)
+    return window.api.git.diffImage(r.path, baseOf(task, c?.project ?? project), scope, r.rel, side, f.oldPath ? (inRepo(f.oldPath)?.rel ?? undefined) : undefined).catch(() => null)
   }
 
   const discard = async (path: string): Promise<void> => {
@@ -264,6 +360,10 @@ export function ChangesProvider({ task, project, root, children }: { task: Task;
   const api: ChangesApi = {
     task,
     base,
+    root,
+    scope,
+    setScope,
+    scopeNote,
     files,
     ordered: inListOrder(files ?? []),
     refresh,
@@ -285,7 +385,13 @@ export function ChangesProvider({ task, project, root, children }: { task: Task;
     setCommitMsg,
     committing,
     commit,
+    excluded,
+    toggleExcluded,
     discard,
+    revertFile,
+    revertHunk,
+    image,
+    ignoreSpace,
     commits,
     agent
   }

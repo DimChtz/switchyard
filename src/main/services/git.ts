@@ -1,4 +1,4 @@
-import { gitAt, gitArgs, gitEnv, gitYes, newestBase } from './gitEnv'
+import { gitAt, gitArgs, gitEnv, gitFailure, gitYes, newestBase } from './gitEnv'
 import { basename, dirname, isAbsolute, join } from 'path'
 import { promises as fs } from 'fs'
 import { tmpdir } from 'os'
@@ -10,7 +10,7 @@ import { expandPath } from './repos'
 import { toPrDetails } from '@shared/pr'
 import { samePath } from './paths'
 import type { PrDetails } from '@shared/types'
-import type { BranchInfo, BranchResult, FileDiff, DiffLine, DiffStat, GitWorktreeInfo, Issue, PullRequest, RemoteInfo, RepoInfo, WorktreeStatus } from '@shared/types'
+import type { BranchInfo, BranchResult, FileDiff, DiffLine, DiffOptions, DiffScope, DiffStat, GitWorktreeInfo, Issue, PullRequest, RemoteInfo, RepoInfo, WorktreeStatus } from '@shared/types'
 
 /**
  * Where a task's worktree goes: a .worktrees folder inside the repository,
@@ -416,6 +416,84 @@ export async function discardFile(worktreePath: string, path: string): Promise<v
   await fs.rm(join(worktreePath, path), { force: true, recursive: true })
 }
 
+/** Stages just these files (ignored ones stay out) and commits them - anything else already staged stays out too. */
+export async function commitFiles(worktreePath: string, paths: string[], message: string): Promise<string> {
+  if (!paths.length) throw new Error('No files picked.')
+  const git = gitAt(worktreePath)
+  await git.add(['-A', '--', ...paths])
+  // (--only: the commit takes these paths as they are now, whatever else is in the index.)
+  await git.raw(['commit', '--only', '--quiet', '-m', message, '--', ...paths])
+  return (await git.revparse(['HEAD'])).trim()
+}
+
+/**
+ * Takes one file back to how it is where the diff starts (the base, origin's copy, the last commit):
+ * the task's changes to it are undone in the worktree, uncommitted, for the next commit.
+ * A file the task added is deleted; one it moved comes back under its old name.
+ */
+export async function revertFile(worktreePath: string, baseBranch: string, scope: DiffScope, path: string, oldPath?: string): Promise<void> {
+  const from = typeof scope === 'object' ? await parentOf(worktreePath, scope.commit) : await diffStart(worktreePath, baseBranch, scope)
+  const git = gitAt(worktreePath)
+  const was = oldPath ?? path
+  const existed = await gitYes(worktreePath, ['cat-file', '-e', `${from}:${was}`]).catch(() => false)
+  if (oldPath || !existed) {
+    await git.raw(['rm', '--cached', '--force', '--quiet', '--ignore-unmatch', '--', path]).catch(() => {})
+    await fs.rm(join(worktreePath, path), { force: true, recursive: true })
+  }
+  if (existed) {
+    await git.raw(['checkout', from, '--', was])
+    // (checkout stages it; leave it unstaged, like any other change in the worktree.)
+    await git.raw(['reset', '--quiet', '--', was]).catch(() => {})
+  }
+}
+
+/**
+ * Undoes one hunk of a file's diff in the worktree (the diff ends at the worktree, so the hunk
+ * is there to take out). `lines`: the hunk, its "@@" line first.
+ */
+export async function revertHunk(worktreePath: string, path: string, lines: DiffLine[], oldPath?: string): Promise<void> {
+  if (lines[0]?.kind !== '@') throw new Error('Not a hunk.')
+  const body: string[] = []
+  for (const l of lines) {
+    body.push(l.kind === '@' ? l.text : `${l.kind}${l.text}`)
+    if (l.noEol) body.push('\\ No newline at end of file')
+  }
+  const patch = [`diff --git a/${oldPath ?? path} b/${path}`, `--- a/${oldPath ?? path}`, `+++ b/${path}`, ...body, ''].join('\n')
+  const dir = await fs.mkdtemp(join(tmpdir(), 'sy-hunk-'))
+  const file = join(dir, 'hunk.patch')
+  try {
+    await fs.writeFile(file, patch)
+    // Onto the worktree only (no --index); --recount: the "@@" counts needn't be exact.
+    await gitAt(worktreePath).raw(['apply', '-R', '--recount', '--whitespace=nowarn', file])
+  } catch (err) {
+    throw new Error(`The file changed since the diff was read - refresh and try again. (${gitFailure(err, 'git apply failed')})`, { cause: err })
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true }).catch(() => {})
+  }
+}
+
+const IMAGE_TYPES: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml', ico: 'image/x-icon', bmp: 'image/bmp', avif: 'image/avif' }
+
+/**
+ * An image in a diff, as a data URL: how it is now ('new': the worktree, or the commit), or where the
+ * diff starts ('old'). Null when it isn't an image, isn't there on that side, or is too big to show.
+ */
+export async function diffImage(worktreePath: string, baseBranch: string, scope: DiffScope, path: string, side: 'old' | 'new', oldPath?: string): Promise<string | null> {
+  const type = IMAGE_TYPES[path.split('.').pop()?.toLowerCase() ?? '']
+  if (!type) return null
+  let buf: Buffer | null
+  if (side === 'new' && typeof scope !== 'object') {
+    buf = await fs.readFile(join(worktreePath, path)).catch(() => null)
+  } else {
+    const rev = typeof scope === 'object' ? (side === 'new' ? scope.commit : await parentOf(worktreePath, scope.commit)) : await diffStart(worktreePath, baseBranch, scope)
+    buf = await execFileP('git', gitArgs(['show', `${rev}:${side === 'old' ? (oldPath ?? path) : path}`]), { cwd: worktreePath, windowsHide: true, env: gitEnv(), encoding: 'buffer', maxBuffer: 32 * 1024 * 1024 })
+      .then((r) => r.stdout as Buffer)
+      .catch(() => null)
+  }
+  if (!buf || buf.length > 20 * 1024 * 1024) return null
+  return `data:${type};base64,${buf.toString('base64')}`
+}
+
 export async function getWorktreeStatus(worktreePath: string, baseBranch: string): Promise<WorktreeStatus> {
   const git = gitAt(worktreePath)
   let ahead = 0
@@ -459,34 +537,101 @@ async function forkPoint(worktreePath: string, baseBranch: string): Promise<stri
   }
 }
 
-const MAX_DIFF_LINES = 20_000
-
-export async function getDiffFiles(worktreePath: string, baseBranch: string): Promise<FileDiff[]> {
+/**
+ * Where origin's copy of the checked-out branch is (its upstream, or origin/<branch>):
+ * diffing against it shows what isn't pushed yet. Null when the branch was never pushed.
+ */
+async function pushedPoint(worktreePath: string): Promise<string | null> {
   const git = gitAt(worktreePath)
-  const from = await forkPoint(worktreePath, baseBranch)
+  const upstream = (await git.raw(['rev-parse', '--abbrev-ref', '--symbolic-full-name', '@{upstream}']).catch(() => '')).trim()
+  if (upstream) return upstream
+  const branch = (await git.raw(['symbolic-ref', '--quiet', '--short', 'HEAD']).catch(() => '')).trim()
+  if (branch && (await gitYes(worktreePath, ['rev-parse', '--verify', '--quiet', `refs/remotes/origin/${branch}`]).catch(() => false))) return `origin/${branch}`
+  return null
+}
+
+/** What a diff in this scope starts from (see DiffScope). A branch never pushed: everything since it left the base. */
+async function diffStart(worktreePath: string, baseBranch: string, scope: DiffScope): Promise<string> {
+  if (scope === 'uncommitted') return 'HEAD'
+  if (scope === 'unpushed') {
+    const pushed = await pushedPoint(worktreePath)
+    if (pushed) return pushed
+  }
+  return forkPoint(worktreePath, baseBranch)
+}
+
+const MAX_DIFF_LINES = 20_000
+/** A new file bigger than this isn't read for its diff (it's listed, with no lines). */
+const MAX_TEXT_BYTES = 16 * 1024 * 1024
+
+/**
+ * A new file's text, or null when it isn't text (or is too big to show). UTF-16 with its
+ * byte-order mark (what Windows PowerShell writes) is text too - its zero bytes aren't binary.
+ */
+function textOf(buf: Buffer): string | null {
+  if (buf.length > MAX_TEXT_BYTES) return null
+  if (buf[0] === 0xff && buf[1] === 0xfe) return buf.subarray(2).toString('utf16le')
+  if (buf[0] === 0xfe && buf[1] === 0xff) {
+    const le = Buffer.from(buf.subarray(2, buf.length - (buf.length % 2)))
+    le.swap16()
+    return le.toString('utf16le')
+  }
+  // Git's test for binary: a zero byte near the start.
+  if (buf.subarray(0, 8000).includes(0)) return null
+  const text = buf.toString('utf-8')
+  return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text
+}
+
+/** Git's empty tree: what a repository's first commit is compared with. */
+const EMPTY_TREE = '4b825dc642cb6eb9a060e54bf8d69288fbee4904'
+
+/** A commit's parent, or the empty tree for a first commit. */
+async function parentOf(worktreePath: string, sha: string): Promise<string> {
+  const ok = await gitYes(worktreePath, ['rev-parse', '--verify', '--quiet', `${sha}^`]).catch(() => false)
+  return ok ? `${sha}^` : EMPTY_TREE
+}
+
+/** `git diff`'s output, one FileDiff per file. */
+function parseDiff(raw: string, uncommitted: (path: string) => boolean): FileDiff[] {
+  const out: FileDiff[] = []
+  for (const section of raw.split(/^(?=diff --git )/m)) {
+    if (!section.startsWith('diff --git ')) continue
+    const file = parseFileSection(section)
+    if (file) out.push({ ...file, uncommitted: uncommitted(file.path) })
+  }
+  return out
+}
+
+export async function getDiffFiles(worktreePath: string, baseBranch: string, scope: DiffScope = 'branch', opts: DiffOptions = {}): Promise<FileDiff[]> {
+  const git = gitAt(worktreePath)
+  const space = opts.ignoreSpace ? ['-w'] : []
+  // One commit: what it changed, nothing of the worktree's.
+  if (typeof scope === 'object') {
+    const sha = scope.commit
+    const raw = await git.raw(['diff', '-M', ...space, '--no-color', '--no-ext-diff', await parentOf(worktreePath, sha), sha])
+    return parseDiff(raw, () => false).sort((a, b) => a.path.localeCompare(b.path))
+  }
+  const from = await diffStart(worktreePath, baseBranch, scope)
   const status = await git.status()
   const uncommitted = new Set(status.files.map((f) => f.path.replace(/^"|"$/g, '')))
   for (const r of status.renamed) uncommitted.add(r.to)
   const results = new Map<string, FileDiff>()
 
-  const raw = await git.raw(['diff', '-M', '--no-color', '--no-ext-diff', from])
-  for (const section of raw.split(/^(?=diff --git )/m)) {
-    if (!section.startsWith('diff --git ')) continue
-    const file = parseFileSection(section)
-    if (file) results.set(file.path, { ...file, uncommitted: uncommitted.has(file.path) })
-  }
+  const raw = await git.raw(['diff', '-M', ...space, '--no-color', '--no-ext-diff', from])
+  for (const file of parseDiff(raw, (p) => uncommitted.has(p))) results.set(file.path, file)
 
   // Untracked files: git diff won't show their content, so build a synthetic
   // all-additions diff from the file itself.
   for (const path of status.not_added) {
     try {
-      const buf = await fs.readFile(join(worktreePath, path))
-      if (buf.length > 500_000 || buf.includes(0)) {
+      const text = textOf(await fs.readFile(join(worktreePath, path)))
+      if (text == null) {
         results.set(path, { path, status: 'added', added: 0, deleted: 0, lines: [], uncommitted: true })
         continue
       }
-      const lines: DiffLine[] = fileLines(buf.toString('utf-8')).map((line, i) => ({ kind: '+', text: line, oldLine: null, newLine: i + 1 }))
-      results.set(path, { path, status: 'added', added: lines.length, deleted: 0, lines, uncommitted: true })
+      const all = fileLines(text)
+      const lines: DiffLine[] = all.slice(0, MAX_DIFF_LINES).map((line, i) => ({ kind: '+', text: line, oldLine: null, newLine: i + 1 }))
+      results.set(path, { path, status: 'added', added: all.length, deleted: 0, lines, uncommitted: true, ...(all.length > MAX_DIFF_LINES ? { truncated: true } : {}) })
     } catch {
       results.set(path, { path, status: 'added', added: 0, deleted: 0, lines: [], uncommitted: true })
     }
@@ -502,13 +647,7 @@ export async function diffFilesBetween(gitDir: string, from: string, to: string)
     env: gitEnv(),
     maxBuffer: 64 * 1024 * 1024
   })
-  const out: FileDiff[] = []
-  for (const section of stdout.split(/^(?=diff --git )/m)) {
-    if (!section.startsWith('diff --git ')) continue
-    const file = parseFileSection(section)
-    if (file) out.push({ ...file, uncommitted: false })
-  }
-  return out.sort((a, b) => a.path.localeCompare(b.path))
+  return parseDiff(stdout, () => false).sort((a, b) => a.path.localeCompare(b.path))
 }
 
 /** A text file's lines, as git counts them (a final newline doesn't start another). */
@@ -526,15 +665,18 @@ export function parseFileSection(section: string): Omit<FileDiff, 'uncommitted'>
   const plus = pick(/^\+\+\+ b\/(.+)$/m)
   const minus = pick(/^--- a\/(.+)$/m)
   const renamed = pick(/^rename to (.+)$/m)
+  const renamedFrom = pick(/^rename from (.+)$/m)
   const fromGit = header.match(/^diff --git a\/(.+) b\/(.+)$/m)
   const path = plus ?? renamed ?? minus ?? fromGit?.[2] ?? null
   if (!path) return null
   const status: FileDiff['status'] = /^new file mode/m.test(header) ? 'added' : /^deleted file mode/m.test(header) ? 'deleted' : 'modified'
-  if (/^Binary files /m.test(header)) return { path, status, added: 0, deleted: 0, lines: [] }
+  const moved = renamedFrom && renamedFrom !== path ? { oldPath: renamedFrom } : {}
+  if (/^Binary files /m.test(header)) return { path, status, added: 0, deleted: 0, lines: [], binary: true, ...moved }
   const lines = parseUnifiedDiff(section)
   const added = lines.filter((l) => l.kind === '+').length
   const deleted = lines.filter((l) => l.kind === '-').length
-  return { path, status, added, deleted, lines: lines.length > MAX_DIFF_LINES ? lines.slice(0, MAX_DIFF_LINES) : lines }
+  if (lines.length > MAX_DIFF_LINES) return { path, status, added, deleted, lines: lines.slice(0, MAX_DIFF_LINES), truncated: true, ...moved }
+  return { path, status, added, deleted, lines, ...moved }
 }
 
 export function parseUnifiedDiff(raw: string): DiffLine[] {
@@ -548,7 +690,12 @@ export function parseUnifiedDiff(raw: string): DiffLine[] {
   for (const line of lines) {
     if (!inHunk && !line.startsWith('@@')) continue
     inHunk = true
-    if (line.startsWith('\\')) continue // "\ No newline at end of file"
+    // "\ No newline at end of file": about the line before it.
+    if (line.startsWith('\\')) {
+      const last = result[result.length - 1]
+      if (last && last.kind !== '@') last.noEol = true
+      continue
+    }
     if (line.startsWith('@@')) {
       const match = line.match(/@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/)
       if (match) {
@@ -610,8 +757,8 @@ export async function getDiffStat(worktreePath: string, baseBranch: string): Pro
   for (const path of (await git.status()).not_added) {
     stat.files += 1
     try {
-      const buf = await fs.readFile(join(worktreePath, path))
-      if (buf.length <= 500_000 && !buf.includes(0)) stat.added += fileLines(buf.toString('utf-8')).length
+      const text = textOf(await fs.readFile(join(worktreePath, path)))
+      if (text != null) stat.added += fileLines(text).length
     } catch {
       // unreadable - still counts as a file
     }
