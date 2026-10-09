@@ -1,6 +1,6 @@
 {
   "name": "switchyard",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Dashboard for managing coding agents across git worktrees",
   "main": "./out/main/index.js",
   "author": "Dimitris",
