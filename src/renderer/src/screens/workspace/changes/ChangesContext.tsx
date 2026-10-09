@@ -8,7 +8,10 @@ import { commentMessage, followUpMessage, inOrder, nextRefs, reviewMessage } fro
 import { confirm } from '../../../components/ui'
 import { checkoutsOf, splitRepoPath } from '../../../lib/multiRepo'
 import { baseOf } from '../../../lib/stack'
-import type { DiffScope, FileDiff, Project, ReviewComment, Task } from '@shared/types'
+import { plural } from '../../../lib/summary'
+import { setLayout, showInWorkspace, wsOpen } from '../../../lib/wsStore'
+import { closeWhere } from '../../../lib/wsLayout'
+import type { DiffLine, DiffScope, FileDiff, Project, ReviewComment, SyncState, Task } from '@shared/types'
 
 /** Each task's scope while the app runs (the Changes view comes and goes with the side bar). */
 const scopes = new Map<string, DiffScope>()
@@ -56,6 +59,12 @@ export interface ChangesApi {
   /** Uncommitted files left out of the next commit (all of them go in otherwise). */
   excluded: Set<string>
   toggleExcluded: (path: string) => void
+  /** A file's changed lines left out of the next commit (indexes into its Uncommitted diff), or null for none. */
+  skippedLines: (path: string) => Set<number> | null
+  /** Some changed lines of a file in or out of the next commit (in the Uncommitted view). */
+  pickLines: (f: FileDiff, lines: number[], on: boolean) => void
+  /** How much of a file goes into the next commit. */
+  pickState: (f: FileDiff) => 'all' | 'some' | 'none'
   discard: (path: string) => void
   /** The file back to how it is where the diff starts (its changes undone, uncommitted). */
   revertFile: (f: FileDiff) => void
@@ -65,10 +74,42 @@ export interface ChangesApi {
   image: (f: FileDiff, side: 'old' | 'new') => Promise<string | null>
   /** Whitespace-only changes left out (then hunks can't be reverted: they aren't what's in the file). */
   ignoreSpace: boolean
+  /** Commits the base has that the branch doesn't. */
+  behind: number
+  /** A merge or rebase stopped on conflicts (null: none going on). */
+  sync: RepoSync | null
+  /** Busy bringing the branch up to date, continuing or aborting. */
+  syncing: boolean
+  /** Brings the branch up to date with its base; conflicts are left to resolve here. */
+  updateBranch: () => void
+  continueSync: () => void
+  abortSync: () => void
+  /** A conflicted file settled: as it is now, or taken whole from your side or the base's. */
+  resolveFile: (path: string, how: 'as-is' | 'mine' | 'theirs') => Promise<void>
+  /** Asks the agent to resolve the conflicts (it doesn't continue the merge/rebase: that's yours). */
+  askToResolve: () => void
+  /** The repository a task file is in, and its path there. */
+  repoOf: (path: string) => { path: string; rel: string } | null
+  /** One commit's changes in Changes (and a file's diff in it). */
+  showCommit: (sha: string, path?: string, subject?: string) => void
+  /** The shown commit's subject, when it was opened from somewhere that knew it. */
+  commitSubject: string | null
   /** The branch's own commits, newest first. */
   commits: Commit[]
   /** The agent's name, or "the agent". */
   agent: string
+}
+
+/** A stopped merge/rebase, in one of the task's repositories (`dir`: its folder in a task folder, '' for one repository). */
+export type RepoSync = SyncState & { repo: string; dir: string }
+
+/** The two sides of a conflict as the task sees them, against git's "ours"/"theirs". */
+export function sidesOf(sync: SyncState, base: string): { mine: 'ours' | 'theirs'; mineLabel: string; otherLabel: string } {
+  const other = sync.onto || base
+  // In a rebase, HEAD ("ours") is the base the task's commits are being replayed onto.
+  return sync.op === 'rebase'
+    ? { mine: 'theirs', mineLabel: sync.commit ? `Your commit ${sync.commit.split(' ')[0]}` : 'Your branch', otherLabel: other }
+    : { mine: 'ours', mineLabel: 'Your branch', otherLabel: other }
 }
 
 const Ctx = createContext<ChangesApi | null>(null)
@@ -102,17 +143,26 @@ export function ChangesProvider({ task, project, root, children }: { task: Task;
   const [committing, setCommitting] = useState(false)
   const [commits, setCommits] = useState<Commit[]>([])
   const base = baseOf(task, project)
-  const [scope, setScopeState] = useState<DiffScope>(() => scopes.get(task.id) ?? 'branch')
+  // Pending work first (what isn't pushed yet), as source control apps do; the whole branch is a click away.
+  const firstScope = (): DiffScope => scopes.get(task.id) ?? state.prefs.changesScope ?? 'unpushed'
+  const [scope, setScopeState] = useState<DiffScope>(firstScope)
   const setScope = (s: DiffScope): void => {
     scopes.set(task.id, s)
     setScopeState(s)
   }
-  useEffect(() => setScopeState(scopes.get(task.id) ?? 'branch'), [task.id])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => setScopeState(firstScope()), [task.id])
   const scopeNote =
     typeof scope === 'object' ? `in ${scope.commit.slice(0, 7)}` : scope === 'uncommitted' ? 'not committed yet' : scope === 'unpushed' ? 'not pushed yet' : `vs ${base}`
   const ignoreSpace = !!state.prefs.diffIgnoreSpace
   const [excluded, setExcluded] = useState<Set<string>>(new Set())
   const viewedKeys = useRef(new Map<string, string>())
+  // Lines left out of the next commit, per file - read off its Uncommitted diff (vs HEAD), which they stay tied to.
+  const [skips, setSkips] = useState<Record<string, { lines: DiffLine[]; sig: string; skip: Set<number> }>>({})
+  const [behind, setBehind] = useState(0)
+  const [commitSubject, setCommitSubject] = useState<string | null>(null)
+  const [sync, setSync] = useState<RepoSync | null>(null)
+  const [syncing, setSyncing] = useState(false)
 
   const refresh = (): void => {
     // (A commit is the home repository's: the others have nothing in it.)
@@ -127,6 +177,15 @@ export function ChangesProvider({ task, project, root, children }: { task: Task;
     ).then(async (lists) => {
       const f = lists.flat()
       setFiles(f)
+      // Picked lines hold while the file's uncommitted changes are what they were picked from.
+      if (scope === 'uncommitted')
+        setSkips((s) => {
+          const keep = Object.entries(s).filter(([p, v]) => {
+            const now = f.find((d) => d.path === p)
+            return now?.uncommitted && diffSignature(now) === v.sig
+          })
+          return keep.length === Object.keys(s).length ? s : Object.fromEntries(keep)
+        })
       // Viewed holds only while the file's changes are what you looked at (as on GitHub).
       const marks = await window.api.store.getViewedFiles(task.id)
       const now = new Map(f.map((d) => [d.path, diffSignature(d)]))
@@ -134,14 +193,21 @@ export function ChangesProvider({ task, project, root, children }: { task: Task;
       viewedKeys.current = new Map(marks.map((k) => [splitMark(k)[0], k]))
     })
     window.api.store.getComments().then((all) => setComments(all.filter((c) => c.taskId === task.id)))
-    // The branch's own commits (the home repository's).
+    // The branch's own commits (the home repository's), and how far its base moved on.
     const home = checkouts[0]
     if (home?.path)
       window.api.git
         .worktreeStatus(home.path, baseOf(task, home.project))
-        .then((s) => (s.ahead ? window.api.git.log(home.path!, Math.min(s.ahead, 50)) : []))
+        .then((s) => {
+          setBehind(s.behind)
+          return s.ahead ? window.api.git.log(home.path!, Math.min(s.ahead, 50)) : []
+        })
         .then(setCommits)
         .catch(() => setCommits([]))
+    // A merge or rebase stopped half-way on conflicts, in any of its repositories.
+    Promise.all(checkouts.map((c) => window.api.git.syncState(c.path!).then((s) => (s ? { ...s, repo: c.path!, dir: c.dir ?? '' } : null)).catch(() => null))).then((all) =>
+      setSync(all.find((s) => s) ?? null)
+    )
   }
 
   // Live: the agent's edits and commits show up as they happen.
@@ -190,31 +256,73 @@ export function ChangesProvider({ task, project, root, children }: { task: Task;
   }
 
   const uncommitted = (files ?? []).filter((f) => f.uncommitted)
-  const toggleExcluded = (path: string): void =>
+  /** A file's box: all of it in or out (a file with some lines picked goes all in). */
+  const toggleExcluded = (path: string): void => {
+    const some = !!skips[path]?.skip.size
+    setSkips((s) => {
+      if (!s[path]) return s
+      const next = { ...s }
+      delete next[path]
+      return next
+    })
     setExcluded((s) => {
       const next = new Set(s)
-      if (next.has(path)) next.delete(path)
+      if (next.has(path) || some) next.delete(path)
       else next.add(path)
       return next
     })
+  }
+  const changedLines = (lines: DiffLine[]): number[] => lines.flatMap((l, i) => (l.kind === '+' || l.kind === '-' ? [i] : []))
+  const skippedLines = (path: string): Set<number> | null => skips[path]?.skip ?? null
+  const pickState = (f: FileDiff): 'all' | 'some' | 'none' => {
+    if (excluded.has(f.path)) return 'none'
+    const s = skips[f.path]
+    if (!s?.skip.size) return 'all'
+    return s.skip.size >= changedLines(s.lines).length ? 'none' : 'some'
+  }
+  const pickLines = (f: FileDiff, idx: number[], on: boolean): void => {
+    setSkips((all) => {
+      const cur = all[f.path]
+      const skip = new Set(cur && cur.sig === diffSignature(f) ? cur.skip : [])
+      // Left out as a whole until now: every line was out.
+      if (excluded.has(f.path)) changedLines(f.lines).forEach((i) => skip.add(i))
+      for (const i of idx) {
+        if (on) skip.delete(i)
+        else skip.add(i)
+      }
+      const next = { ...all }
+      if (skip.size) next[f.path] = { lines: f.lines, sig: diffSignature(f), skip }
+      else delete next[f.path]
+      return next
+    })
+    if (excluded.has(f.path))
+      setExcluded((s) => {
+        const next = new Set(s)
+        next.delete(f.path)
+        return next
+      })
+  }
   const commit = async (push = false): Promise<void> => {
-    const picked = uncommitted.filter((f) => !excluded.has(f.path))
+    const picked = uncommitted.filter((f) => pickState(f) !== 'none')
     if (committing || picked.length === 0) return
     setCommitting(true)
     try {
-      const message = commitMessageFor(task)
-      // Each repository with uncommitted changes gets the commit: all of them, or just the picked files.
-      const repos = new Map<string, string[]>()
+      const message = commitMsg.trim() || commitMessageFor(task)
+      // Each repository with uncommitted changes gets the commit: all of them, or just the picked files (or lines).
+      const repos = new Map<string, { path: string; oldPath?: string; lines?: DiffLine[]; include?: number[] }[]>()
       for (const f of picked) {
         const r = inRepo(f.path)
         if (!r) continue
-        repos.set(r.path, [...(repos.get(r.path) ?? []), r.rel, ...(f.oldPath ? [inRepo(f.oldPath)?.rel ?? f.oldPath] : [])])
+        const s = skips[f.path]
+        const some = s && s.skip.size ? { lines: s.lines, include: changedLines(s.lines).filter((i) => !s.skip.has(i)) } : {}
+        repos.set(r.path, [...(repos.get(r.path) ?? []), { path: r.rel, ...(f.oldPath ? { oldPath: inRepo(f.oldPath)?.rel ?? f.oldPath } : {}), ...some }])
       }
-      const all = picked.length === uncommitted.length
+      const all = picked.length === uncommitted.length && picked.every((f) => pickState(f) === 'all')
       const shas: string[] = []
-      for (const [path, rels] of repos) shas.push(all ? await window.api.git.commitAll(path, commitMsg.trim() || message) : await window.api.git.commitFiles(path, rels, commitMsg.trim() || message))
+      for (const [path, picks] of repos) shas.push(all ? await window.api.git.commitAll(path, message) : await window.api.git.commitSelection(path, picks, message))
       setCommitMsg('')
       setExcluded(new Set())
+      setSkips({})
       dispatch({
         type: 'TOAST',
         text: `Committed ${picked.length} file${picked.length > 1 ? 's' : ''} · ${shas.map((s) => s.slice(0, 7)).join(', ')}${repos.size > 1 ? ` (${repos.size} repos)` : ''}`
@@ -264,6 +372,95 @@ export function ChangesProvider({ task, project, root, children }: { task: Task;
     } catch (err) {
       dispatch({ type: 'TOAST', text: `Could not undo the change: ${errText(err)}` })
     }
+  }
+
+  // The merge/rebase over: its conflict tabs have nothing left to show.
+  const hadSync = useRef(false)
+  useEffect(() => {
+    if (hadSync.current && !sync) setLayout(task.id, (L) => closeWhere(L, (t) => t.startsWith('conflict:')))
+    hadSync.current = !!sync
+  }, [sync, task.id])
+
+  // ── Up to date with the base, and its conflicts ──
+  const busyAgent = task.st === 'working'
+  const updateBranch = async (): Promise<void> => {
+    const home = checkouts[0]
+    if (!home?.path || syncing) return
+    if (busyAgent) return dispatch({ type: 'TOAST', text: `${agent} is working in this worktree - update the branch when it's done.` })
+    setSyncing(true)
+    try {
+      await window.api.git.rebase(home.path, baseOf(task, home.project), true)
+      dispatch({ type: 'TOAST', text: `Up to date with ${base}.` })
+    } catch (err) {
+      const msg = errText(err)
+      if (msg.startsWith('CONFLICT:')) {
+        const n = msg.slice('CONFLICT:'.length).split('\n').filter(Boolean)
+        dispatch({ type: 'TOAST', text: `${plural(n.length, 'file')} to resolve - ${base}'s changes clash with this branch's.` })
+        // The first one, ready to resolve.
+        if (n[0]) wsOpen(task.id, `conflict:${home.dir ? `${home.dir}/` : ''}${n[0]}`)
+      } else dispatch({ type: 'TOAST', text: `Could not update from ${base}: ${msg}` })
+    } finally {
+      setSyncing(false)
+      refresh()
+    }
+  }
+  const continueSync = async (): Promise<void> => {
+    if (!sync || syncing) return
+    setSyncing(true)
+    try {
+      const next = await window.api.git.continueSync(sync.repo)
+      if (next?.files.length) {
+        dispatch({ type: 'TOAST', text: `On to the next commit: ${plural(next.files.length, 'file')} to resolve.` })
+        wsOpen(task.id, `conflict:${sync.dir ? `${sync.dir}/` : ''}${next.files[0].path}`)
+      } else if (!next) dispatch({ type: 'TOAST', text: sync.op === 'rebase' ? `Rebased onto ${sync.onto || base}.` : `Merged ${sync.onto || base}.` })
+    } catch (err) {
+      dispatch({ type: 'TOAST', text: `Could not continue: ${errText(err)}` })
+    } finally {
+      setSyncing(false)
+      refresh()
+    }
+  }
+  const abortSync = async (): Promise<void> => {
+    if (!sync || syncing) return
+    const ok = await confirm({
+      title: `Give up the ${sync.op}?`,
+      body: `The branch goes back to how it was before it started. Conflicts you resolved are lost.`,
+      confirmLabel: `Abort ${sync.op}`,
+      danger: true
+    })
+    if (!ok) return
+    setSyncing(true)
+    try {
+      await window.api.git.abortSync(sync.repo)
+      dispatch({ type: 'TOAST', text: `The ${sync.op} is undone.` })
+    } catch (err) {
+      dispatch({ type: 'TOAST', text: `Could not abort: ${errText(err)}` })
+    } finally {
+      setSyncing(false)
+      refresh()
+    }
+  }
+  const resolveFile = async (path: string, how: 'as-is' | 'mine' | 'theirs'): Promise<void> => {
+    if (!sync) return
+    const rel = sync.dir && path.startsWith(`${sync.dir}/`) ? path.slice(sync.dir.length + 1) : path
+    const sides = sidesOf(sync, base)
+    try {
+      if (how === 'as-is') await window.api.git.markResolved(sync.repo, rel)
+      else await window.api.git.takeSide(sync.repo, rel, how === 'mine' ? sides.mine : sides.mine === 'ours' ? 'theirs' : 'ours')
+    } catch (err) {
+      dispatch({ type: 'TOAST', text: `Could not resolve ${rel}: ${errText(err)}` })
+    }
+    refresh()
+  }
+  const askToResolve = (): void => {
+    if (!sync) return
+    const list = sync.files.map((f) => f.path).join(', ')
+    dispatch({
+      type: 'MESSAGE_AGENT',
+      taskId: task.id,
+      text: `The ${sync.op} with ${sync.onto || base} stopped on conflicts in ${list}. Resolve them keeping what both sides meant (remove every conflict marker), then \`git add\` each file. Don't continue or abort the ${sync.op} - I'll do that.`,
+      toast: `Asked ${agent} to resolve the conflicts.`
+    })
   }
 
   const image = (f: FileDiff, side: 'old' | 'new'): Promise<string | null> => {
@@ -387,11 +584,30 @@ export function ChangesProvider({ task, project, root, children }: { task: Task;
     commit,
     excluded,
     toggleExcluded,
+    skippedLines,
+    pickLines,
+    pickState,
     discard,
     revertFile,
     revertHunk,
     image,
     ignoreSpace,
+    behind,
+    sync,
+    syncing,
+    updateBranch,
+    continueSync,
+    abortSync,
+    resolveFile,
+    askToResolve,
+    repoOf: inRepo,
+    commitSubject,
+    showCommit: (sha, path, subject) => {
+      setCommitSubject(subject ?? null)
+      setScope({ commit: sha })
+      showInWorkspace(task.id, 'changes')
+      if (path) wsOpen(task.id, `diff:${path}`)
+    },
     commits,
     agent
   }

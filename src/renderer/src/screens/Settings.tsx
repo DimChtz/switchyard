@@ -400,6 +400,17 @@ function GlobalSettings({ section, scope, onScope }: { section: string; scope: P
           {tog('Show whitespace', 'Dots for spaces, arrows for tabs', 'editorWhitespace')}
         </Group>
         <Group title="Diffs">
+          <Row k="changesScope" label="Changes shows" sub="What a task's Changes lists when it opens - switch it there any time">
+            <Seg
+              value={pf.changesScope}
+              options={[
+                ['uncommitted', 'Uncommitted'],
+                ['unpushed', 'Not pushed'],
+                ['branch', 'Whole branch']
+              ]}
+              onChange={(v) => set({ changesScope: v as Prefs['changesScope'] })}
+            />
+          </Row>
           <Row k="diffLayout" label="Layout" sub="How the Changes tab shows a file's diff">
             <Seg value={pf.diffLayout} options={[['unified', 'Unified'], ['split', 'Side by side']]} onChange={(v) => set({ diffLayout: v === 'split' ? 'split' : 'unified' })} />
           </Row>

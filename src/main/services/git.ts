@@ -10,7 +10,7 @@ import { expandPath } from './repos'
 import { toPrDetails } from '@shared/pr'
 import { samePath } from './paths'
 import type { PrDetails } from '@shared/types'
-import type { BranchInfo, BranchResult, FileDiff, DiffLine, DiffOptions, DiffScope, DiffStat, GitWorktreeInfo, Issue, PullRequest, RemoteInfo, RepoInfo, WorktreeStatus } from '@shared/types'
+import type { BranchInfo, BranchResult, Blame, FileCommit, FileDiff, DiffLine, DiffOptions, DiffScope, DiffStat, SyncState, GitWorktreeInfo, Issue, PullRequest, RemoteInfo, RepoInfo, WorktreeStatus } from '@shared/types'
 
 /**
  * Where a task's worktree goes: a .worktrees folder inside the repository,
@@ -426,6 +426,92 @@ export async function commitFiles(worktreePath: string, paths: string[], message
   return (await git.revparse(['HEAD'])).trim()
 }
 
+/** What goes into a commit from one file: all of it, or (`lines`, `include`) only some of its changed lines. */
+export interface CommitPick {
+  path: string
+  /** Moved from here (its deletion goes in too). */
+  oldPath?: string
+  /** The file's uncommitted diff (vs HEAD) and the indexes of its changed lines to commit. */
+  lines?: DiffLine[]
+  include?: number[]
+}
+
+/**
+ * A patch of just the picked lines of a file's diff vs HEAD: an added line left out isn't added,
+ * a removed line left out stays. Hunks with nothing picked are dropped.
+ */
+export function partialPatch(path: string, lines: DiffLine[], include: Set<number>, isNew: boolean): string {
+  const out = isNew ? [`diff --git a/${path} b/${path}`, 'new file mode 100644', '--- /dev/null', `+++ b/${path}`] : [`diff --git a/${path} b/${path}`, `--- a/${path}`, `+++ b/${path}`]
+  // A new file read straight from disk has no "@@" line: it's one hunk.
+  const all = lines[0]?.kind === '@' ? lines : [{ kind: '@' as const, text: `@@ -0,0 +1,${lines.length} @@`, oldLine: null, newLine: null }, ...lines]
+  let hunk: string[] = []
+  let picked = false
+  const flush = (): void => {
+    if (picked) out.push(...hunk)
+    hunk = []
+    picked = false
+  }
+  all.forEach((l, k) => {
+    // (Indexes are the caller's: the lines it was given.)
+    const i = all === lines ? k : k - 1
+    if (l.kind === '@') {
+      flush()
+      hunk.push(l.text.match(/^@@ [^@]+ @@/)?.[0] ?? l.text)
+      return
+    }
+    const on = include.has(i)
+    let row: string | null
+    if (l.kind === ' ') row = ` ${l.text}`
+    else if (l.kind === '+') row = on ? `+${l.text}` : null
+    else row = on ? `-${l.text}` : ` ${l.text}`
+    if (on && l.kind !== ' ') picked = true
+    if (row == null) return
+    hunk.push(row)
+    if (l.noEol) hunk.push('\\ No newline at end of file')
+  })
+  flush()
+  return out.join('\n') + '\n'
+}
+
+/**
+ * Commits the picked files - whole, or only some of their lines - and nothing else. Built in a
+ * index of its own (so what's staged in the real one stays as it is), then the real index is
+ * brought up to date for those files. Hooks run as for any commit.
+ */
+export async function commitSelection(worktreePath: string, picks: CommitPick[], message: string): Promise<string> {
+  if (!picks.length) throw new Error('No files picked.')
+  if (!picks.some((p) => p.lines)) return commitFiles(worktreePath, picks.flatMap((p) => [p.path, ...(p.oldPath ? [p.oldPath] : [])]), message)
+  const dir = await fs.mkdtemp(join(tmpdir(), 'sy-commit-'))
+  const env = gitEnv({ GIT_INDEX_FILE: join(dir, 'index') })
+  const run = (args: string[]): Promise<unknown> => execFileP('git', gitArgs(args), { cwd: worktreePath, windowsHide: true, env, maxBuffer: 16 * 1024 * 1024 })
+  const paths = picks.flatMap((p) => [p.path, ...(p.oldPath ? [p.oldPath] : [])])
+  try {
+    await run(['read-tree', 'HEAD'])
+    const whole = picks.filter((p) => !p.lines)
+    if (whole.length) await run(['add', '-A', '--', ...whole.flatMap((p) => [p.path, ...(p.oldPath ? [p.oldPath] : [])])])
+    for (const p of picks.filter((x) => x.lines)) {
+      const inHead = await gitYes(worktreePath, ['cat-file', '-e', `HEAD:${p.path}`]).catch(() => false)
+      const file = join(dir, 'pick.patch')
+      await fs.writeFile(file, partialPatch(p.path, p.lines!, new Set(p.include ?? []), !inHead))
+      await run(['apply', '--cached', '--recount', '--whitespace=nowarn', file]).catch((err: unknown) => {
+        throw new Error(`${p.path} changed since its diff was read - refresh and pick its lines again. (${gitFailure(err, 'git apply failed')})`, { cause: err })
+      })
+    }
+    try {
+      await run(['commit', '--quiet', '-m', message])
+    } catch (err) {
+      throw new Error(gitFailure(err, 'git commit failed'), { cause: err })
+    }
+  } finally {
+    await fs.rm(dir, { recursive: true, force: true }).catch(() => {})
+  }
+  // The real index: these files as they're now committed (what's left of them shows as uncommitted).
+  await gitAt(worktreePath)
+    .raw(['reset', '--quiet', '--', ...paths])
+    .catch(() => {})
+  return (await gitAt(worktreePath).revparse(['HEAD'])).trim()
+}
+
 /**
  * Takes one file back to how it is where the diff starts (the base, origin's copy, the last commit):
  * the task's changes to it are undone in the worktree, uncommitted, for the next commit.
@@ -722,7 +808,7 @@ export function parseUnifiedDiff(raw: string): DiffLine[] {
  * merge, per Settings. On conflicts it backs out again, so the worktree is
  * never left half-way through, and says which files conflict.
  */
-export async function rebaseOnto(worktreePath: string, baseBranch: string): Promise<void> {
+export async function rebaseOnto(worktreePath: string, baseBranch: string, keepConflicts = false): Promise<void> {
   const git = gitAt(worktreePath)
   const merge = getPrefs(worktreePath).syncMode === 'merge'
   // Onto origin's base when it's newer than the local one: up to date for real.
@@ -734,11 +820,168 @@ export async function rebaseOnto(worktreePath: string, baseBranch: string): Prom
     else await git.rebase(['--autostash', onto])
   } catch (err) {
     const conflicted = (await git.status()).conflicted
+    // Kept to resolve (the Changes view's conflict editor): left half-way, as git leaves it.
+    if (keepConflicts && conflicted.length) throw new Error(`CONFLICT:${conflicted.join('\n')}`, { cause: err })
     if (merge) await git.merge(['--abort']).catch(() => {})
     else await git.rebase(['--abort']).catch(() => {})
     if (conflicted.length === 0) throw err
     throw new Error(`CONFLICT:${conflicted.join('\n')}`, { cause: err })
   }
+}
+
+// ── A file's history ────────────────────────────────────────────────
+
+/** The commits that changed a file, newest first (across moves). */
+export async function fileHistory(worktreePath: string, path: string, limit = 200): Promise<FileCommit[]> {
+  const raw = await gitAt(worktreePath)
+    .raw(['log', '--follow', `-n${limit}`, '--format=%H%x1f%an%x1f%at%x1f%s', '--', path])
+    .catch(() => '')
+  return raw
+    .split('\n')
+    .filter(Boolean)
+    .map((l) => {
+      const [hash, author, at, subject] = l.split('\x1f')
+      return { hash, author, at: Number(at) * 1000, subject }
+    })
+}
+
+/**
+ * Who last changed each line of the file as it is in the worktree: per line, its commit's id
+ * (all zeros for a line not committed yet), with each commit's author, time and subject.
+ */
+export async function blame(worktreePath: string, path: string): Promise<Blame> {
+  const { stdout } = await execFileP('git', gitArgs(['blame', '--porcelain', '--', path]), { cwd: worktreePath, windowsHide: true, env: gitEnv(), maxBuffer: 64 * 1024 * 1024 })
+  const commits: Blame['commits'] = {}
+  const lines: string[] = []
+  let cur = ''
+  for (const row of stdout.split('\n')) {
+    const head = row.match(/^([0-9a-f]{40}) \d+ (\d+)/)
+    if (head) {
+      cur = head[1]
+      commits[cur] ??= { author: '', at: 0, subject: '' }
+      continue
+    }
+    if (row.startsWith('\t')) {
+      lines.push(cur)
+      continue
+    }
+    const c = commits[cur]
+    if (!c) continue
+    if (row.startsWith('author ')) c.author = row.slice(7)
+    else if (row.startsWith('author-time ')) c.at = Number(row.slice(12)) * 1000
+    else if (row.startsWith('summary ')) c.subject = row.slice(8)
+  }
+  return { commits, lines }
+}
+
+// ── A merge or rebase stopped on conflicts ──────────────────────────
+
+/** Whether a git-dir file exists (MERGE_HEAD, rebase-merge…), for the worktree. */
+async function gitPathExists(worktreePath: string, name: string): Promise<string | null> {
+  const p = (await gitAt(worktreePath).raw(['rev-parse', '--git-path', name]).catch(() => '')).trim()
+  if (!p) return null
+  const full = isAbsolute(p) ? p : join(worktreePath, p)
+  return (await fs.stat(full).catch(() => null)) ? full : null
+}
+
+/**
+ * What the worktree is in the middle of (a merge, rebase or cherry-pick git stopped), and its
+ * conflicted files with how each conflicts. Null when it's in the middle of nothing.
+ */
+export async function syncState(worktreePath: string): Promise<SyncState | null> {
+  const rebaseDir = (await gitPathExists(worktreePath, 'rebase-merge')) ?? (await gitPathExists(worktreePath, 'rebase-apply'))
+  const op: SyncState['op'] | null = rebaseDir
+    ? 'rebase'
+    : (await gitPathExists(worktreePath, 'MERGE_HEAD'))
+      ? 'merge'
+      : (await gitPathExists(worktreePath, 'CHERRY_PICK_HEAD'))
+        ? 'cherry-pick'
+        : null
+  if (!op) return null
+  const read = (dir: string, f: string): Promise<string> => fs.readFile(join(dir, f), 'utf-8').then((s) => s.trim()).catch(() => '')
+  let onto = ''
+  let step: [number, number] | null = null
+  let commit = ''
+  if (rebaseDir) {
+    const ontoSha = await read(rebaseDir, 'onto')
+    // The branch name it's onto, when one points there.
+    onto = ontoSha ? (await gitAt(worktreePath).raw(['name-rev', '--name-only', '--exclude=refs/tags/*', ontoSha]).catch(() => '')).trim().replace(/^remotes\//, '') || ontoSha.slice(0, 7) : ''
+    const n = Number(await read(rebaseDir, 'msgnum')) || Number(await read(rebaseDir, 'next'))
+    const total = Number(await read(rebaseDir, 'end')) || Number(await read(rebaseDir, 'last'))
+    if (n && total) step = [n, total]
+    const stopped = await read(rebaseDir, 'stopped-sha')
+    if (stopped) commit = (await gitAt(worktreePath).raw(['log', '-1', '--format=%h %s', stopped]).catch(() => '')).trim()
+  } else if (op === 'merge') {
+    const msg = await fs.readFile((await gitPathExists(worktreePath, 'MERGE_MSG')) ?? '', 'utf-8').catch(() => '')
+    onto = msg.match(/^Merge (?:remote-tracking )?branch '([^']+)'/m)?.[1] ?? ''
+  }
+  // Each unmerged file and how: both changed it, or one side deleted it.
+  const files: SyncState['files'] = []
+  const porcelain = await gitAt(worktreePath).raw(['status', '--porcelain=v1', '-z', '--untracked-files=no']).catch(() => '')
+  for (const entry of porcelain.split('\0')) {
+    const code = entry.slice(0, 2)
+    if (!['DD', 'AU', 'UD', 'UA', 'DU', 'AA', 'UU'].includes(code)) continue
+    // ("Us" is HEAD: in a rebase that's the base being rebased onto, in a merge this branch.)
+    const kind: SyncState['files'][number]['kind'] = code === 'UU' || code === 'AA' ? 'both' : code === 'UD' || code === 'AU' ? 'deleted-theirs' : code === 'DU' || code === 'UA' ? 'deleted-ours' : 'both-deleted'
+    files.push({ path: entry.slice(3), kind })
+  }
+  return { op, onto, step, commit, files }
+}
+
+/** One conflicted file settled: as it is now in the worktree (or deleted, when it's gone). */
+export async function markResolved(worktreePath: string, path: string): Promise<void> {
+  const exists = await fs.stat(join(worktreePath, path)).catch(() => null)
+  if (exists) await gitAt(worktreePath).raw(['add', '--', path])
+  else await gitAt(worktreePath).raw(['rm', '--quiet', '--cached', '--ignore-unmatch', '--', path])
+}
+
+/**
+ * A conflicted file taken whole from one side and marked resolved. 'ours' / 'theirs' are git's
+ * (HEAD / the other side) - the window says which is the task's.
+ */
+export async function takeSide(worktreePath: string, path: string, side: 'ours' | 'theirs'): Promise<void> {
+  const git = gitAt(worktreePath)
+  const ok = await git.raw(['checkout', `--${side}`, '--', path]).then(
+    () => true,
+    () => false
+  )
+  // That side deleted it: so does the resolution.
+  if (!ok) {
+    await git.raw(['rm', '--quiet', '--force', '--', path])
+    return
+  }
+  await git.raw(['add', '--', path])
+}
+
+/** Goes on with the merge / rebase once its conflicts are resolved (a rebase may stop again on the next commit). */
+export async function continueSync(worktreePath: string): Promise<SyncState | null> {
+  const state = await syncState(worktreePath)
+  if (!state) return null
+  if (state.files.length) throw new Error(`Resolve ${state.files.length === 1 ? state.files[0].path : `the ${state.files.length} conflicted files`} first.`)
+  // No editor: the commit messages stay as they are.
+  const env = { GIT_EDITOR: 'true' }
+  const args = state.op === 'rebase' ? ['rebase', '--continue'] : state.op === 'merge' ? ['merge', '--continue'] : ['cherry-pick', '--continue']
+  try {
+    await execFileP('git', gitArgs(['-c', 'core.editor=true', ...args]), { cwd: worktreePath, windowsHide: true, env: gitEnv(env), maxBuffer: 16 * 1024 * 1024 })
+  } catch (err) {
+    // Stopped again on conflicts (the next commit of a rebase): that's the new state.
+    const next = await syncState(worktreePath)
+    if (next?.files.length) return next
+    // A commit the rebase had to make came out empty (the resolution dropped its changes): skip it.
+    if (next?.op === 'rebase' && /nothing to commit|empty/i.test(String((err as { stderr?: unknown }).stderr ?? err))) {
+      await execFileP('git', gitArgs(['rebase', '--skip']), { cwd: worktreePath, windowsHide: true, env: gitEnv(env) }).catch(() => {})
+      return syncState(worktreePath)
+    }
+    throw new Error(gitFailure(err, `git ${args[0]} --continue failed`), { cause: err })
+  }
+  return syncState(worktreePath)
+}
+
+/** Gives up on the merge / rebase: the branch goes back to how it was before. */
+export async function abortSync(worktreePath: string): Promise<void> {
+  const state = await syncState(worktreePath)
+  if (!state) return
+  await gitAt(worktreePath).raw([state.op, '--abort'])
 }
 
 /** Changed files and lines vs the base branch, committed or not - without reading whole diffs. */

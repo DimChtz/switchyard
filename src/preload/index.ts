@@ -34,6 +34,9 @@ import type {
   DiffOptions,
   DiffScope,
   DiffStat,
+  SyncState,
+  Blame,
+  FileCommit,
   FileDiff,
   FileEntry,
   CheckoutFiles,
@@ -207,6 +210,9 @@ const api = {
       ipcRenderer.invoke(IPC.gitLog, worktreePath, limit),
     diffFiles: (worktreePath: string, baseBranch: string, scope?: DiffScope, opts?: DiffOptions): Promise<FileDiff[]> =>
       ipcRenderer.invoke(IPC.gitDiffFiles, worktreePath, baseBranch, scope, opts),
+    /** Commits the picked files - whole, or (lines, include) only some of their changed lines. */
+    commitSelection: (worktreePath: string, picks: { path: string; oldPath?: string; lines?: DiffLine[]; include?: number[] }[], message: string): Promise<string> =>
+      ipcRenderer.invoke(IPC.gitCommitSelection, worktreePath, picks, message),
     commitFiles: (worktreePath: string, paths: string[], message: string): Promise<string> => ipcRenderer.invoke(IPC.gitCommitFiles, worktreePath, paths, message),
     revertFile: (worktreePath: string, baseBranch: string, scope: DiffScope, path: string, oldPath?: string): Promise<void> =>
       ipcRenderer.invoke(IPC.gitRevertFile, worktreePath, baseBranch, scope, path, oldPath),
@@ -215,7 +221,15 @@ const api = {
       ipcRenderer.invoke(IPC.gitDiffImage, worktreePath, baseBranch, scope, path, side, oldPath),
     diffStat: (worktreePath: string, baseBranch: string): Promise<DiffStat> =>
       ipcRenderer.invoke(IPC.gitDiffStat, worktreePath, baseBranch),
-    rebase: (worktreePath: string, baseBranch: string): Promise<void> => ipcRenderer.invoke(IPC.gitRebase, worktreePath, baseBranch),
+    /** Brings the branch up to date with the base. `keepConflicts`: on conflicts, leave them to resolve (else it backs out). */
+    rebase: (worktreePath: string, baseBranch: string, keepConflicts?: boolean): Promise<void> => ipcRenderer.invoke(IPC.gitRebase, worktreePath, baseBranch, keepConflicts),
+    fileHistory: (worktreePath: string, path: string): Promise<FileCommit[]> => ipcRenderer.invoke(IPC.gitFileHistory, worktreePath, path),
+    blame: (worktreePath: string, path: string): Promise<Blame> => ipcRenderer.invoke(IPC.gitBlame, worktreePath, path),
+    syncState: (worktreePath: string): Promise<SyncState | null> => ipcRenderer.invoke(IPC.gitSyncState, worktreePath),
+    markResolved: (worktreePath: string, path: string): Promise<void> => ipcRenderer.invoke(IPC.gitMarkResolved, worktreePath, path),
+    takeSide: (worktreePath: string, path: string, side: 'ours' | 'theirs'): Promise<void> => ipcRenderer.invoke(IPC.gitTakeSide, worktreePath, path, side),
+    continueSync: (worktreePath: string): Promise<SyncState | null> => ipcRenderer.invoke(IPC.gitContinueSync, worktreePath),
+    abortSync: (worktreePath: string): Promise<void> => ipcRenderer.invoke(IPC.gitAbortSync, worktreePath),
     mergeAndPrune: (repoPath: string, worktreePath: string, branch: string, baseBranch: string, prune?: boolean, message?: string): Promise<{ merged: boolean }> =>
       ipcRenderer.invoke(IPC.gitMergeAndPrune, repoPath, worktreePath, branch, baseBranch, prune, message),
     issues: (repoPath: string): Promise<Issue[]> => ipcRenderer.invoke(IPC.gitIssues, repoPath),

@@ -8,7 +8,7 @@ import { titleFromBranch } from '../lib/outside'
 import { useRealWorktrees } from '../lib/realGit'
 import { errText } from '../lib/errors'
 import { keyLabel, revealLabel } from '../lib/keys'
-import { addShell } from '../lib/wsStore'
+import { addShell, wsOpen } from '../lib/wsStore'
 import { Button, Menu, confirm, type MenuItem } from '../components/ui'
 import type { Action } from '../store/types'
 import type { Project, Task } from '@shared/types'
@@ -268,6 +268,26 @@ function DetailPanel({ worktrees, onChanged }: { worktrees: WorktreeRow[]; onCha
     }
   }
 
+  // The sync again, stopping at the conflicts: the task's Changes resolves them.
+  const resolveHere = async (): Promise<void> => {
+    if (!task) return
+    setSyncing(true)
+    try {
+      await window.api.git.rebase(wt.path, base, true)
+      setConflict(null)
+      onChanged()
+    } catch (err) {
+      const msg = errText(err)
+      if (!msg.startsWith('CONFLICT:')) return void dispatch({ type: 'TOAST', text: `${merge ? 'Merge' : 'Rebase'} failed: ${msg}` })
+      setConflict(null)
+      const first = msg.slice('CONFLICT:'.length).split('\n').filter(Boolean)[0]
+      dispatch({ type: 'OPEN_TASK', taskId: task.id, tab: 'changes' })
+      if (first) wsOpen(task.id, `conflict:${first}`)
+    } finally {
+      setSyncing(false)
+    }
+  }
+
   const askAgent = (files?: string[]): void => {
     if (!task) return
     const what = merge ? `merge ${base} into this branch` : `rebase this branch onto ${base}`
@@ -327,10 +347,17 @@ function DetailPanel({ worktrees, onChanged }: { worktrees: WorktreeRow[]; onCha
             {merge ? `Merging ${base}` : `Rebasing onto ${base}`} conflicts in {conflict.length} file{conflict.length > 1 ? 's' : ''}. Nothing was changed.
           </div>
           <div style={{ font: "11.5px/1.5 var(--font-mono)", color: 'var(--c-red)', overflowWrap: 'anywhere' }}>{conflict.slice(0, 6).join(' · ')}</div>
-          {task?.agentKind ? (
-            <Button variant="primary" size="sm" onClick={() => askAgent(conflict)} style={{ alignSelf: 'flex-start' }}>
-              Ask {agentShort(task.agentKind)} to resolve them
-            </Button>
+          {task ? (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <Button variant="primary" size="sm" disabled={busy} onClick={resolveHere} title="Start it again and stop at the conflicts: resolve them in the task's Changes">
+                Resolve them here
+              </Button>
+              {task.agentKind ? (
+                <Button size="sm" onClick={() => askAgent(conflict)}>
+                  Ask {agentShort(task.agentKind)} to resolve them
+                </Button>
+              ) : null}
+            </div>
           ) : (
             <div style={{ font: '12px var(--font-ui)', color: 'var(--t3)' }}>Resolve them in a terminal in the worktree.</div>
           )}

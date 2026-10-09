@@ -292,11 +292,58 @@ export function DiffTab({ path, gid }: { path: string; gid: string }): React.JSX
     title: 'Click to comment - shift-click to comment on several lines'
   })
 
+  // ── Lines picked for the next commit (the Uncommitted view: its diff is what gets committed) ──
+  const canPick = !!file && ch.scope === 'uncommitted' && file.uncommitted && !ch.ignoreSpace && !file.binary && !file.oldPath && file.status !== 'deleted' && !file.truncated && !ch.sync
+  const pickState = file ? ch.pickState(file) : 'all'
+  const skipped = ch.skippedLines(path)
+  const isIn = (i: number): boolean => pickState !== 'none' && !skipped?.has(i)
+  const lastPick = useRef<number | null>(null)
+  const changedIn = (from: number, to: number): number[] => {
+    const out: number[] = []
+    for (let k = from; k <= to; k++) if (lines[k] && (lines[k].kind === '+' || lines[k].kind === '-')) out.push(k)
+    return out
+  }
+  const pickBox = (i: number): React.JSX.Element => {
+    const on = isIn(i)
+    return (
+      <span
+        className={`pk-box${on ? ' on' : ''}`}
+        title={on ? 'In the next commit - click to leave it out (shift-click for a range)' : 'Left out of the next commit - click to put it in'}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={(e) => {
+          e.stopPropagation()
+          if (!file) return
+          const from = e.shiftKey && lastPick.current != null ? Math.min(lastPick.current, i) : i
+          const to = e.shiftKey && lastPick.current != null ? Math.max(lastPick.current, i) : i
+          ch.pickLines(file, changedIn(from, to), !on)
+          lastPick.current = i
+        }}
+      />
+    )
+  }
+  const hunkPick = (at: number): React.JSX.Element | null => {
+    if (!canPick || !file) return null
+    let end = at + 1
+    while (end < lines.length && lines[end].kind !== '@') end++
+    const idx = changedIn(at + 1, end - 1)
+    const inCount = idx.filter(isIn).length
+    const state = inCount === idx.length ? 'on' : inCount ? 'some' : ''
+    return (
+      <span
+        className={`pk-box ${state}`}
+        title={state === 'on' ? 'This change is in the next commit - click to leave it out' : 'Put this whole change in the next commit'}
+        onClick={() => ch.pickLines(file, idx, state !== 'on')}
+      />
+    )
+  }
+
   const lineRow = (i: number): React.JSX.Element => {
     const l = lines[i]
+    const changed = l.kind === '+' || l.kind === '-'
     const cls = picked(i) ? 'picked' : l.kind === '+' ? 'add' : l.kind === '-' ? 'del' : ''
     return (
-      <div className={`sy-dr click ${cls}`} {...clickable(i)}>
+      <div className={`sy-dr click ${cls}${canPick ? ' pk' : ''}${canPick && changed && !isIn(i) ? ' out' : ''}`} {...clickable(i)}>
+        {canPick ? changed ? pickBox(i) : <span /> : null}
         {num(l.kind === '+' ? null : l.oldLine, false)}
         {num(l.kind === '-' ? null : l.newLine, true)}
         {signOf(l)}
@@ -337,7 +384,8 @@ export function DiffTab({ path, gid }: { path: string; gid: string }): React.JSX
         <span className="txt">{text(t, null, n)}</span>
       </div>
     ) : (
-      <div className="sy-dr">
+      <div className={`sy-dr${canPick ? ' pk' : ''}`}>
+        {canPick ? <span /> : null}
         {num(o, false)}
         {num(n, true)}
         <span />
@@ -349,6 +397,7 @@ export function DiffTab({ path, gid }: { path: string; gid: string }): React.JSX
     const h = hunkLabel(lines[i].text)
     return (
       <div className="sy-hunk" data-hunk={i}>
+        {hunkPick(i)}
         <span style={{ whiteSpace: 'nowrap' }}>{h.where}</span>
         {h.context ? <span className="ctx">{h.context}</span> : null}
         <span style={{ flex: 1 }} />
@@ -494,6 +543,11 @@ export function DiffTab({ path, gid }: { path: string; gid: string }): React.JSX
             {file.deleted ? <span style={{ color: 'var(--c-red)' }}>−{file.deleted}</span> : null}
             {file.oldPath ? <span style={{ color: 'var(--c-blue)' }}>moved</span> : file.status !== 'modified' ? <span style={{ color: 'var(--t4)' }}>{file.status}</span> : null}
             {file.uncommitted ? <span style={{ color: 'var(--c-amber)' }}>uncommitted</span> : null}
+            {canPick && pickState !== 'all' ? (
+              <span style={{ color: 'var(--t3)' }} title="Only the ticked lines go into the next commit">
+                · {pickState === 'none' ? 'left out of the commit' : 'some lines picked'}
+              </span>
+            ) : null}
           </span>
         ) : null}
         <span style={{ flex: 1 }} />

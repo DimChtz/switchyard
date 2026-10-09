@@ -15,6 +15,7 @@ import {
   branchLeft,
   closeCheck,
   commitFiles,
+  commitSelection,
   createBranch,
   listBranches,
   prTemplate,
@@ -27,7 +28,15 @@ import {
   mergeWithoutCheckout,
   parseUnifiedDiff,
   revertFile,
-  revertHunk
+  revertHunk,
+  rebaseOnto,
+  syncState,
+  continueSync,
+  markResolved,
+  takeSide,
+  abortSync,
+  fileHistory,
+  blame
 } from './git'
 
 let dir = ''
@@ -140,6 +149,32 @@ describe('the Changes diff', () => {
     expect(git(r, 'status', '--porcelain')).toBe('?? later.txt')
   })
 
+  it('commits only the picked lines, leaving the rest - and what was staged - as they were', async () => {
+    const r = repo()
+    writeFileSync(join(r, 'long.txt'), Array.from({ length: 30 }, (_, i) => `l${i}`).join('\n') + '\n')
+    git(r, 'add', '-A')
+    git(r, 'commit', '-qm', 'long')
+    writeFileSync(join(r, 'long.txt'), Array.from({ length: 30 }, (_, i) => (i === 2 ? 'TOP' : i === 26 ? 'BOTTOM' : `l${i}`)).join('\n') + '\n')
+    writeFileSync(join(r, 'fresh.txt'), 'keep\nskip\n')
+    // Staged by someone else: stays staged, out of this commit.
+    writeFileSync(join(r, 'staged.txt'), 's\n')
+    git(r, 'add', 'staged.txt')
+    const files = await getDiffFiles(r, 'main', 'uncommitted')
+    const long = files.find((f) => f.path === 'long.txt')!
+    const top = long.lines.flatMap((l, i) => (l.kind !== ' ' && l.kind !== '@' && (l.text === 'TOP' || l.text === 'l2') ? [i] : []))
+    const fresh = files.find((f) => f.path === 'fresh.txt')!
+    await commitSelection(r, [
+      { path: 'long.txt', lines: long.lines, include: top },
+      { path: 'fresh.txt', lines: fresh.lines, include: [0] }
+    ], 'some lines')
+    expect(git(r, 'show', 'HEAD:long.txt').split('\n').slice(0, 3)).toEqual(['l0', 'l1', 'TOP'])
+    expect(git(r, 'show', 'HEAD:long.txt').split('\n')[26]).toBe('l26')
+    expect(git(r, 'show', 'HEAD:fresh.txt')).toBe('keep')
+    // The worktree keeps everything; the rest shows as still to commit.
+    expect(readFileSync(join(r, 'long.txt'), 'utf-8').split('\n')[26]).toBe('BOTTOM')
+    expect(git(r, 'status', '--porcelain').split('\n').map((s) => s.trim()).sort()).toEqual(['A  staged.txt', 'M fresh.txt', 'M long.txt'])
+  })
+
   it('undoes one hunk, or a whole file back to the base', async () => {
     const r = repo()
     writeFileSync(join(r, 'long.txt'), Array.from({ length: 30 }, (_, i) => `l${i}`).join('\n') + '\n')
@@ -168,6 +203,74 @@ describe('the Changes diff', () => {
     writeFileSync(join(r, 'added.txt'), 'x\n')
     await revertFile(r, 'main', 'branch', 'added.txt')
     expect(existsSync(join(r, 'added.txt'))).toBe(false)
+  })
+})
+
+describe('a file’s history', () => {
+  it('lists its commits across a move, and who wrote each line', async () => {
+    const r = repo()
+    writeFileSync(join(r, 'a.txt'), 'one\nTWO\n')
+    git(r, 'commit', '-qam', 'SYT-3: shout')
+    git(r, 'mv', 'a.txt', 'b.txt')
+    git(r, 'commit', '-qm', 'move')
+    writeFileSync(join(r, 'b.txt'), 'one\nTWO\nthree\n')
+    expect((await fileHistory(r, 'b.txt')).map((c) => c.subject)).toEqual(['move', 'SYT-3: shout', 'init'])
+    const b = await blame(r, 'b.txt')
+    expect(b.lines.map((sha) => (/^0+$/.test(sha) ? 'not committed' : b.commits[sha].subject))).toEqual(['init', 'SYT-3: shout', 'not committed'])
+    expect(b.commits[b.lines[0]].author).toBe('t')
+  })
+})
+
+describe('a sync that stops on conflicts', () => {
+  /** main and task both changed a.txt's second line; task has two commits. */
+  function clashing(): string {
+    const r = repo()
+    git(r, 'checkout', '-qb', 'task')
+    writeFileSync(join(r, 'a.txt'), 'one\ntask\n')
+    git(r, 'commit', '-qam', 'task one')
+    writeFileSync(join(r, 't.txt'), 't\n')
+    git(r, 'add', '-A')
+    git(r, 'commit', '-qm', 'task two')
+    git(r, 'checkout', '-q', 'main')
+    writeFileSync(join(r, 'a.txt'), 'one\nmain\n')
+    git(r, 'commit', '-qam', 'main')
+    git(r, 'checkout', '-q', 'task')
+    return r
+  }
+  afterEach(() => {
+    prefs.syncMode = 'rebase'
+  })
+
+  it('backs out by default, or stays to be resolved and continued (rebase)', async () => {
+    const r = clashing()
+    await expect(rebaseOnto(r, 'main')).rejects.toThrow('CONFLICT:a.txt')
+    expect(await syncState(r)).toBe(null)
+    await expect(rebaseOnto(r, 'main', true)).rejects.toThrow('CONFLICT:a.txt')
+    const st = (await syncState(r))!
+    expect([st.op, st.onto, st.step, st.files]).toEqual(['rebase', 'main', [1, 2], [{ path: 'a.txt', kind: 'both' }]])
+    expect(st.commit).toMatch(/task one$/)
+    await expect(continueSync(r)).rejects.toThrow('Resolve a.txt first')
+    writeFileSync(join(r, 'a.txt'), 'one\nmain and task\n')
+    await markResolved(r, 'a.txt')
+    expect(await continueSync(r)).toBe(null)
+    expect(git(r, 'log', '--format=%s', '-3').split('\n')).toEqual(['task two', 'task one', 'main'])
+    expect(readFileSync(join(r, 'a.txt'), 'utf-8')).toBe('one\nmain and task\n')
+  })
+
+  it('takes one side whole, or gives up (merge)', async () => {
+    prefs.syncMode = 'merge'
+    const r = clashing()
+    await expect(rebaseOnto(r, 'main', true)).rejects.toThrow('CONFLICT:a.txt')
+    expect((await syncState(r))!.op).toBe('merge')
+    await abortSync(r)
+    expect(await syncState(r)).toBe(null)
+    expect(readFileSync(join(r, 'a.txt'), 'utf-8')).toBe('one\ntask\n')
+    await expect(rebaseOnto(r, 'main', true)).rejects.toThrow('CONFLICT')
+    expect((await syncState(r))!.onto).toBe('main')
+    await takeSide(r, 'a.txt', 'theirs')
+    expect(await continueSync(r)).toBe(null)
+    expect(readFileSync(join(r, 'a.txt'), 'utf-8')).toBe('one\nmain\n')
+    expect(git(r, 'log', '-1', '--format=%p').split(' ').length).toBe(2)
   })
 })
 

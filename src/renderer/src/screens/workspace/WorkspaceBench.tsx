@@ -22,6 +22,8 @@ import { ExplorerView } from './files/ExplorerView'
 import { SearchView } from './files/SearchView'
 import { FileEditor } from './files/FileEditor'
 import { ChangesProvider, useChangesMaybe } from './changes/ChangesContext'
+import { ConflictTab } from './changes/ConflictTab'
+import { HistoryTab } from './files/HistoryTab'
 import { ChangesView } from './changes/ChangesView'
 import { DiffTab } from './changes/DiffTab'
 import { TaskView } from './terminal/TaskView'
@@ -125,6 +127,14 @@ function Bench({ task, project }: { task: Task; project: Project }): React.JSX.E
       const path = id.slice(5)
       return { label: path.split('/').pop() ?? path, sub: 'diff', ic: '±', icColor: 'var(--c-amber)', italic: true, tip: `Changes · ${path}` }
     }
+    if (id.startsWith('history:')) {
+      const path = id.slice(8)
+      return { label: path.split('/').pop() ?? path, sub: 'history', ic: '⟲', icColor: 'var(--c-blue)', italic: true, tip: `History · ${path}` }
+    }
+    if (id.startsWith('conflict:')) {
+      const path = id.slice(9)
+      return { label: path.split('/').pop() ?? path, sub: 'conflict', ic: '!', icColor: 'var(--c-red)', italic: true, tip: `Resolve conflicts · ${path}` }
+    }
     if (id === 'preview') {
       const port = previewPortOf(task.id)
       return { label: 'Preview', sub: port ? `:${port}` : undefined, ic: '◎', icColor: 'var(--c-green)', tip: 'Preview of this worktree' }
@@ -145,6 +155,8 @@ function Bench({ task, project }: { task: Task; project: Project }): React.JSX.E
     if (id.startsWith('shell:')) return <ShellTab task={task} project={project} id={id.slice(6)} visible={visible} />
     if (id.startsWith('file:')) return files ? <FileEditor path={id.slice(5)} visible={visible} /> : noFolder
     if (id.startsWith('diff:')) return changes ? <DiffTab path={id.slice(5)} gid={gid} /> : noFolder
+    if (id.startsWith('history:')) return changes ? <HistoryTab path={id.slice(8)} /> : noFolder
+    if (id.startsWith('conflict:')) return changes ? <ConflictTab path={id.slice(9)} /> : noFolder
     if (id === 'preview') return <WorkspacePreview task={task} project={project} />
     if (id.startsWith('note:')) return <NoteTab id={id.slice(5)} onOpen={(n) => wsOpen(task.id, `note:${n}`, gid)} />
     if (id === 'timeline') return <WorkspaceTimeline task={task} active={visible} />
@@ -211,7 +223,7 @@ function Bench({ task, project }: { task: Task; project: Project }): React.JSX.E
       case 'search':
         return files ? <SearchView chrome={chrome} /> : <NoFolderView id={id} chrome={chrome} />
       case 'changes':
-        return changes && root ? <ChangesView chrome={chrome} root={root} activeDiff={showing.startsWith('diff:') ? showing.slice(5) : null} /> : <NoFolderView id={id} chrome={chrome} />
+        return changes && root ? <ChangesView chrome={chrome} root={root} activeDiff={showing.startsWith('diff:') ? showing.slice(5) : null} activeConflict={showing.startsWith('conflict:') ? showing.slice(9) : null} /> : <NoFolderView id={id} chrome={chrome} />
       case 'notes':
         return <NotesList task={task} activeId={showing.startsWith('note:') ? showing.slice(5) : null} onOpen={(n) => wsOpen(task.id, `note:${n}`)} header={<PanelHeader title="Notes" chrome={chrome} />} />
       case 'sessions':

@@ -21,6 +21,64 @@
 .sy-diff.nowrap .sy-dr {
   grid-template-columns: 46px 46px 20px max-content;
 }
+/* With a tick box per changed line (picking lines for the next commit). */
+.sy-dr.pk {
+  grid-template-columns: 22px 46px 46px 20px minmax(0, 1fr);
+}
+.sy-diff.nowrap .sy-dr.pk {
+  grid-template-columns: 22px 46px 46px 20px max-content;
+}
+.sy-dr.out .txt,
+.sy-dr.out .sign {
+  opacity: 0.4;
+}
+.sy-dr.out {
+  background: transparent;
+  box-shadow: inset 2px 0 0 var(--bd-2);
+}
+.pk-box {
+  align-self: center;
+  justify-self: center;
+  width: 11px;
+  height: 11px;
+  border-radius: 3px;
+  border: 1px solid var(--bd-4);
+  cursor: pointer;
+  box-sizing: border-box;
+  position: relative;
+  flex: none;
+}
+.pk-box:hover {
+  border-color: var(--c-amber);
+}
+.pk-box.on {
+  background: var(--c-amber);
+  border-color: var(--c-amber);
+}
+.pk-box.on::after {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 0.5px;
+  width: 3px;
+  height: 6px;
+  border: solid var(--bg-console);
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+}
+.pk-box.some {
+  border-color: var(--c-amber);
+}
+.pk-box.some::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 4px;
+  width: 5px;
+  height: 1.5px;
+  background: var(--c-amber);
+}
+
 .sy-dr.split {
   grid-template-columns: 46px 18px minmax(0, 1fr) 46px 18px minmax(0, 1fr);
 }

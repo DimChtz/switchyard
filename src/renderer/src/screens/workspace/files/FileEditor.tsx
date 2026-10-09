@@ -11,8 +11,15 @@ import { keyLabel, revealLabel } from '../../../lib/keys'
 import { useAppStore } from '../../../store/AppStore'
 import { wsOpen } from '../../../lib/wsStore'
 import { useFiles } from './FilesContext'
+import { useChangesMaybe } from '../changes/ChangesContext'
+import { blameGutter } from '../../../lib/blameGutter'
+import { taskOfCommit } from '../../../lib/commitTask'
+import type { Blame } from '@shared/types'
 
 /** A file's editor tab. */
+/** Blame shown or not, for every file editor (until the app restarts). */
+let blameShown = false
+
 export function FileEditor({ path, visible }: { path: string; visible: boolean }): React.JSX.Element {
   const { dispatch } = useAppStore()
   const f = useFiles()
@@ -20,6 +27,41 @@ export function FileEditor({ path, visible }: { path: string; visible: boolean }
   const viewRef = useRef<EditorView | null>(null)
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
   const [, setRecheck] = useState(0)
+  // Blame: who last changed each line (of the file as saved), in a gutter. On or off for every file.
+  const { state } = useAppStore()
+  const changes = useChangesMaybe()
+  const repo = changes?.repoOf(path) ?? null
+  const [blameOn, setBlameOnState] = useState(blameShown)
+  const setBlameOn = (on: boolean): void => {
+    blameShown = on
+    setBlameOnState(on)
+  }
+  const [blame, setBlame] = useState<Blame | null>(null)
+  const savedAt = f.meta(path)?.mtime
+  useEffect(() => {
+    if (!blameOn || !repo) return setBlame(null)
+    let live = true
+    window.api.git
+      .blame(repo.path, repo.rel)
+      .then((b) => live && setBlame(b))
+      .catch(() => live && setBlame(null))
+    return () => {
+      live = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blameOn, repo?.path, repo?.rel, savedAt, changes?.commits.length])
+  const blameExt = useMemo(
+    () =>
+      blame
+        ? blameGutter(
+            blame,
+            (subject) => taskOfCommit(subject, state.tasks)?.key ?? null,
+            (sha) => changes?.showCommit(sha, path, blame.commits[sha]?.subject)
+          )
+        : null,
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [blame, state.tasks]
+  )
   const waited = useRef(0)
 
   useEffect(() => f.ensureLoaded(path), [path, f.ensureLoaded]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -176,6 +218,16 @@ export function FileEditor({ path, visible }: { path: string; visible: boolean }
             View diff
           </Button>
         ) : null}
+        {repo && meta?.kind === 'text' ? (
+          <>
+            <Button size="xs" tone={blameOn ? 'success' : undefined} onClick={() => setBlameOn(!blameOn)} title={blameOn ? 'Hide who changed each line' : 'Who last changed each line, when, and in which task'}>
+              Blame
+            </Button>
+            <Button size="xs" onClick={() => wsOpen(task.id, `history:${path}`)} title="The commits that changed this file">
+              History
+            </Button>
+          </>
+        ) : null}
         {dirty ? (
           <Button variant="primary" size="xs" hint="⌘S" onClick={() => f.save(path)}>
             Save
@@ -229,7 +281,7 @@ export function FileEditor({ path, visible }: { path: string; visible: boolean }
             value={text}
             height="100%"
             theme={codeTheme}
-            extensions={[...languageFor(path), ...extensions]}
+            extensions={[...languageFor(path), ...extensions, ...(blameExt ? [blameExt] : [])]}
             onChange={(value) => {
               f.setEdit(path, value)
               f.scheduleAutoSave(path)

@@ -130,6 +130,7 @@ export const DEFAULT_PREFS: Prefs = {
   diffLayout: 'unified',
   diffWrap: false,
   diffIgnoreSpace: false,
+  changesScope: 'unpushed',
   editorLineNumbers: true,
   editorActiveLine: true,
   theme: 'dark',

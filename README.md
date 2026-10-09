@@ -11,7 +11,8 @@ Track your projects on a board, start a task with an agent, and Switchyard creat
 - **Tools for the agents (MCP):** previews, tests, conflicts, review comments, notes, the pull request's checks, and the task's terminals - an agent can read the dev server's output or run a command in a shell tab you see.
 - **Agents view:** every running agent across projects, with the ones waiting for you or failed first.
 - **Task workspace:** the agent's terminal, shells, files, diffs, preview, notes and timeline as tabs. Split the editor right or down, drag tabs between groups, and resize.
-- **Review:** per-file diffs - everything since the base, only what isn't pushed or committed, or one commit's - unified or side by side, with syntax colors, changed words marked, hidden lines a click away, and images before and after. Line comments go back to the agent as a review. Undo a single change or a whole file, commit just the files you pick (and push), discard, and open pull requests through the GitHub CLI.
+- **Review:** per-file diffs - your pending work (not pushed, or not committed), the whole branch vs its base, or one commit's - unified or side by side, with syntax colors, changed words marked, hidden lines a click away, and images before and after. Line comments go back to the agent as a review. Undo a single change or a whole file, commit just the files - or the lines - you tick (and push), discard, and open pull requests through the GitHub CLI.
+- **Source control:** "Update branch" brings in the base's new commits; conflicts are resolved in the app, one at a time (yours, theirs or both), or handed to the agent. Blame and file history in the editor, with each commit's task.
 - **Worktrees:** every worktree across projects, with ahead/behind and dirty state, and cleanup.
 - **Notes, Inbox, Summary, Usage, Team and Map views.**
 - **Command palette** (`Ctrl+K` / `⌘K`), **Go to file** (`Ctrl+P`), and rebindable shortcuts.

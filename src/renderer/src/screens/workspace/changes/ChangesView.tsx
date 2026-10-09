@@ -16,7 +16,7 @@ import { PanelHeader, PanelIcon, type PanelChrome } from '../layout/PanelHeader'
 const SECTION: React.CSSProperties = { font: '500 11px var(--font-mono)', letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--t4)' }
 
 /** The Changes side bar view: what the branch changed, file by file (each opens as a diff tab), the review, and its commits. */
-export function ChangesView({ chrome, activeDiff, root }: { chrome: PanelChrome; activeDiff: string | null; root: string }): React.JSX.Element {
+export function ChangesView({ chrome, activeDiff, activeConflict, root }: { chrome: PanelChrome; activeDiff: string | null; activeConflict?: string | null; root: string }): React.JSX.Element {
   const { dispatch } = useAppStore()
   const ch = useChanges()
   const { task, files } = ch
@@ -27,7 +27,8 @@ export function ChangesView({ chrome, activeDiff, root }: { chrome: PanelChrome;
   const totalDel = (files ?? []).reduce((n, f) => n + f.deleted, 0)
   const viewedCount = (files ?? []).filter((f) => ch.viewed[f.path]).length
   const uncommitted = (files ?? []).filter((f) => f.uncommitted)
-  const picked = uncommitted.filter((f) => !ch.excluded.has(f.path))
+  const picked = uncommitted.filter((f) => ch.pickState(f) !== 'none')
+  const someLines = picked.some((f) => ch.pickState(f) === 'some')
   const commitScope = typeof ch.scope === 'object' ? ch.scope.commit : null
   const pending = ch.pending
   const native = (rel: string): string => nativePath(root, rel)
@@ -86,7 +87,7 @@ export function ChangesView({ chrome, activeDiff, root }: { chrome: PanelChrome;
     : ch.scope === 'branch'
       ? `No changes vs ${ch.base}.`
       : ch.scope === 'unpushed'
-        ? 'Everything is pushed.'
+        ? 'Everything is committed and pushed.'
         : 'Nothing uncommitted.'
 
   return (
@@ -100,6 +101,17 @@ export function ChangesView({ chrome, activeDiff, root }: { chrome: PanelChrome;
         </PanelIcon>
       </PanelHeader>
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
+        {ch.sync ? <SyncBox activeConflict={activeConflict} /> : null}
+        {!ch.sync && ch.behind > 0 && !commitScope ? (
+          <div style={{ margin: '0 10px 8px', padding: '6px 8px 6px 10px', display: 'flex', alignItems: 'center', gap: 8, border: '1px solid var(--bd-2)', borderRadius: 6, font: '12px var(--font-ui)', color: 'var(--t3)' }}>
+            <span style={{ flex: 1, minWidth: 0 }} title={`${ch.base} has ${plural(ch.behind, 'commit')} this branch doesn't`}>
+              <span style={{ color: 'var(--c-blue)' }}>↓</span> {ch.base} has {plural(ch.behind, 'new commit')}
+            </span>
+            <Button size="xs" disabled={ch.syncing} onClick={ch.updateBranch} title={`Bring them into this branch (Settings → Git: rebase or merge). Conflicts are left for you to resolve here.`}>
+              {ch.syncing ? 'Updating…' : 'Update branch'}
+            </Button>
+          </div>
+        ) : null}
         <div style={{ padding: '0 14px 8px' }}>
           {commitScope ? (
             <div
@@ -107,7 +119,7 @@ export function ChangesView({ chrome, activeDiff, root }: { chrome: PanelChrome;
             >
               <span style={{ color: 'var(--c-blue)' }}>{commitScope.slice(0, 7)}</span>
               <span style={{ flex: 1, minWidth: 0, color: 'var(--t2)', fontFamily: 'var(--font-ui)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {ch.commits.find((c) => c.hash === commitScope || commitScope.startsWith(c.hash))?.message.split('\n')[0] ?? 'commit'}
+                {ch.commits.find((c) => c.hash === commitScope || commitScope.startsWith(c.hash))?.message.split('\n')[0] ?? ch.commitSubject ?? 'commit'}
               </span>
               <Button size="xs" onClick={() => ch.setScope('branch')} title="Back to all the branch's changes">
                 ✕
@@ -118,11 +130,11 @@ export function ChangesView({ chrome, activeDiff, root }: { chrome: PanelChrome;
               value={ch.scope as string}
               onChange={(v) => ch.setScope(v as 'branch' | 'unpushed' | 'uncommitted')}
               options={[
-                ['branch', <span key="b" title={`Everything the branch changed since it left ${ch.base} - what its pull request shows`}>All</span>],
-                ['unpushed', <span key="p" title={`What isn't on origin's copy of ${task.branch} yet (all of it when the branch was never pushed)`}>Not pushed</span>],
-                ['uncommitted', <span key="c" title="Only what isn't committed yet">Uncommitted</span>]
+                ['uncommitted', <span key="c" title="Only what isn't committed yet">Uncommitted</span>],
+                ['unpushed', <span key="p" title={`Your pending work: what isn't on origin's copy of ${task.branch} yet - uncommitted or committed (all of it when the branch was never pushed)`}>Unpushed</span>],
+                ['branch', <span key="b" title={`Everything the branch changed since it left ${ch.base} - what its pull request shows`}>Branch</span>]
               ]}
-              style={{ font: '11.5px var(--font-ui)' }}
+              style={{ font: '11.5px var(--font-ui)', flexWrap: 'nowrap', width: 'fit-content' }}
             />
           )}
         </div>
@@ -177,11 +189,11 @@ export function ChangesView({ chrome, activeDiff, root }: { chrome: PanelChrome;
             </div>
           </div>
         ) : null}
-        {uncommitted.length > 0 && !commitScope ? (
+        {uncommitted.length > 0 && !commitScope && !ch.sync ? (
           <div style={{ margin: '0 10px 10px', border: '1px solid color-mix(in srgb, var(--c-amber) 35%, transparent)', borderRadius: 6, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ display: 'flex', gap: 8, font: '12px var(--font-mono)', color: 'var(--c-amber)' }}>
-              <span style={{ flex: 1 }}>{plural(uncommitted.length, 'uncommitted file')}</span>
-              {picked.length < uncommitted.length ? <span style={{ color: 'var(--t3)' }}>{picked.length} picked</span> : null}
+            <div style={{ display: 'flex', flexWrap: 'wrap', columnGap: 8, font: '12px var(--font-mono)', color: 'var(--c-amber)' }}>
+              <span style={{ flex: 1, whiteSpace: 'nowrap' }}>{plural(uncommitted.length, 'uncommitted file')}</span>
+              {picked.length < uncommitted.length || someLines ? <span style={{ color: 'var(--t3)' }}>{picked.length} picked{someLines ? ' (some lines)' : ''}</span> : null}
             </div>
             <TextInput
               size="md"
@@ -202,7 +214,7 @@ export function ChangesView({ chrome, activeDiff, root }: { chrome: PanelChrome;
                 title="Untick a file in the list to leave it out"
                 style={{ flex: 1, minWidth: 0 }}
               >
-                {ch.committing ? 'Committing…' : picked.length === uncommitted.length ? 'Commit all' : `Commit ${plural(picked.length, 'file')}`}
+                {ch.committing ? 'Committing…' : picked.length === uncommitted.length && !someLines ? 'Commit all' : someLines ? 'Commit picked lines' : `Commit ${plural(picked.length, 'file')}`}
               </Button>
               {task.branch ? (
                 <Button disabled={ch.committing || picked.length === 0} onClick={() => ch.commit(true)} title={`Commit, then push ${task.branch} (${keyLabel('⌘↵')} in the message)`}>
@@ -229,7 +241,16 @@ export function ChangesView({ chrome, activeDiff, root }: { chrome: PanelChrome;
           </div>
         ) : null}
         <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '0 6px' }}>
-          {files && files.length === 0 ? <div style={{ padding: '8px 8px', color: 'var(--t4)', fontSize: 12.5 }}>{empty}</div> : null}
+          {files && files.length === 0 ? (
+            <div style={{ padding: '8px 8px', display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'flex-start', color: 'var(--t4)', fontSize: 12.5 }}>
+              <span>{empty}</span>
+              {ch.scope !== 'branch' ? (
+                <Button size="sm" onClick={() => ch.setScope('branch')} title="What its pull request shows">
+                  Show the whole branch vs {ch.base}
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
           {files && files.length > 0 && shown.length === 0 ? <div style={{ padding: '8px 8px', color: 'var(--t4)', fontSize: 12.5 }}>No file matches “{filter}”.</div> : null}
           {rows.map((r) =>
             'dir' in r ? (
@@ -242,7 +263,7 @@ export function ChangesView({ chrome, activeDiff, root }: { chrome: PanelChrome;
                 isViewed={!!ch.viewed[r.file.path]}
                 comments={ch.comments.filter((c) => c.path === r.file.path && !c.resolved).length}
                 pendingComments={ch.comments.filter((c) => c.path === r.file.path && c.pending).length}
-                picked={r.file.uncommitted && !commitScope ? !ch.excluded.has(r.file.path) : null}
+                picked={r.file.uncommitted && !commitScope && !ch.sync ? ch.pickState(r.file) : null}
                 onPick={() => ch.toggleExcluded(r.file.path)}
                 onClick={() => open(r.file.path)}
                 onDragStart={(e) => {
@@ -289,6 +310,72 @@ export function ChangesView({ chrome, activeDiff, root }: { chrome: PanelChrome;
       </div>
       {menu ? <Menu anchor={menu} items={fileMenu(menu.file)} onClose={() => setMenu(null)} /> : null}
     </>
+  )
+}
+
+const KIND: Record<string, string> = {
+  both: 'both changed',
+  'deleted-ours': 'deleted on one side',
+  'deleted-theirs': 'deleted on one side',
+  'both-deleted': 'deleted on both'
+}
+
+/** A merge or rebase stopped on conflicts: its files to resolve, and going on or giving up. */
+function SyncBox({ activeConflict }: { activeConflict?: string | null }): React.JSX.Element | null {
+  const ch = useChanges()
+  const s = ch.sync
+  if (!s) return null
+  const open = (path: string): void => wsOpen(ch.task.id, `conflict:${path}`)
+  const prefix = s.dir ? `${s.dir}/` : ''
+  const what = s.op === 'rebase' ? `Rebasing onto ${s.onto || ch.base}` : s.op === 'merge' ? `Merging ${s.onto || ch.base}` : 'Cherry-picking'
+  const left = s.files.length
+  return (
+    <div style={{ margin: '0 10px 10px', border: `1px solid color-mix(in srgb, var(--c-${left ? 'red' : 'green'}) 45%, transparent)`, background: `color-mix(in srgb, var(--c-${left ? 'red' : 'green'}) 5%, transparent)`, borderRadius: 6, padding: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+        <span style={{ font: '500 12.5px var(--font-ui)', color: 'var(--t1)', flex: 1, minWidth: 0 }}>{what}</span>
+        {s.step ? <span style={{ font: '11.5px var(--font-mono)', color: 'var(--t3)' }}>commit {s.step[0]}/{s.step[1]}</span> : null}
+      </div>
+      {s.commit ? (
+        <div title={s.commit} style={{ font: '11.5px var(--font-mono)', color: 'var(--t3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          at {s.commit}
+        </div>
+      ) : null}
+      <div style={{ font: '12px var(--font-ui)', color: left ? 'var(--c-red)' : 'var(--c-green)' }}>
+        {left ? `${plural(left, 'file')} to resolve` : `All resolved - continue the ${s.op}.`}
+      </div>
+      {s.files.map((f) => (
+        <ConflictRow key={f.path} path={prefix + f.path} kind={KIND[f.kind]} active={activeConflict === prefix + f.path} onClick={() => open(prefix + f.path)} />
+      ))}
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        <Button variant="primary" size="sm" disabled={!!left || ch.syncing} onClick={ch.continueSync} title={left ? 'Resolve every file first' : `Finish the ${s.op}`} style={{ flex: 1 }}>
+          {ch.syncing ? 'Working…' : 'Continue'}
+        </Button>
+        {left && ch.task.agentKind ? (
+          <Button size="sm" onClick={ch.askToResolve} title={`${ch.agent} resolves them; you continue`}>
+            Ask {ch.agent}
+          </Button>
+        ) : null}
+        <Button size="sm" tone="danger" disabled={ch.syncing} onClick={ch.abortSync} title="Back to how the branch was before">
+          Abort
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+function ConflictRow({ path, kind, active, onClick }: { path: string; kind: string; active: boolean; onClick: () => void }): React.JSX.Element {
+  const [hover, hoverProps] = useHover()
+  return (
+    <div
+      onClick={onClick}
+      {...hoverProps}
+      title={`${path} · ${kind}`}
+      style={{ display: 'flex', alignItems: 'center', gap: 8, height: 24, padding: '0 6px', borderRadius: 4, cursor: 'pointer', font: '12px var(--font-mono)', background: active ? 'color-mix(in srgb, var(--c-red) 12%, transparent)' : hover ? 'var(--bg-menu)' : 'transparent' }}
+    >
+      <span style={{ color: 'var(--c-red)', width: 10 }}>!</span>
+      <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--t1)' }}>{path.split('/').pop()}</span>
+      <span style={{ color: 'var(--t4)', fontSize: 11 }}>{kind}</span>
+    </div>
   )
 }
 
@@ -355,7 +442,7 @@ function FileRow({
   comments: number
   pendingComments: number
   /** In the next commit or not (null: not an uncommitted file). */
-  picked: boolean | null
+  picked: 'all' | 'some' | 'none' | null
   onPick: () => void
   onClick: () => void
   onDragStart: (e: React.DragEvent) => void
@@ -391,11 +478,14 @@ function FileRow({
         {picked != null ? (
           <input
             type="checkbox"
-            checked={picked}
-            title={picked ? 'In the next commit - untick to leave it out' : 'Left out of the next commit'}
+            checked={picked !== 'none'}
+            ref={(el) => {
+              if (el) el.indeterminate = picked === 'some'
+            }}
+            title={picked === 'all' ? 'In the next commit - untick to leave it out' : picked === 'some' ? 'Some of its lines are in the next commit - tick for all of it' : 'Left out of the next commit'}
             onClick={(e) => e.stopPropagation()}
             onChange={onPick}
-            style={{ margin: 0, width: 12, height: 12, accentColor: 'var(--c-amber)', cursor: 'pointer', opacity: picked && !hover ? 0.55 : 1 }}
+            style={{ margin: 0, width: 12, height: 12, accentColor: 'var(--c-amber)', cursor: 'pointer', opacity: picked === 'all' && !hover ? 0.55 : 1 }}
           />
         ) : null}
       </span>

@@ -21,6 +21,7 @@ import { errText } from '../lib/errors'
 import { columnName } from '../lib/boardPrefs'
 import { LayoutButtons } from './workspace/layout/LayoutButtons'
 import { useHeadBranch } from '../lib/headBranch'
+import { showInWorkspace, wsOpen } from '../lib/wsStore'
 
 export function Workspace(): React.JSX.Element | null {
   const { state } = useAppStore()
@@ -625,10 +626,30 @@ function StackLine({ task, behind, onUpdated }: { task: Task; behind: number; on
       setBusy(false)
     }
   }
+  // The same again, but stopping at the conflicts: they're resolved in Changes.
+  const resolveHere = async (): Promise<void> => {
+    setBusy(true)
+    try {
+      await window.api.git.rebase(task.worktreePath!, parent.branch!, true)
+      setClash(null)
+      onUpdated()
+    } catch (err) {
+      const msg = errText(err)
+      if (msg.startsWith('CONFLICT:')) {
+        setClash(null)
+        const first = msg.slice('CONFLICT:'.length).split('\n').filter(Boolean)[0]
+        showInWorkspace(task.id, 'changes')
+        if (first) wsOpen(task.id, `conflict:${first}`)
+      } else dispatch({ type: 'TOAST', text: `Could not update from ${parent.key}: ${msg}` })
+    } finally {
+      setBusy(false)
+    }
+  }
   return (
     <AlertLine color="var(--c-blue)" icon="↳" title={`${task.key} builds on ${parent.key} · ${parent.title}`}>
       {clash ? `${parent.key}'s new commits clash with this branch in ${clash.slice(0, 3).join(', ')}${clash.length > 3 ? ` +${clash.length - 3}` : ''} - nothing changed` : `${parent.key} has ${behind} new commit${behind === 1 ? '' : 's'} this branch doesn't`}
       {!clash && task.st !== 'working' ? <AlertAction onClick={() => !busy && update()}>{busy ? 'updating…' : 'update'}</AlertAction> : null}
+      {clash && task.st !== 'working' ? <AlertAction onClick={() => !busy && resolveHere()}>{busy ? 'starting…' : 'resolve here'}</AlertAction> : null}
       {task.agentKind ? <AlertAction onClick={ask}>ask {agent} to {clash ? 'resolve it' : 'do it'}</AlertAction> : null}
     </AlertLine>
   )

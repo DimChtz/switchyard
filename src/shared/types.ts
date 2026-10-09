@@ -760,6 +760,8 @@ export interface Prefs {
   diffWrap: boolean
   /** Whitespace-only changes left out of diffs. */
   diffIgnoreSpace: boolean
+  /** What a task's Changes shows when it opens: its pending work (not pushed / not committed), or the whole branch vs its base. */
+  changesScope: 'unpushed' | 'uncommitted' | 'branch'
   editorLineNumbers: boolean
   editorActiveLine: boolean
   /** A theme's id, or "system": light or dark as the OS is. */
@@ -952,6 +954,38 @@ export interface FileDiff {
  * A commit's id: only what that commit changed.
  */
 export type DiffScope = 'branch' | 'unpushed' | 'uncommitted' | { commit: string }
+
+/** A commit in a file's history. */
+export interface FileCommit {
+  hash: string
+  author: string
+  /** When it was written (ms). */
+  at: number
+  subject: string
+}
+
+/** Who last changed each line of a file. */
+export interface Blame {
+  commits: Record<string, { author: string; at: number; subject: string }>
+  /** Per line (the first is line 1): its commit's id - all zeros when not committed yet. */
+  lines: string[]
+}
+
+/** A merge, rebase or cherry-pick git stopped on conflicts, half-way. */
+export interface SyncState {
+  op: 'merge' | 'rebase' | 'cherry-pick'
+  /** What's being merged in / rebased onto ("develop"), when known. */
+  onto: string
+  /** A rebase's commit it's at, of how many. */
+  step: [number, number] | null
+  /** The commit a rebase stopped at ("abc1234 Its message"). */
+  commit: string
+  /**
+   * The files to resolve. "ours" is git's HEAD side: in a rebase that's the base (and the commits
+   * replayed so far), in a merge this branch.
+   */
+  files: { path: string; kind: 'both' | 'deleted-ours' | 'deleted-theirs' | 'both-deleted' }[]
+}
 
 /** How a diff is read: whitespace-only changes left out or not. */
 export interface DiffOptions {

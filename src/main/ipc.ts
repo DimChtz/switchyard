@@ -202,7 +202,14 @@ export function registerIpcHandlers(): void {
     git.getDiffFiles(worktreePath, baseBranch, diffScope(scope), { ignoreSpace: !!opts?.ignoreSpace })
   )
   ipcMain.handle(IPC.gitDiffStat, (_e, worktreePath: string, baseBranch: string) => git.getDiffStat(worktreePath, baseBranch))
-  ipcMain.handle(IPC.gitRebase, (_e, worktreePath: string, baseBranch: string) => git.rebaseOnto(worktreePath, baseBranch))
+  ipcMain.handle(IPC.gitRebase, (_e, worktreePath: string, baseBranch: string, keepConflicts?: boolean) => git.rebaseOnto(worktreePath, baseBranch, !!keepConflicts))
+  ipcMain.handle(IPC.gitFileHistory, (_e, worktreePath: string, path: string) => git.fileHistory(worktreePath, path))
+  ipcMain.handle(IPC.gitBlame, (_e, worktreePath: string, path: string) => git.blame(worktreePath, path))
+  ipcMain.handle(IPC.gitSyncState, (_e, worktreePath: string) => git.syncState(worktreePath))
+  ipcMain.handle(IPC.gitMarkResolved, (_e, worktreePath: string, path: string) => git.markResolved(worktreePath, path))
+  ipcMain.handle(IPC.gitTakeSide, (_e, worktreePath: string, path: string, side: 'ours' | 'theirs') => git.takeSide(worktreePath, path, side === 'theirs' ? 'theirs' : 'ours'))
+  ipcMain.handle(IPC.gitContinueSync, (_e, worktreePath: string) => git.continueSync(worktreePath))
+  ipcMain.handle(IPC.gitAbortSync, (_e, worktreePath: string) => git.abortSync(worktreePath))
   ipcMain.handle(IPC.gitMergeAndPrune, (_e, repoPath: string, worktreePath: string, branch: string, baseBranch: string, prune?: boolean, message?: string) =>
     git.mergeAndPrune(repoPath, worktreePath, branch, baseBranch, prune, message)
   )
@@ -223,6 +230,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.gitCreateBranch, (_e, repoPath: string, branch: string, baseBranch: string) => git.createBranch(repoPath, branch, baseBranch))
   ipcMain.handle(IPC.gitCommitAll, (_e, worktreePath: string, message: string) => git.commitAll(worktreePath, message))
   ipcMain.handle(IPC.gitDiscardFile, (_e, worktreePath: string, path: string) => git.discardFile(worktreePath, path))
+  ipcMain.handle(IPC.gitCommitSelection, (_e, worktreePath: string, picks: git.CommitPick[], message: string) => git.commitSelection(worktreePath, picks, message))
   ipcMain.handle(IPC.gitCommitFiles, (_e, worktreePath: string, paths: string[], message: string) => git.commitFiles(worktreePath, paths, message))
   ipcMain.handle(IPC.gitRevertFile, (_e, worktreePath: string, baseBranch: string, scope: unknown, path: string, oldPath?: string) =>
     git.revertFile(worktreePath, baseBranch, diffScope(scope), path, oldPath)

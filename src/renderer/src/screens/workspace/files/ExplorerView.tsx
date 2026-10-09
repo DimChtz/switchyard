@@ -351,6 +351,7 @@ export function ExplorerView({ chrome, activePath }: { chrome: PanelChrome; acti
       : [
           { label: 'Open', onClick: () => openFile(row.path) },
           ...(row.status !== 'unchanged' ? [{ label: 'Open Changes', onClick: () => showChanges(row.path) }] : []),
+          ...(row.status !== 'added' ? [{ label: 'File History', onClick: () => wsOpen(task.id, `history:${row.path}`) }] : []),
           { label: 'Open in Editor', onClick: () => window.api.sys.openInEditor(abs(row.path)).catch(toastErr) },
           { label: 'Open with Default App', onClick: () => window.api.sys.reveal(abs(row.path)).catch(toastErr) }
         ]
