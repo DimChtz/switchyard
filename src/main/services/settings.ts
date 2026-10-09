@@ -250,8 +250,10 @@ function validProject(data: Record<string, unknown>): Partial<Project> {
   for (const key of PROJECT_SETTING_KEYS) {
     const v = data[key]
     if (v === undefined) continue
-    if (key === 'copyFiles') {
+    if (key === 'copyFiles' || key === 'depFolders') {
       if (Array.isArray(v) && v.every((x) => typeof x === 'string')) out[key] = v
+    } else if (key === 'shareDeps') {
+      if (v === 'copy') out[key] = v
     } else if (key === 'agentKind') {
       if (AGENTS.some((a) => a.kind === v)) out[key] = v
     } else if (key === 'env' && v && typeof v === 'object' && !Array.isArray(v)) {

@@ -2,7 +2,7 @@ import type { KeyBinding } from './keybindings'
 
 export type AgentStatus = 'working' | 'waiting' | 'failed' | 'done' | 'paused' | null
 
-export type ViewName = 'dashboard' | 'board' | 'agents' | 'worktrees' | 'workspace' | 'settings' | 'notes' | 'usage' | 'team' | 'inbox' | 'summary' | 'map'
+export type ViewName = 'dashboard' | 'board' | 'agents' | 'worktrees' | 'workspace' | 'settings' | 'notes' | 'usage' | 'team' | 'inbox' | 'summary' | 'map' | 'prs'
 
 export type BoardColumn = 'backlog' | 'ready' | 'progress' | 'review' | 'done'
 
@@ -43,6 +43,10 @@ export interface Project {
   agentKind?: AgentKind
   /** Untracked files (e.g. .env, config/master.key) copied into each new worktree. */
   copyFiles?: string[]
+  /** New worktrees get a copy of the checkout's installed dependencies (when their lockfile matches); unset installs (the setup command). */
+  shareDeps?: 'copy'
+  /** Which folders those are (patterns; default node_modules). */
+  depFolders?: string[]
   /** KEY=value lines, set for every process run in the project's worktrees. */
   env?: string
   /** The Start modal's first message; {key} {title} {desc} {branch}. */
@@ -69,7 +73,7 @@ export interface Project {
 }
 
 /** Project settings a repository can carry in .switchyard/settings.json. */
-export type ProjectSettingKey = 'prefix' | 'defaultBranch' | 'lang' | 'agentKind' | 'setupCmd' | 'testCmd' | 'devCmd' | 'copyFiles' | 'messageTemplate' | 'env'
+export type ProjectSettingKey = 'prefix' | 'defaultBranch' | 'lang' | 'agentKind' | 'setupCmd' | 'testCmd' | 'devCmd' | 'copyFiles' | 'shareDeps' | 'depFolders' | 'messageTemplate' | 'env'
 
 /** Where a project setting is kept: Switchyard on this machine, or the repo's shared file. */
 export type ProjectSettingScope = 'machine' | 'shared'
@@ -770,6 +774,11 @@ export interface Prefs {
   modelPrices: Record<string, import('./usage').ModelPrice>
   /** What the notification center keeps (the bell). */
   noticeKinds: NoticeKind[]
+  /** Notifications to a phone or chat: where (empty: off), through which service, which kinds, and only while you're away. */
+  pushUrl: string
+  pushService: 'ntfy' | 'slack' | 'discord' | 'webhook'
+  pushKinds: NoticeKind[]
+  pushWhenAway: boolean
   /** Projects whose events raise no notifications - neither the bell nor the system's. */
   mutedProjects: string[]
   /** A notice once a day's agent cost (at API prices) reaches this many dollars; 0: never. */
@@ -954,6 +963,43 @@ export interface FileDiff {
  * A commit's id: only what that commit changed.
  */
 export type DiffScope = 'branch' | 'unpushed' | 'uncommitted' | { commit: string }
+
+/** An open pull request of a project's repository (the PR dashboard). */
+export interface OpenPr {
+  number: number
+  title: string
+  url: string
+  branch: string
+  base: string
+  author: string
+  draft: boolean
+  review: 'approved' | 'changes' | 'required' | null
+  checks: { total: number; failed: number; pending: number; state: 'pass' | 'fail' | 'pending' | 'none' }
+  /** GitHub says it doesn't merge cleanly. */
+  conflicts: boolean
+  updatedAt: number
+  additions: number
+  deletions: number
+}
+
+/** What a new worktree got of the main checkout's installed dependencies. */
+export interface DepShare {
+  folder: string
+  how: 'copied' | 'skipped'
+  /** Why it was skipped. */
+  why?: string
+}
+
+/** Changes put aside with git stash. */
+export interface StashEntry {
+  /** "stash@{0}": which one, for applying or dropping it (it shifts as stashes come and go). */
+  ref: string
+  /** The branch it was made on. */
+  branch: string
+  message: string
+  at: number
+  files: string[]
+}
 
 /** A commit in a file's history. */
 export interface FileCommit {

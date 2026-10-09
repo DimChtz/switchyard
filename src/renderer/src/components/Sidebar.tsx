@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react'
 import type { AgentStatus, Project, Task } from '@shared/types'
 import { useAppStore } from '../store/AppStore'
 import { useHover } from '../lib/useHover'
-import { statusColor } from '../lib/status'
+import { needsYou, statusColor } from '../lib/status'
 import { liveTasks, tasksForProject, agentShort } from '../lib/derive'
 import { IconButton, useContextMenu } from './ui'
 import { folderItems, projectMenuItems, taskMenuItems } from '../lib/menus'
@@ -52,6 +52,15 @@ const NAV_ICONS: Record<string, React.JSX.Element> = {
     <>
       <path d="M2 3.2h6.6a.8.8 0 0 1 .8.8v3.4a.8.8 0 0 1-.8.8H5.2L3 10V8.2H2a.8.8 0 0 1-.8-.8V4a.8.8 0 0 1 .8-.8z" />
       <path d="M10.6 5.6h1.4a.8.8 0 0 1 .8.8v3.2a.8.8 0 0 1-.8.8h-.8v1.6L9.2 10.4H7" />
+    </>
+  ),
+  prs: (
+    <>
+      <circle cx="3.6" cy="3.2" r="1.5" />
+      <circle cx="3.6" cy="10.8" r="1.5" />
+      <circle cx="10.4" cy="10.8" r="1.5" />
+      <path d="M3.6 4.7v4.6M10.4 9.3V6.4a2 2 0 0 0-2-2H6.2" />
+      <path d="M7.6 3.1 6.1 4.4l1.5 1.3" />
     </>
   ),
   map: (
@@ -289,7 +298,7 @@ type NavItem = { icon: keyof typeof NAV_ICONS; label: string; key: string; activ
 
 function useNav(): NavItem[] {
   const { state, dispatch } = useAppStore()
-  const needsCount = liveTasks(state).filter((t) => t.st === 'waiting' || t.st === 'failed').length
+  const needsCount = liveTasks(state).filter(needsYou).length
   // What waits on you, everywhere (the Inbox).
   const inboxCount = useInboxItems().length
   const activity = useActivity()
@@ -306,6 +315,7 @@ function useNav(): NavItem[] {
     nav('projects', 'Projects', 'dashboard'),
     nav('agents', 'Agents', 'agents', { badge: needsCount || undefined }),
     nav('worktrees', 'Worktrees', 'worktrees'),
+    nav('prs', 'Pull requests', 'prs'),
     nav('notes', 'Notes', 'notes', { onClick: () => dispatch({ type: 'OPEN_NOTE', id: null }) }),
     nav('usage', 'Usage', 'usage'),
     nav('team', 'Team', 'team'),

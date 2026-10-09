@@ -5,7 +5,7 @@ import { NO_FILTER, boardFilterOf, loadBoardPrefs } from '../lib/boardFilter'
 import type { Action, AppState } from './types'
 import { AGENTS, COLUMN_ORDER, DEFAULT_PREFS, branchFor, firstMessage } from '@shared/constants'
 import { agentShort, busyAgents, nextTaskKey, raiseKeyHigh } from '../lib/derive'
-import { clock, waitingText } from '../lib/status'
+import { clock, needsYou, waitingText } from '../lib/status'
 import { prefsFor } from '../lib/projectPrefs'
 import { waitsFor, wouldLoop } from '@shared/stack'
 import { isStarted, makeScratch, scratchId } from '@shared/scratch'
@@ -626,7 +626,7 @@ function reduce(state: AppState, action: Action): AppState {
         session,
         lastActivityAt: Date.now()
       }))
-      const becameBlocked = (update.st === 'waiting' || update.st === 'failed') && task.st === 'working'
+      const becameBlocked = needsYou({ ...update, scratch: task.scratch }) && task.st === 'working'
       const looking = state.view === 'workspace' && state.taskId === task.id
       if (!becameBlocked || looking) return { ...state, tasks: next }
       const name = agentShort(task.agentKind)

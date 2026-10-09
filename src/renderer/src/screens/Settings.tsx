@@ -577,6 +577,59 @@ function GlobalSettings({ section, scope, onScope }: { section: string; scope: P
         </Group>
       ) : null}
       {!scope ? (
+        <Group title="Phone and chat" note="Agents that need you, when you're away from the computer - through ntfy (an app for your phone), Slack, Discord, or any webhook.">
+          <Row k="pushService" label="Send through">
+            <Seg
+              value={pf.pushService}
+              options={[
+                ['ntfy', 'ntfy'],
+                ['slack', 'Slack'],
+                ['discord', 'Discord'],
+                ['webhook', 'Webhook']
+              ]}
+              onChange={(v) => set({ pushService: v as Prefs['pushService'] })}
+            />
+          </Row>
+          <Row
+            k="pushUrl"
+            label="Address"
+            sub={
+              pf.pushService === 'ntfy'
+                ? 'A topic only you know - e.g. https://ntfy.sh/switchyard-k7f3q9 - then subscribe to it in the ntfy app. Empty: off.'
+                : pf.pushService === 'slack'
+                  ? 'An incoming webhook URL (Slack → Apps → Incoming Webhooks). Empty: off.'
+                  : pf.pushService === 'discord'
+                    ? 'A channel webhook URL (channel settings → Integrations → Webhooks). Empty: off.'
+                    : 'Gets a JSON POST: kind, title, text, detail, task. Empty: off.'
+            }
+          >
+            <TextField value={pf.pushUrl} placeholder={pf.pushService === 'ntfy' ? 'https://ntfy.sh/your-secret-topic' : 'https://…'} onChange={(v) => set({ pushUrl: v.trim() })} />
+            {pf.pushUrl ? (
+              <span
+                onClick={() =>
+                  window.api.sys
+                    .pushTest()
+                    .then(() => dispatch({ type: 'TOAST', text: 'Sent a test notification.' }))
+                    .catch((err: unknown) => dispatch({ type: 'TOAST', text: errText(err) }))
+                }
+                style={{ alignSelf: 'flex-end', font: `11px ${MONO}`, color: 'var(--c-blue)', cursor: 'pointer' }}
+              >
+                Send a test
+              </span>
+            ) : null}
+          </Row>
+          {tog('Only while I’m away', 'The window isn’t in front, or no keyboard or mouse for two minutes', 'pushWhenAway')}
+          {NOTICE_GROUPS.map(([label, sub, kinds]) => (
+            <Row key={label} label={label} sub={sub}>
+              <Toggle
+                on={kinds.every((k) => pf.pushKinds.includes(k))}
+                onChange={(on) => set({ pushKinds: on ? [...new Set([...pf.pushKinds, ...kinds])] : pf.pushKinds.filter((k) => !kinds.includes(k)) })}
+              />
+            </Row>
+          ))}
+        </Group>
+      ) : null}
+      {!scope ? (
         <Group title="Notification center" note={`What the bell keeps${shortcut('notifications') ? ` (${shortcut('notifications')})` : ''} - window in front or not`}>
           {NOTICE_GROUPS.map(([label, sub, kinds]) => (
             <Row key={label} label={label} sub={sub}>
@@ -821,6 +874,13 @@ function ProjectSettings({ project: p }: { project: Project }): React.JSX.Elemen
     window.api.git.copySuggestions(p.repoPath).then(setSuggested)
   }, [p.repoPath])
   const missing = suggested.filter((f) => !(p.copyFiles ?? []).includes(f))
+  // The worktrees this project's tasks have now (the list applies to new ones; these can get it too).
+  const existing = state.tasks.filter((t) => t.projectId === p.id && t.worktreePath && !t.inPlace && !t.scratch && t.col !== 'done').map((t) => t.worktreePath!)
+  const copyToExisting = async (): Promise<void> => {
+    let files = 0
+    for (const wt of existing) files += (await window.api.git.copyIntoWorktree(p.repoPath, wt, p.copyFiles ?? []).catch(() => [])).length
+    dispatch({ type: 'TOAST', text: files ? `Copied ${plural(files, 'file')} into ${plural(existing.length, 'worktree')}.` : 'Every worktree has them already.' })
+  }
 
   const remove = (): Promise<boolean> => removeProject(p, state.tasks, dispatch)
 
@@ -907,7 +967,7 @@ function ProjectSettings({ project: p }: { project: Project }): React.JSX.Elemen
         </Row>
       </Group>
       <Group title="Worktrees">
-        <Row label="Copy into new worktrees" sub="Files git doesn't track that the project needs to run, copied from this checkout when a task starts. Comma-separated; * works in the last part">
+        <Row label="Copy into new worktrees" sub="Files git doesn't track that the project needs to run, copied from this checkout when a task starts - never over one already there. Comma-separated; * and ? work in any part, ** for any folders (apps/*/.env, **/.env.local)">
           <TextField value={(p.copyFiles ?? []).join(', ')} placeholder=".env, config/master.key" onChange={(v) => update({ copyFiles: splitList(v) })} />
           {missing.length ? (
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, font: `11px ${MONO}`, color: 'var(--t3)' }}>
@@ -919,7 +979,37 @@ function ProjectSettings({ project: p }: { project: Project }): React.JSX.Elemen
               </span>
             </div>
           ) : null}
+          {p.copyFiles?.length && existing.length ? (
+            <span
+              onClick={copyToExisting}
+              title="Copies what's missing into the worktrees tasks already have - files already there stay as they are"
+              style={{ alignSelf: 'flex-end', font: `11px ${MONO}`, color: 'var(--c-blue)', cursor: 'pointer', whiteSpace: 'nowrap' }}
+            >
+              Copy into the {plural(existing.length, 'existing worktree')} now
+            </span>
+          ) : null}
           {where('copyFiles')}
+        </Row>
+        <Row
+          label="Dependencies"
+          sub={
+            p.shareDeps === 'copy'
+              ? `A new worktree gets a copy of this checkout's installed ${(p.depFolders?.length ? p.depFolders : ['node_modules']).join(', ')} when its lockfile is the same - copy-on-write on macOS (instant, no extra space), a full copy on Windows. Your setup command still runs, with little left to do.`
+              : 'Each new worktree installs its own, with the setup command.'
+          }
+        >
+          <Seg
+            value={p.shareDeps ?? 'install'}
+            options={[
+              ['install', 'Install'],
+              ['copy', 'Copy from this checkout']
+            ]}
+            onChange={(v) => update({ shareDeps: v === 'copy' ? 'copy' : undefined })}
+          />
+          {p.shareDeps === 'copy' ? (
+            <TextField value={(p.depFolders ?? []).join(', ')} placeholder="node_modules" onChange={(v) => update({ depFolders: splitList(v) })} />
+          ) : null}
+          {where('shareDeps')}
         </Row>
       </Group>
       <Group title="Environment" note="Kept on this machine - these are often secrets. A value in the repository’s settings file is shown as shared.">

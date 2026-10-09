@@ -32,7 +32,7 @@ export const COLUMN_LABEL: Record<BoardColumn, string> = {
 }
 
 /** What .switchyard/settings.json (and settings.local.json) may set for a project. */
-export const PROJECT_SETTING_KEYS: ProjectSettingKey[] = ['prefix', 'defaultBranch', 'lang', 'agentKind', 'setupCmd', 'testCmd', 'devCmd', 'copyFiles', 'messageTemplate', 'env']
+export const PROJECT_SETTING_KEYS: ProjectSettingKey[] = ['prefix', 'defaultBranch', 'lang', 'agentKind', 'setupCmd', 'testCmd', 'devCmd', 'copyFiles', 'shareDeps', 'depFolders', 'messageTemplate', 'env']
 
 /**
  * Preferences that belong to the app as a whole, not to a project - a
@@ -137,6 +137,10 @@ export const DEFAULT_PREFS: Prefs = {
   modelPrices: {},
   noticeKinds: ['waiting', 'permission', 'failed', 'done', 'tests-passed', 'tests-failed', 'finished', 'pr-merged', 'spend', 'review-reply', 'agent-question', 'team', 'limit', 'pr'],
   mutedProjects: [],
+  pushUrl: '',
+  pushService: 'ntfy',
+  pushKinds: ['permission', 'failed', 'agent-question', 'waiting', 'done', 'tests-failed', 'pr-merged', 'limit'],
+  pushWhenAway: true,
   spendAlert: 0,
   spendAlertWeek: 0,
   agentTools: true,

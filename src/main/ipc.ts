@@ -4,6 +4,7 @@ import { join } from 'path'
 import { IPC } from '@shared/ipc'
 import * as store from './services/store'
 import * as git from './services/git'
+import { pushNotice, type PushNotice } from './services/push'
 import * as ptyService from './services/pty'
 import * as agentsService from './services/agents'
 import * as agentStatus from './services/agentStatus'
@@ -203,6 +204,14 @@ export function registerIpcHandlers(): void {
   )
   ipcMain.handle(IPC.gitDiffStat, (_e, worktreePath: string, baseBranch: string) => git.getDiffStat(worktreePath, baseBranch))
   ipcMain.handle(IPC.gitRebase, (_e, worktreePath: string, baseBranch: string, keepConflicts?: boolean) => git.rebaseOnto(worktreePath, baseBranch, !!keepConflicts))
+  ipcMain.handle(IPC.gitShareDeps, (_e, repoPath: string, worktreePath: string, folders: string[]) =>
+    git.shareDependencies(repoPath, worktreePath, Array.isArray(folders) && folders.length ? folders : ['node_modules'])
+  )
+  ipcMain.handle(IPC.gitOpenPrs, (_e, repoPath: string) => git.openPrs(repoPath))
+  ipcMain.handle(IPC.gitStashList, (_e, worktreePath: string, branch?: string) => git.stashList(worktreePath, branch || undefined))
+  ipcMain.handle(IPC.gitStashPush, (_e, worktreePath: string, message: string, paths?: string[]) => git.stashPush(worktreePath, message, paths))
+  ipcMain.handle(IPC.gitStashApply, (_e, worktreePath: string, ref: string, pop: boolean) => git.stashApply(worktreePath, ref, !!pop))
+  ipcMain.handle(IPC.gitStashDrop, (_e, worktreePath: string, ref: string) => git.stashDrop(worktreePath, ref))
   ipcMain.handle(IPC.gitFileHistory, (_e, worktreePath: string, path: string) => git.fileHistory(worktreePath, path))
   ipcMain.handle(IPC.gitBlame, (_e, worktreePath: string, path: string) => git.blame(worktreePath, path))
   ipcMain.handle(IPC.gitSyncState, (_e, worktreePath: string) => git.syncState(worktreePath))
@@ -372,6 +381,8 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.sysShowItem, (_e, path: string) => system.showItem(path))
   ipcMain.handle(IPC.sysOpenTerminal, (_e, path: string) => system.openTerminal(path))
   ipcMain.on(IPC.sysCopy, (_e, text: string) => system.copyText(text))
+  ipcMain.on(IPC.sysPush, (_e, n: PushNotice) => void pushNotice(n))
+  ipcMain.handle(IPC.sysPushTest, () => pushNotice({ kind: 'done', taskKey: '', taskTitle: 'Notifications from Switchyard reach you here.', text: 'Switchyard test', detail: null }, true))
   ipcMain.on(IPC.sysNotify, (_e, title: string, body: string, taskId: string | null, actions?: NotifyAction[]) =>
     system.notify(title, body, taskId, Array.isArray(actions) ? actions.filter((a) => typeof a?.id === 'string' && typeof a?.label === 'string').slice(0, 3) : [])
   )

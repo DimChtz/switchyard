@@ -1,3 +1,4 @@
+import { needsYou } from './status'
 import type { ConflictReport, Notice, ReviewComment, Task, TeamMessage } from '@shared/types'
 import { AGENTS } from '@shared/constants'
 
@@ -39,7 +40,7 @@ export function buildInbox(src: { tasks: Task[]; comments: ReviewComment[]; noti
     if (t.sleeping) out.push({ id: `limit:${t.id}:${t.sleeping.since}`, kind: 'limit', taskId: t.id, title: `${agentName(t)} hit a usage limit`, detail: t.sleeping.reason, at: t.sleeping.since })
     else if (t.st === 'waiting' && t.askKind === 'permission') out.push({ id: `approval:${t.id}:${t.ask ?? ''}`, kind: 'approval', taskId: t.id, title: `${agentName(t)} asks for approval`, detail: t.ask, at })
     else if (t.st === 'failed') out.push({ id: `failed:${t.id}:${at}`, kind: 'failed', taskId: t.id, title: `${agentName(t)} failed`, detail: t.ask, at })
-    else if (t.st === 'waiting' && t.agentKind && t.col === 'progress') out.push({ id: `waiting:${t.id}:${at}`, kind: 'waiting', taskId: t.id, title: `${agentName(t)} finished its turn`, detail: t.activity ?? null, at })
+    else if (t.st === 'waiting' && t.agentKind && t.col === 'progress' && needsYou(t)) out.push({ id: `waiting:${t.id}:${at}`, kind: 'waiting', taskId: t.id, title: `${agentName(t)} finished its turn`, detail: t.activity ?? null, at })
     if (t.lastTest?.status === 'failed' && (t.col === 'progress' || t.col === 'review'))
       out.push({ id: `tests:${t.id}:${t.lastTest.at}`, kind: 'tests', taskId: t.id, title: 'Tests failed', detail: `exit ${t.lastTest.exitCode ?? '?'}`, at: t.lastTest.at })
     const failed = (t.criteria ?? []).filter((c) => c.status === 'failed')

@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { useAppStore } from '../store/AppStore'
 import { useHover } from '../lib/useHover'
-import { statusColor } from '../lib/status'
+import { needsYou, statusColor } from '../lib/status'
 import { agentShort, liveTasks } from '../lib/derive'
 import { shortcut } from '../lib/shortcuts'
 import { NoticeBell } from './NoticeCenter'
@@ -73,7 +73,7 @@ export function StatusBar(): React.JSX.Element {
 
   const queued = state.tasks.filter((t) => t.queued).length
   let ctx = `${live.filter((t) => t.st === 'working').length} working · ${
-    live.filter((t) => t.st === 'waiting' || t.st === 'failed').length
+    live.filter(needsYou).length
   } need you${queued ? ` · ${queued} queued` : ''}`
 
   if (state.view === 'workspace' && state.taskId) {

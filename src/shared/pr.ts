@@ -1,4 +1,4 @@
-import type { PrCheck, PrComment, PrDetails, PullRequest } from './types'
+import type { OpenPr, PrCheck, PrComment, PrDetails, PullRequest } from './types'
 
 /**
  * A pull request's checks and reviews, from the GitHub CLI's JSON (`gh pr
@@ -51,6 +51,44 @@ export function checkState(c: RollupItem): PrCheck['state'] {
 }
 
 const time = (s?: string | null): number => (s ? Date.parse(s) || 0 : 0)
+
+/** One of a repository's open pull requests, from `gh pr list --json …` (see OPEN_PR_FIELDS). */
+export function toOpenPr(p: {
+  number: number
+  title: string
+  url: string
+  headRefName?: string
+  baseRefName?: string
+  author?: { login?: string } | null
+  isDraft?: boolean
+  reviewDecision?: string | null
+  statusCheckRollup?: RollupItem[] | null
+  mergeable?: string | null
+  updatedAt?: string
+  additions?: number
+  deletions?: number
+}): OpenPr {
+  const states = (p.statusCheckRollup ?? []).map(checkState).filter((s) => s !== 'skipped')
+  const failed = states.filter((s) => s === 'fail').length
+  const pending = states.filter((s) => s === 'pending').length
+  return {
+    number: p.number,
+    title: p.title,
+    url: p.url,
+    branch: p.headRefName ?? '',
+    base: p.baseRefName ?? '',
+    author: p.author?.login ?? '',
+    draft: !!p.isDraft,
+    review: p.reviewDecision === 'APPROVED' ? 'approved' : p.reviewDecision === 'CHANGES_REQUESTED' ? 'changes' : p.reviewDecision === 'REVIEW_REQUIRED' ? 'required' : null,
+    checks: { total: states.length, failed, pending, state: !states.length ? 'none' : failed ? 'fail' : pending ? 'pending' : 'pass' },
+    conflicts: p.mergeable === 'CONFLICTING',
+    updatedAt: time(p.updatedAt),
+    additions: p.additions ?? 0,
+    deletions: p.deletions ?? 0
+  }
+}
+
+export const OPEN_PR_FIELDS = 'number,title,url,headRefName,baseRefName,author,isDraft,reviewDecision,statusCheckRollup,mergeable,updatedAt,additions,deletions'
 
 export function toPrDetails(pr: GhPr, lineComments: GhLineComment[] = [], now = Date.now()): PrDetails {
   const checks: PrCheck[] = (pr.statusCheckRollup ?? []).map((c) => ({ name: c.name || c.context || 'check', state: checkState(c), url: c.detailsUrl ?? c.targetUrl ?? null }))

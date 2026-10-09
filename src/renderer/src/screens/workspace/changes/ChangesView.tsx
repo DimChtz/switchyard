@@ -9,7 +9,7 @@ import { commitMessageFor } from '../../../lib/taskActions'
 import { Button, Menu, Segmented, TextInput, type MenuItem } from '../../../components/ui'
 import { useAppStore } from '../../../store/AppStore'
 import { startTabDrag, setDrag, wsOpen } from '../../../lib/wsStore'
-import type { FileDiff } from '@shared/types'
+import type { FileDiff, StashEntry } from '@shared/types'
 import { useChanges } from './ChangesContext'
 import { PanelHeader, PanelIcon, type PanelChrome } from '../layout/PanelHeader'
 
@@ -221,6 +221,13 @@ export function ChangesView({ chrome, activeDiff, activeConflict, root }: { chro
                   & Push
                 </Button>
               ) : null}
+              <Button
+                disabled={ch.committing || picked.length === 0 || someLines}
+                onClick={ch.stash}
+                title={someLines ? 'Stash takes whole files - tick files, not lines' : picked.length < uncommitted.length ? 'Put the ticked files aside, uncommitted (the message box names it)' : 'Put the uncommitted changes aside (the message box names it) - bring them back from Stashed'}
+              >
+                Stash
+              </Button>
             </div>
           </div>
         ) : null}
@@ -279,6 +286,14 @@ export function ChangesView({ chrome, activeDiff, activeConflict, root }: { chro
             )
           )}
         </div>
+        {ch.stashes.length ? (
+          <div style={{ flex: 'none', borderTop: '1px solid var(--bd-1)', padding: '10px 8px 6px', display: 'flex', flexDirection: 'column', gap: 1, maxHeight: '25%', overflow: 'auto' }}>
+            <div style={{ ...SECTION, margin: '0 6px 4px' }}>Stashed</div>
+            {ch.stashes.map((s) => (
+              <StashRow key={s.ref} s={s} onApply={(pop) => ch.applyStash(s, pop)} onDrop={() => ch.dropStash(s)} />
+            ))}
+          </div>
+        ) : null}
         {ch.commits.length || uncommitted.length ? (
           <div style={{ flex: 'none', borderTop: '1px solid var(--bd-1)', padding: '10px 8px', display: 'flex', flexDirection: 'column', gap: 1, font: '12px var(--font-mono)', color: 'var(--t3)', maxHeight: '35%', overflow: 'auto' }}>
             <div style={{ ...SECTION, margin: '0 6px 4px', display: 'flex' }}>
@@ -395,6 +410,44 @@ function DirRow({ dir, count, folded, onClick }: { dir: string; count: number; f
         <bdi>{dir}/</bdi>
       </span>
       {folded ? <span style={{ color: 'var(--t4)' }}>{count}</span> : null}
+    </div>
+  )
+}
+
+/** A stash: what it is, and bringing it back (applying keeps it; Restore drops it after) or deleting it. */
+function StashRow({ s, onApply, onDrop }: { s: StashEntry; onApply: (pop: boolean) => void; onDrop: () => void }): React.JSX.Element {
+  const [hover, hoverProps] = useHover()
+  const link = (label: string, title: string, on: () => void, danger = false): React.JSX.Element => (
+    <span
+      onClick={(e) => {
+        e.stopPropagation()
+        on()
+      }}
+      title={title}
+      style={{ color: danger ? 'var(--c-red)' : 'var(--c-blue)', cursor: 'pointer' }}
+    >
+      {label}
+    </span>
+  )
+  return (
+    <div
+      {...hoverProps}
+      title={`${s.message}\n${s.files.join('\n')}`}
+      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 6px', borderRadius: 4, font: '12px var(--font-mono)', whiteSpace: 'nowrap', background: hover ? 'var(--bg-menu)' : 'transparent' }}
+    >
+      <span style={{ color: 'var(--c-amber)' }}>⧉</span>
+      <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--t2)', fontFamily: 'var(--font-ui)' }}>{s.message}</span>
+      {hover ? (
+        <span style={{ display: 'flex', gap: 8, fontSize: 11.5 }}>
+          {link('restore', 'Bring the changes back and delete the stash', () => onApply(true))}
+          {link('apply', 'Bring the changes back and keep the stash', () => onApply(false))}
+          {link('×', 'Delete the stash', onDrop, true)}
+        </span>
+      ) : (
+        <span style={{ color: 'var(--t4)' }}>
+          {plural(s.files.length, 'file')} · {timeAgo(s.at)}
+        </span>
+      )}
     </div>
   )
 }

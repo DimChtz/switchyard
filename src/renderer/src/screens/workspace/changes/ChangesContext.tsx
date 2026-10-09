@@ -11,7 +11,7 @@ import { baseOf } from '../../../lib/stack'
 import { plural } from '../../../lib/summary'
 import { setLayout, showInWorkspace, wsOpen } from '../../../lib/wsStore'
 import { closeWhere } from '../../../lib/wsLayout'
-import type { DiffLine, DiffScope, FileDiff, Project, ReviewComment, SyncState, Task } from '@shared/types'
+import type { DiffLine, DiffScope, FileDiff, Project, ReviewComment, StashEntry, SyncState, Task } from '@shared/types'
 
 /** Each task's scope while the app runs (the Changes view comes and goes with the side bar). */
 const scopes = new Map<string, DiffScope>()
@@ -88,6 +88,13 @@ export interface ChangesApi {
   resolveFile: (path: string, how: 'as-is' | 'mine' | 'theirs') => Promise<void>
   /** Asks the agent to resolve the conflicts (it doesn't continue the merge/rebase: that's yours). */
   askToResolve: () => void
+  /** Changes put aside on this task's branch (the home repository's). */
+  stashes: StashEntry[]
+  /** Puts the uncommitted changes aside: all of them, or the picked files when only some are. */
+  stash: () => void
+  /** A stash's changes back into the worktree; `pop` drops it after. */
+  applyStash: (s: StashEntry, pop: boolean) => void
+  dropStash: (s: StashEntry) => void
   /** The repository a task file is in, and its path there. */
   repoOf: (path: string) => { path: string; rel: string } | null
   /** One commit's changes in Changes (and a file's diff in it). */
@@ -161,6 +168,7 @@ export function ChangesProvider({ task, project, root, children }: { task: Task;
   const [skips, setSkips] = useState<Record<string, { lines: DiffLine[]; sig: string; skip: Set<number> }>>({})
   const [behind, setBehind] = useState(0)
   const [commitSubject, setCommitSubject] = useState<string | null>(null)
+  const [stashes, setStashes] = useState<StashEntry[]>([])
   const [sync, setSync] = useState<RepoSync | null>(null)
   const [syncing, setSyncing] = useState(false)
 
@@ -204,6 +212,12 @@ export function ChangesProvider({ task, project, root, children }: { task: Task;
         })
         .then(setCommits)
         .catch(() => setCommits([]))
+    // Its stashes: every worktree of a repository shares them - this branch's are the task's.
+    if (home?.path)
+      window.api.git
+        .stashList(home.path, task.branch ?? undefined)
+        .then(setStashes)
+        .catch(() => setStashes([]))
     // A merge or rebase stopped half-way on conflicts, in any of its repositories.
     Promise.all(checkouts.map((c) => window.api.git.syncState(c.path!).then((s) => (s ? { ...s, repo: c.path!, dir: c.dir ?? '' } : null)).catch(() => null))).then((all) =>
       setSync(all.find((s) => s) ?? null)
@@ -452,6 +466,49 @@ export function ChangesProvider({ task, project, root, children }: { task: Task;
     }
     refresh()
   }
+  // ── Stash ──
+  const stash = async (): Promise<void> => {
+    const home = checkouts[0]
+    if (!home?.path) return
+    if (busyAgent) return dispatch({ type: 'TOAST', text: `${agent} is working in this worktree - stashing would pull its files from under it.` })
+    // Some files ticked: just those (in the home repository).
+    const picked = uncommitted.filter((f) => pickState(f) !== 'none')
+    const some = picked.length < uncommitted.length
+    const paths = some ? picked.flatMap((f) => inRepo(f.path)?.path === home.path ? [inRepo(f.path)!.rel, ...(f.oldPath ? [inRepo(f.oldPath)?.rel ?? f.oldPath] : [])] : []) : undefined
+    if (some && !paths?.length) return
+    try {
+      await window.api.git.stashPush(home.path, commitMsg.trim() || `${task.key}: work in progress`, paths)
+      dispatch({ type: 'TOAST', text: `Stashed ${some ? plural(picked.length, 'file') : 'the uncommitted changes'} - bring them back from Stashed in Changes.` })
+      setCommitMsg('')
+    } catch (err) {
+      dispatch({ type: 'TOAST', text: `Could not stash: ${errText(err)}` })
+    }
+    refresh()
+  }
+  const applyStash = async (s: StashEntry, pop: boolean): Promise<void> => {
+    const home = checkouts[0]
+    if (!home?.path) return
+    try {
+      await window.api.git.stashApply(home.path, s.ref, pop)
+      dispatch({ type: 'TOAST', text: pop ? `Brought back “${s.message}”.` : `Applied “${s.message}” - the stash is kept.` })
+    } catch (err) {
+      dispatch({ type: 'TOAST', text: `Could not apply the stash: ${errText(err)}` })
+    }
+    refresh()
+  }
+  const dropStash = async (s: StashEntry): Promise<void> => {
+    const home = checkouts[0]
+    if (!home?.path) return
+    const ok = await confirm({ title: `Delete the stash “${s.message}”?`, body: `Its changes to ${plural(s.files.length, 'file')} are gone for good.`, detail: s.files.slice(0, 8).join('\n'), confirmLabel: 'Delete stash', danger: true })
+    if (!ok) return
+    try {
+      await window.api.git.stashDrop(home.path, s.ref)
+    } catch (err) {
+      dispatch({ type: 'TOAST', text: `Could not delete the stash: ${errText(err)}` })
+    }
+    refresh()
+  }
+
   const askToResolve = (): void => {
     if (!sync) return
     const list = sync.files.map((f) => f.path).join(', ')
@@ -600,6 +657,10 @@ export function ChangesProvider({ task, project, root, children }: { task: Task;
     abortSync,
     resolveFile,
     askToResolve,
+    stashes,
+    stash,
+    applyStash,
+    dropStash,
     repoOf: inRepo,
     commitSubject,
     showCommit: (sha, path, subject) => {

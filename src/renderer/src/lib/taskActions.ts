@@ -5,6 +5,7 @@ import { checkoutsOf, repoDir, taskRoot } from './multiRepo'
 import { errText } from './errors'
 import { choose, confirm, type MenuItem } from '../components/ui'
 import { baseOf, unmergedParent } from './stack'
+import { prepareWorktree } from './worktreePrep'
 
 type Dispatch = (action: Action) => void
 
@@ -289,7 +290,7 @@ export async function recreateWorktree(task: Task, project: Project, dispatch: D
   try {
     await window.api.git.pruneWorktrees(project.repoPath)
     await window.api.git.addWorktree(project.repoPath, task.worktreePath, task.branch, baseOf(task, project))
-    if (project.copyFiles?.length) await window.api.git.copyIntoWorktree(project.repoPath, task.worktreePath, project.copyFiles).catch(() => [])
+    await prepareWorktree(project, task.worktreePath)
     dispatch({ type: 'TOAST', text: `Recreated ${task.key}'s worktree on ${task.branch}.`, tone: 'done' })
     return true
   } catch (err) {
@@ -406,7 +407,7 @@ export async function attachRepo(task: Task, repo: Project, projects: Project[],
     await window.api.git.createBranch(repo.repoPath, branch, baseOf(task, repo))
     const path = joinPath(taskDir, repoDir(repo))
     await window.api.git.addWorktree(repo.repoPath, path, branch)
-    if (repo.copyFiles?.length) await window.api.git.copyIntoWorktree(repo.repoPath, path, repo.copyFiles).catch(() => [])
+    await prepareWorktree(repo, path)
     dispatch({ type: 'SET_TASK_REPOS', taskId: task.id, repos, taskDir, worktreePath: homePath })
 
     const tell = `I attached ${repo.name} at ./${repoDir(repo)}, on ${branch} too${restart ? `, and moved ${home.name} to ./${repoDir(home)}` : ''}. Change it if the task needs it.`

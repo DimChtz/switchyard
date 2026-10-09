@@ -23,7 +23,7 @@ interface Made {
 import { AGENTS } from '@shared/constants'
 import { errText } from '../lib/errors'
 import { inParens, setUserBindings } from '../lib/shortcuts'
-import { clock, waitingText, wakeAt } from '../lib/status'
+import { clock, needsYou, waitingText, wakeAt } from '../lib/status'
 import { prefsFor } from '../lib/projectPrefs'
 import { discoverPr, finishWithPr } from '../lib/taskActions'
 import { adoptShell, closeNoteTabs, renameNoteTabs, shellsOf } from '../lib/wsStore'
@@ -31,6 +31,7 @@ import { baseFor, parentFinished } from '@shared/stack'
 import { isStarted } from '@shared/scratch'
 import { dueForArchive } from '../lib/boardPrefs'
 import { knowTasks } from '../lib/stack'
+import { prepareWorktree, preparedList } from '../lib/worktreePrep'
 
 interface Ctx {
   state: AppState
@@ -103,7 +104,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }): R
       if (action.type === 'AGENT_STATUS' && task.st === 'working' && task.col !== 'done') {
         const u = action.update
         if (u.st === 'failed') addNotice({ ...base, kind: 'failed', text: `${name} failed`, detail: u.ask ?? null })
-        else if (u.st === 'waiting')
+        else if (u.st === 'waiting' && needsYou({ ...u, scratch: task.scratch }))
           addNotice({ ...base, kind: u.askKind === 'permission' ? 'permission' : 'waiting', text: `${name} ${waitingText(u.askKind, u.ask)}`, detail: u.ask ?? u.activity ?? null })
         else if (u.st === 'done') addNotice({ ...base, kind: 'done', text: `${name} finished - ready for review`, detail: null })
       } else if (action.type === 'TESTS_FINISHED')
@@ -119,7 +120,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }): R
       const name = AGENTS.find((a) => a.kind === task.agentKind)?.name ?? 'The agent'
       if (action.type === 'AGENT_STATUS' && task.st === 'working' && isStarted(task) && task.col !== 'done') {
         const u = action.update
-        if (s.prefs.notifyInput && (u.st === 'waiting' || u.st === 'failed')) {
+        if (s.prefs.notifyInput && needsYou({ ...u, scratch: task.scratch })) {
           const what = u.st === 'failed' ? 'failed' : waitingText(u.askKind, u.ask)
           // Answer right from the notification: approve or deny a permission, retry a failure.
           const actions =
@@ -719,15 +720,12 @@ ${u.ask}` : ''}`, task.id, actions)
         })
       case 1: // Add worktree, and copy in the untracked files it needs (.env, keys).
         return once(async () => {
-          const copyInto = async (p: Project, path: string, prefix: string): Promise<string[]> =>
-            p.copyFiles?.length
-              ? (
-                  await window.api.git.copyIntoWorktree(p.repoPath, path, p.copyFiles).catch((err: unknown) => {
-                    dispatch({ type: 'TOAST', text: `Could not copy files into the worktree: ${errText(err)}` })
-                    return [] as string[]
-                  })
-                ).map((f) => prefix + f)
-              : []
+          // Its untracked files (.env, keys) and, when the project shares them, its dependencies.
+          const copyInto = async (p: Project, path: string, prefix: string): Promise<string[]> => {
+            const r = await prepareWorktree(p, path)
+            if (r.error) dispatch({ type: 'TOAST', text: r.error })
+            return preparedList(r, prefix)
+          }
           if (!extras.length) {
             const path = await window.api.git.suggestWorktreePath(project.repoPath, start.branch)
             await window.api.git.addWorktree(project.repoPath, path, start.branch)

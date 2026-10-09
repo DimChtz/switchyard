@@ -3,6 +3,7 @@ import { nextTaskKey } from './derive'
 import { errText } from './errors'
 import type { Action } from '../store/types'
 import type { AgentKind, BoardColumn, OutsideItem, OutsideSession, Project, Task } from '@shared/types'
+import { prepareWorktree } from './worktreePrep'
 
 /**
  * Bringing in work done outside Switchyard (see main's outside service): a
@@ -195,7 +196,7 @@ export async function bringIn(
     if (item.kind === 'branch') {
       path = await window.api.git.suggestWorktreePath(project.repoPath, branch)
       await window.api.git.addWorktree(project.repoPath, path, branch)
-      if (project.copyFiles?.length) await window.api.git.copyIntoWorktree(project.repoPath, path, project.copyFiles).catch(() => [])
+      await prepareWorktree(project, path)
     }
     const col = opts.col === 'review' ? 'review' : 'progress'
     // Its conversation, to resume exactly it (the agent's own resume otherwise).

@@ -37,6 +37,9 @@ import type {
   SyncState,
   Blame,
   FileCommit,
+  StashEntry,
+  DepShare,
+  OpenPr,
   FileDiff,
   FileEntry,
   CheckoutFiles,
@@ -223,6 +226,15 @@ const api = {
       ipcRenderer.invoke(IPC.gitDiffStat, worktreePath, baseBranch),
     /** Brings the branch up to date with the base. `keepConflicts`: on conflicts, leave them to resolve (else it backs out). */
     rebase: (worktreePath: string, baseBranch: string, keepConflicts?: boolean): Promise<void> => ipcRenderer.invoke(IPC.gitRebase, worktreePath, baseBranch, keepConflicts),
+    /** The main checkout's installed dependencies into a new worktree (see shareDependencies). */
+    shareDeps: (repoPath: string, worktreePath: string, folders: string[]): Promise<DepShare[]> => ipcRenderer.invoke(IPC.gitShareDeps, repoPath, worktreePath, folders),
+    /** The repository's open pull requests (GitHub CLI). */
+    openPrs: (repoPath: string): Promise<OpenPr[]> => ipcRenderer.invoke(IPC.gitOpenPrs, repoPath),
+    /** The stashes - only a branch's, given one. */
+    stashList: (worktreePath: string, branch?: string): Promise<StashEntry[]> => ipcRenderer.invoke(IPC.gitStashList, worktreePath, branch),
+    stashPush: (worktreePath: string, message: string, paths?: string[]): Promise<void> => ipcRenderer.invoke(IPC.gitStashPush, worktreePath, message, paths),
+    stashApply: (worktreePath: string, ref: string, pop: boolean): Promise<void> => ipcRenderer.invoke(IPC.gitStashApply, worktreePath, ref, pop),
+    stashDrop: (worktreePath: string, ref: string): Promise<void> => ipcRenderer.invoke(IPC.gitStashDrop, worktreePath, ref),
     fileHistory: (worktreePath: string, path: string): Promise<FileCommit[]> => ipcRenderer.invoke(IPC.gitFileHistory, worktreePath, path),
     blame: (worktreePath: string, path: string): Promise<Blame> => ipcRenderer.invoke(IPC.gitBlame, worktreePath, path),
     syncState: (worktreePath: string): Promise<SyncState | null> => ipcRenderer.invoke(IPC.gitSyncState, worktreePath),
@@ -367,6 +379,10 @@ const api = {
     copy: (text: string): void => ipcRenderer.send(IPC.sysCopy, text),
     openExternal: (url: string): Promise<void> => ipcRenderer.invoke(IPC.sysOpenExternal, url),
     notify: (title: string, body: string, taskId: string | null, actions?: NotifyAction[]): void => ipcRenderer.send(IPC.sysNotify, title, body, taskId, actions),
+    /** A notice to the phone or chat set in Settings (main decides: its kinds, only while you're away). */
+    push: (n: Pick<Notice, 'kind' | 'taskKey' | 'taskTitle' | 'text' | 'detail'>): void => ipcRenderer.send(IPC.sysPush, n),
+    /** A test notification there; rejects with why when it doesn't get through. */
+    pushTest: (): Promise<void> => ipcRenderer.invoke(IPC.sysPushTest),
     /** A notification's button was clicked (see notify's `actions`). */
     onNotifyAction: (cb: (taskId: string, actionId: string) => void): (() => void) => {
       const handler = (_e: Electron.IpcRendererEvent, taskId: string, actionId: string): void => cb(taskId, actionId)

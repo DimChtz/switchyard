@@ -48,6 +48,16 @@ export function statusLabel(s: AgentStatus | AskState): string {
   return STATUS_LABEL[t.st]
 }
 
+/**
+ * Waiting on you: failed, asking for approval, asking a question, or done with its turn. Except a
+ * scratchpad's agent idle at its prompt - it's there to use when you want it, not asking for anything.
+ */
+export function needsYou(t: { st?: AgentStatus | null; askKind?: AskState['askKind']; ask?: string | null; scratch?: boolean }): boolean {
+  if (t.st === 'failed') return true
+  if (t.st !== 'waiting') return false
+  return !t.scratch || t.askKind === 'permission' || !!t.ask
+}
+
 /** What a waiting agent wants, as a sentence after its name ("Claude Code finished its turn"). */
 export function waitingText(askKind: AskState['askKind'], ask: string | null | undefined): string {
   return askKind === 'permission' ? 'needs your approval' : ask ? 'has a question' : 'finished its turn'

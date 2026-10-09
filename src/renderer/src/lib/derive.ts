@@ -1,3 +1,4 @@
+import { needsYou } from './status'
 import type { AppState } from '../store/types'
 import type { AgentKind, Project, Task } from '@shared/types'
 import { AGENTS, staleReason } from '@shared/constants'
@@ -59,7 +60,7 @@ export function liveTasks(state: AppState): Task[] {
 
 export function blockedTasks(state: AppState): Task[] {
   return state.tasks
-    .filter((t) => t.st === 'waiting' || t.st === 'failed')
+    .filter(needsYou)
     .sort((a, b) => a.lastActivityAt - b.lastActivityAt)
 }
 

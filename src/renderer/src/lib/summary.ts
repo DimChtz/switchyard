@@ -1,3 +1,4 @@
+import { needsYou } from './status'
 import { AGENTS, COLUMN_LABEL } from '@shared/constants'
 import { costOf, dayOf, formatCost, type ModelPrice, type UsageEntry } from '@shared/usage'
 import { parentFinished, parentOf } from '@shared/stack'
@@ -190,7 +191,7 @@ export function buildSummary(input: {
     if (t.sleeping) attention.push({ task: t, why: `${agent} hit a usage limit${t.sleeping.until ? ` - back at ${new Date(t.sleeping.until).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}` : ''}`, since: t.sleeping.since, tone: 'blue' })
     else if (t.st === 'failed') attention.push({ task: t, why: `${agent} failed${t.ask ? `: ${t.ask}` : ''}`, since: t.lastActivityAt, tone: 'red' })
     else if (t.st === 'waiting' && t.askKind === 'permission') attention.push({ task: t, why: `${agent} needs your approval${t.ask ? `: ${t.ask}` : ''}`, since: t.lastActivityAt, tone: 'amber' })
-    else if (t.st === 'waiting' && t.col === 'progress') attention.push({ task: t, why: t.ask ? `${agent} asks: ${gist(t.ask, 140)}` : t.activity ? `${agent} finished its turn: ${gist(t.activity, 140)}` : `${agent} finished its turn - the next message is yours`, since: t.lastActivityAt, tone: 'amber' })
+    else if (t.st === 'waiting' && t.col === 'progress' && needsYou(t)) attention.push({ task: t, why: t.ask ? `${agent} asks: ${gist(t.ask, 140)}` : t.activity ? `${agent} finished its turn: ${gist(t.activity, 140)}` : `${agent} finished its turn - the next message is yours`, since: t.lastActivityAt, tone: 'amber' })
     const c = clashes.get(t.id)
     if (c) attention.push({ task: t, why: `Its changes clash with ${[...new Set(c)].join(', ')}`, tone: 'red' })
   }

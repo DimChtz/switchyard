@@ -31,6 +31,7 @@ import { Team } from './screens/Team'
 import { Inbox } from './screens/Inbox'
 import { Summary } from './screens/Summary'
 import { RepoMap } from './screens/RepoMap'
+import { PullRequests } from './screens/PullRequests'
 import { useSummaryAnnouncement } from './lib/activity'
 import { AGENTS, COLUMN_ORDER } from '@shared/constants'
 import { inProject } from './lib/multiRepo'
@@ -237,6 +238,7 @@ function Shell(): React.JSX.Element {
           {state.view === 'inbox' ? <Inbox /> : null}
           {state.view === 'summary' ? <Summary /> : null}
           {state.view === 'map' ? <RepoMap /> : null}
+          {state.view === 'prs' ? <PullRequests /> : null}
           </ErrorBoundary>
         </div>
       </div>

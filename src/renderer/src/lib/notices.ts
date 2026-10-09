@@ -35,6 +35,8 @@ export function addNotice(n: Omit<Notice, 'id' | 'at' | 'read'>): void {
   notices = [{ ...n, id: `${at}-${Math.random().toString(36).slice(2, 8)}`, at, read: false }, ...notices].slice(0, MAX)
   emit()
   save()
+  // To the phone or chat too, when one is set (main picks the kinds, and whether you're away).
+  window.api.sys.push({ kind: n.kind, taskKey: n.taskKey, taskTitle: n.taskTitle, text: n.text, detail: n.detail ?? null })
 }
 
 export function markRead(ids?: string[]): void {

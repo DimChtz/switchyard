@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { execFileSync } from 'child_process'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'fs'
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, symlinkSync, writeFileSync, existsSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
@@ -36,7 +36,14 @@ import {
   takeSide,
   abortSync,
   fileHistory,
-  blame
+  blame,
+  copyIntoWorktree,
+  matchPaths,
+  stashList,
+  stashPush,
+  stashApply,
+  stashDrop,
+  shareDependencies
 } from './git'
 
 let dir = ''
@@ -203,6 +210,107 @@ describe('the Changes diff', () => {
     writeFileSync(join(r, 'added.txt'), 'x\n')
     await revertFile(r, 'main', 'branch', 'added.txt')
     expect(existsSync(join(r, 'added.txt'))).toBe(false)
+  })
+})
+
+describe('shared dependencies', () => {
+  function withDeps(): { r: string; wt: string } {
+    const r = repo()
+    writeFileSync(join(r, '.gitignore'), 'node_modules/\n')
+    writeFileSync(join(r, 'package-lock.json'), '{"v":1}\n')
+    git(r, 'add', '-A')
+    git(r, 'commit', '-qm', 'lock')
+    mkdirSync(join(r, 'node_modules', 'pkg'), { recursive: true })
+    writeFileSync(join(r, 'node_modules', 'pkg', 'index.js'), 'module.exports = 1\n')
+    const wt = join(dir, 'wt')
+    git(r, 'worktree', 'add', '-q', '-b', 'task', wt)
+    return { r, wt }
+  }
+
+  it('copies them when the lockfile matches, and not when it differs', async () => {
+    const { r, wt } = withDeps()
+    expect(await shareDependencies(r, wt, ['node_modules'])).toEqual([{ folder: 'node_modules', how: 'copied' }])
+    expect(readFileSync(join(wt, 'node_modules', 'pkg', 'index.js'), 'utf-8')).toBe('module.exports = 1\n')
+    expect(await shareDependencies(r, wt, ['node_modules'])).toEqual([{ folder: 'node_modules', how: 'skipped', why: 'the worktree has one' }])
+    const wt2 = join(dir, 'wt2')
+    git(r, 'worktree', 'add', '-q', '-b', 'other', wt2)
+    writeFileSync(join(wt2, 'package-lock.json'), '{"v":2}\n')
+    expect(await shareDependencies(r, wt2, ['node_modules'])).toEqual([{ folder: 'node_modules', how: 'skipped', why: 'package-lock.json differs' }])
+  })
+
+  it('never lets removing the worktree reach the checkout’s folder through a link (pnpm)', async () => {
+    const { r, wt } = withDeps()
+    // As pnpm lays it out: node_modules/pkg-alias → an absolute link to node_modules/pkg.
+    symlinkSync(join(r, 'node_modules', 'pkg'), join(r, 'node_modules', 'pkg-alias'), process.platform === 'win32' ? 'junction' : 'dir')
+    const shared = await shareDependencies(r, wt, ['node_modules'])
+    if (process.platform === 'win32') {
+      // Junctions: git can't remove them cleanly with the worktree - no copy, it installs.
+      expect(shared).toEqual([{ folder: 'node_modules', how: 'skipped', why: 'it has links into itself (pnpm) - it installs instead' }])
+      expect(existsSync(join(wt, 'node_modules'))).toBe(false)
+    } else {
+      expect(shared).toEqual([{ folder: 'node_modules', how: 'copied' }])
+      // The link points at the copy, not the checkout.
+      expect(realpathSync(join(wt, 'node_modules', 'pkg-alias'))).toBe(realpathSync(join(wt, 'node_modules', 'pkg')))
+    }
+    expect(git(wt, 'status', '--porcelain')).toBe('')
+    git(r, 'worktree', 'remove', '--force', wt)
+    expect(existsSync(join(r, 'node_modules', 'pkg', 'index.js'))).toBe(true)
+  })
+})
+
+describe('stash', () => {
+  it('puts changes aside (new files too) and brings them back, per branch', async () => {
+    const r = repo()
+    git(r, 'checkout', '-qb', 'task')
+    writeFileSync(join(r, 'a.txt'), 'changed\n')
+    writeFileSync(join(r, 'new.txt'), 'new\n')
+    await stashPush(r, 'half done')
+    expect(git(r, 'status', '--porcelain')).toBe('')
+    const list = await stashList(r)
+    expect(list.map((s) => [s.ref, s.branch, s.message, s.files.sort()])).toEqual([['stash@{0}', 'task', 'half done', ['a.txt', 'new.txt']]])
+    await stashApply(r, 'stash@{0}', true)
+    expect(readFileSync(join(r, 'new.txt'), 'utf-8')).toBe('new\n')
+    expect(await stashList(r)).toEqual([])
+    // Just some paths; then dropped.
+    await stashPush(r, 'only a', ['a.txt'])
+    expect(existsSync(join(r, 'new.txt'))).toBe(true)
+    await stashDrop(r, 'stash@{0}')
+    expect(readFileSync(join(r, 'a.txt'), 'utf-8')).toBe('one\ntwo\n')
+    await expect(stashApply(r, '--evil', false)).rejects.toThrow('Not a stash')
+  })
+
+  it('keeps to a branch’s own stashes - a branch with a slash in its name too', async () => {
+    const r = repo()
+    writeFileSync(join(r, 'a.txt'), 'on main\n')
+    await stashPush(r, 'main work')
+    git(r, 'checkout', '-qb', 'feature/x')
+    writeFileSync(join(r, 'b.txt'), 'b\n')
+    git(r, 'add', '-A')
+    git(r, 'commit', '-qm', 'b')
+    writeFileSync(join(r, 'a.txt'), 'on feature\n')
+    await stashPush(r, 'feature work')
+    expect((await stashList(r, 'feature/x')).map((s) => s.message)).toEqual(['feature work'])
+    expect((await stashList(r, 'main')).map((s) => s.message)).toEqual(['main work'])
+    expect((await stashList(r)).length).toBe(2)
+  })
+})
+
+describe('files copied into new worktrees', () => {
+  it('matches patterns in any part, and ** across folders - never overwriting', async () => {
+    const main = join(dir, 'main')
+    const wt = join(dir, 'wt')
+    for (const f of ['.env', 'apps/web/.env', 'apps/api/.env', 'apps/api/.env.local', 'config/master.key', 'node_modules/x/.env', 'deep/a/b/.env.local']) {
+      mkdirSync(join(main, f, '..'), { recursive: true })
+      writeFileSync(join(main, f), f)
+    }
+    mkdirSync(wt)
+    writeFileSync(join(wt, '.env'), 'mine')
+    const copied = await copyIntoWorktree(main, wt, ['.env', 'apps/*/.env', '**/.env.local', 'config/*.key', 'missing.txt'])
+    expect(copied.sort()).toEqual(['apps/api/.env', 'apps/api/.env.local', 'apps/web/.env', 'config/master.key', 'deep/a/b/.env.local'])
+    // Already there: left as it is.
+    expect(readFileSync(join(wt, '.env'), 'utf-8')).toBe('mine')
+    expect(await matchPaths(main, '../outside')).toEqual([])
+    expect(await matchPaths(main, '**/.env')).not.toContain('node_modules/x/.env')
   })
 })
 

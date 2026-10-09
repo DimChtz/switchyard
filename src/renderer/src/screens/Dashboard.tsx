@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { plural } from '../lib/summary'
 import { useAppStore } from '../store/AppStore'
 import { useHover } from '../lib/useHover'
-import { statusColor, statusLabel, timeAgo } from '../lib/status'
+import { needsYou, statusColor, statusLabel, timeAgo } from '../lib/status'
 import { agentShort, tasksForProject, staleWorktrees } from '../lib/derive'
 import { useRealWorktrees } from '../lib/realGit'
 import { askText } from '../lib/agentControl'
@@ -57,7 +57,7 @@ function ProjectRow({ projectId, worktreeCount }: { projectId: string; worktreeC
   const tasks = tasksForProject(state, projectId)
   const live = tasks.filter((t) => t.st === 'working' || t.st === 'waiting' || t.st === 'failed')
   const open = tasks.filter((t) => t.col !== 'done')
-  const needs = tasks.filter((t) => t.st === 'waiting' || t.st === 'failed')
+  const needs = tasks.filter(needsYou)
   const latest = tasks.slice().sort((a, b) => b.lastActivityAt - a.lastActivityAt)[0]
   const ctx = useContextMenu(() => projectMenuItems(project, state.tasks, dispatch, { muted: state.prefs.mutedProjects }))
 
@@ -141,7 +141,7 @@ export function Dashboard(): React.JSX.Element {
   const { data: allWorktrees } = useRealWorktrees(state.projects, state.tasks, 0)
   const stale = useMemo(() => staleWorktrees(allWorktrees, state.prefs.staleDays), [allWorktrees, state.prefs.staleDays])
   const needs = state.tasks
-    .filter((t) => t.st === 'waiting' || t.st === 'failed')
+    .filter(needsYou)
     .sort((a, b) => a.lastActivityAt - b.lastActivityAt)
     .slice(0, 3)
   const totalAgents = state.tasks.filter((t) => t.st === 'working' || t.st === 'waiting' || t.st === 'failed').length

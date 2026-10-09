@@ -1,16 +1,16 @@
 import { gitAt, gitArgs, gitEnv, gitFailure, gitYes, newestBase } from './gitEnv'
-import { basename, dirname, isAbsolute, join } from 'path'
-import { promises as fs } from 'fs'
+import { basename, dirname, isAbsolute, join, relative } from 'path'
+import { constants as fsConstants, promises as fs } from 'fs'
 import { tmpdir } from 'os'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
 import { getPrefs } from './store'
 import { log } from './log'
 import { expandPath } from './repos'
-import { toPrDetails } from '@shared/pr'
+import { OPEN_PR_FIELDS, toOpenPr, toPrDetails } from '@shared/pr'
 import { samePath } from './paths'
 import type { PrDetails } from '@shared/types'
-import type { BranchInfo, BranchResult, Blame, FileCommit, FileDiff, DiffLine, DiffOptions, DiffScope, DiffStat, SyncState, GitWorktreeInfo, Issue, PullRequest, RemoteInfo, RepoInfo, WorktreeStatus } from '@shared/types'
+import type { BranchInfo, BranchResult, Blame, DepShare, OpenPr, StashEntry, FileCommit, FileDiff, DiffLine, DiffOptions, DiffScope, DiffStat, SyncState, GitWorktreeInfo, Issue, PullRequest, RemoteInfo, RepoInfo, WorktreeStatus } from '@shared/types'
 
 /**
  * Where a task's worktree goes: a .worktrees folder inside the repository,
@@ -829,6 +829,64 @@ export async function rebaseOnto(worktreePath: string, baseBranch: string, keepC
   }
 }
 
+// ── Stash ───────────────────────────────────────────────────────────
+
+/**
+ * The repository's stashes, newest first, each with the branch it was made on. (Every worktree
+ * of a repository shares them - the window shows a task the ones from its branch.)
+ */
+export async function stashList(worktreePath: string, branch?: string): Promise<StashEntry[]> {
+  const raw = await gitAt(worktreePath)
+    .raw(['stash', 'list', '--format=%gd%x1f%gs%x1f%ct%x1f%P'])
+    .catch(() => '')
+  const out: StashEntry[] = []
+  for (const line of raw.split('\n').filter(Boolean)) {
+    const [ref, subject, ct, parents] = line.split('\x1f')
+    // "On feature/x: my message" (with a message) or "WIP on feature/x: abc123 last commit".
+    // (Some gits name only the branch's last part: "On x:" for feature/x.)
+    const m = subject.match(/^(?:WIP on|On) ([^:]+): (.*)$/)
+    if (branch) {
+      const named = m?.[1] ?? ''
+      if (named !== branch && named !== branch.split('/').pop()) continue
+      // Made on a commit of this branch - not another branch of the same last name.
+      const base = (parents ?? '').split(' ')[0]
+      if (base && !(await gitYes(worktreePath, ['merge-base', '--is-ancestor', base, branch]).catch(() => false))) continue
+    }
+    // Its changed files, and its new ones (kept in a third parent - any git has that).
+    const changed = await gitAt(worktreePath).raw(['stash', 'show', '--name-only', ref]).catch(() => '')
+    const added = await gitAt(worktreePath).raw(['ls-tree', '-r', '--name-only', `${ref}^3`]).catch(() => '')
+    const files = [...new Set(`${changed}\n${added}`.split('\n').filter(Boolean))]
+    out.push({ ref, branch: m?.[1] ?? '', message: m?.[2] ?? subject, at: Number(ct) * 1000, files })
+  }
+  return out
+}
+
+/** Puts uncommitted changes aside (new files too): all of them, or these paths'. */
+export async function stashPush(worktreePath: string, message: string, paths?: string[]): Promise<void> {
+  const args = ['stash', 'push', '--include-untracked', '-m', message || 'Stashed in Switchyard']
+  try {
+    await gitAt(worktreePath).raw(paths?.length ? [...args, '--', ...paths] : args)
+  } catch (err) {
+    throw new Error(gitFailure(err, 'git stash failed'), { cause: err })
+  }
+}
+
+/** Brings a stash's changes back into the worktree - and drops it (`pop`), unless they clash. */
+export async function stashApply(worktreePath: string, ref: string, pop: boolean): Promise<void> {
+  if (!/^stash@\{\d+\}$/.test(ref)) throw new Error('Not a stash.')
+  try {
+    await gitAt(worktreePath).raw(['stash', pop ? 'pop' : 'apply', ref])
+  } catch (err) {
+    const msg = gitFailure(err, 'git stash apply failed')
+    throw new Error(/conflict/i.test(msg) ? `Its changes clash with the worktree's - they're applied with conflict markers to resolve${pop ? ', and the stash is kept' : ''}. (${msg})` : msg, { cause: err })
+  }
+}
+
+export async function stashDrop(worktreePath: string, ref: string): Promise<void> {
+  if (!/^stash@\{\d+\}$/.test(ref)) throw new Error('Not a stash.')
+  await gitAt(worktreePath).raw(['stash', 'drop', ref])
+}
+
 // ── A file's history ────────────────────────────────────────────────
 
 /** The commits that changed a file, newest first (across moves). */
@@ -1201,6 +1259,19 @@ function ghError(err: unknown): string {
   return (e.stderr || e.message || String(err)).trim().split('\n').pop() ?? 'gh failed'
 }
 
+/** The repository's open pull requests (all of them, not only Switchyard's), via the GitHub CLI. */
+export async function openPrs(repoPath: string): Promise<OpenPr[]> {
+  const remote = await remoteInfo(repoPath)
+  if (!remote?.github) throw new Error("Its origin isn't on GitHub.")
+  if (!(await hasGh())) throw new Error('Needs the GitHub CLI - install it and run `gh auth login`.')
+  try {
+    const out = await gh(['pr', 'list', '--state', 'open', '--limit', '50', '--json', OPEN_PR_FIELDS], repoPath)
+    return (JSON.parse(out || '[]') as Parameters<typeof toOpenPr>[0][]).map(toOpenPr)
+  } catch (err) {
+    throw new Error(ghError(err), { cause: err })
+  }
+}
+
 /** Open issues of the project's GitHub repository, via the GitHub CLI. */
 export async function listIssues(repoPath: string): Promise<Issue[]> {
   const remote = await remoteInfo(repoPath)
@@ -1376,24 +1447,9 @@ async function dropWorktree(repoPath: string, worktreePath: string): Promise<voi
 export async function copyIntoWorktree(repoPath: string, worktreePath: string, paths: string[]): Promise<string[]> {
   const copied: string[] = []
   for (const raw of paths) {
-    const rel = raw.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '')
-    if (!rel || rel.split('/').includes('..')) continue
-    const parts = rel.split('/')
-    const last = parts.pop()!
-    const dir = parts.join('/')
-    let names = [last]
-    if (last.includes('*')) {
-      const re = new RegExp('^' + last.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$')
-      names = (await fs.readdir(join(repoPath, dir)).catch(() => [] as string[])).filter((n) => re.test(n))
-    }
-    for (const name of names) {
-      const from = join(repoPath, dir, name)
-      const to = join(worktreePath, dir, name)
-      try {
-        await fs.access(from)
-      } catch {
-        continue
-      }
+    for (const rel of await matchPaths(repoPath, raw)) {
+      const from = join(repoPath, rel)
+      const to = join(worktreePath, rel)
       try {
         await fs.access(to)
         continue // already there (tracked, or copied before)
@@ -1401,10 +1457,148 @@ export async function copyIntoWorktree(repoPath: string, worktreePath: string, p
         // not there yet
       }
       await fs.cp(from, to, { recursive: true, errorOnExist: false, force: false })
-      copied.push(dir ? `${dir}/${name}` : name)
+      copied.push(rel)
     }
   }
   return copied
+}
+
+/** Lockfiles: a dependency folder is only shared where the worktree's says the same as the checkout's. */
+const LOCKFILES = ['package-lock.json', 'npm-shrinkwrap.json', 'pnpm-lock.yaml', 'yarn.lock', 'bun.lock', 'bun.lockb', 'Pipfile.lock', 'poetry.lock', 'uv.lock', 'Gemfile.lock', 'composer.lock', 'Cargo.lock', 'go.sum']
+
+/**
+ * Gives a new worktree the main checkout's installed dependencies (node_modules and the like),
+ * so a task doesn't wait for a full install: a copy - copy-on-write where the disk can (APFS,
+ * btrfs), so it's quick and takes no room until something changes; a plain copy elsewhere.
+ * Only where a lockfile next to the folder is the same in both - a branch with other
+ * dependencies installs its own. Never over a folder the worktree has.
+ *
+ * (Never a link to the checkout's folder: removing the worktree - git, or `npm ci`, or an
+ * agent's rm -rf - can go through a link, a Windows junction especially, and delete the
+ * checkout's own.)
+ */
+export async function shareDependencies(repoPath: string, worktreePath: string, folders: string[]): Promise<DepShare[]> {
+  const out: DepShare[] = []
+  for (const pattern of folders) {
+    for (const rel of await matchPaths(repoPath, pattern)) {
+      const from = join(repoPath, rel)
+      const to = join(worktreePath, rel)
+      if (!(await fs.stat(from).catch(() => null))?.isDirectory()) continue
+      if (await fs.lstat(to).catch(() => null)) {
+        out.push({ folder: rel, how: 'skipped', why: 'the worktree has one' })
+        continue
+      }
+      // Same dependencies? A lockfile beside the folder, the same in both.
+      const parent = rel.includes('/') ? rel.slice(0, rel.lastIndexOf('/')) : ''
+      let lock: string | null = null
+      let same = false
+      for (const name of LOCKFILES) {
+        const a = await fs.readFile(join(repoPath, parent, name)).catch(() => null)
+        if (!a) continue
+        lock = name
+        const b = await fs.readFile(join(worktreePath, parent, name)).catch(() => null)
+        same = !!b && a.equals(b)
+        break
+      }
+      if (!lock) {
+        out.push({ folder: rel, how: 'skipped', why: 'no lockfile to compare' })
+        continue
+      }
+      if (!same) {
+        out.push({ folder: rel, how: 'skipped', why: `${lock} differs` })
+        continue
+      }
+      await fs.mkdir(join(to, '..'), { recursive: true })
+      if (await copyTree(from, to)) out.push({ folder: rel, how: 'copied' })
+      else out.push({ folder: rel, how: 'skipped', why: 'it has links into itself (pnpm) - it installs instead' })
+    }
+  }
+  return out
+}
+
+/**
+ * A folder copied (copy-on-write where it can). Links inside it that are relative come along as
+ * they are; one with an absolute target would still point into the original - removing the copy
+ * could then delete through it - so it's pointed at the copy's own file instead, and one leading
+ * outside the folder is left out. On Windows those are junctions (pnpm's), which git can't
+ * remove cleanly with the worktree: there the copy is given up (false), and it installs instead.
+ */
+async function copyTree(from: string, to: string): Promise<boolean> {
+  const absolute: { at: string; target: string }[] = []
+  await fs.cp(from, to, {
+    recursive: true,
+    force: false,
+    errorOnExist: false,
+    verbatimSymlinks: true,
+    mode: fsConstants.COPYFILE_FICLONE,
+    filter: async (src, dest) => {
+      const st = await fs.lstat(src).catch(() => null)
+      if (!st?.isSymbolicLink()) return true
+      const target = (await fs.readlink(src).catch(() => '')).replace(/^\\\\\?\\/, '')
+      if (!isAbsolute(target)) return true
+      absolute.push({ at: dest, target })
+      return false
+    }
+  })
+  if (absolute.length && process.platform === 'win32') {
+    // (The copy holds no junction - they were left out - so removing it can't reach the original.)
+    await fs.rm(to, { recursive: true, force: true }).catch(() => {})
+    return false
+  }
+  for (const l of absolute) {
+    const inside = relative(from, l.target)
+    if (!inside || inside.startsWith('..') || isAbsolute(inside)) continue
+    const target = join(to, inside)
+    const isDir = (await fs.stat(l.target).catch(() => null))?.isDirectory() ?? false
+    await fs.mkdir(dirname(l.at), { recursive: true })
+    await fs.symlink(target, l.at, isDir ? 'dir' : 'file').catch(() => {})
+  }
+  return true
+}
+
+/** Folders a "**" never goes into (big, generated, or git's own). */
+const NOT_SEARCHED = new Set(['node_modules', '.git', '.worktrees', 'vendor', 'dist', 'build', 'out', 'coverage', '.next', '.venv', 'venv', '__pycache__', 'target', '.turbo', '.cache'])
+
+/**
+ * The paths under `root` a pattern names: "*" and "?" work in any part ("apps/*\/.env"), and
+ * "**" stands for any number of folders ("**\/.env.local"). Plain paths come back as they are,
+ * when they exist. Never outside `root`.
+ */
+export async function matchPaths(root: string, pattern: string): Promise<string[]> {
+  const rel = pattern.trim().replace(/\\/g, '/').replace(/^\/+|\/+$/g, '')
+  if (!rel || rel.split('/').includes('..')) return []
+  const parts = rel.split('/').filter(Boolean)
+  const out: string[] = []
+  const toRe = (p: string): RegExp => new RegExp('^' + p.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.') + '$')
+  const walk = async (dir: string, i: number, depth: number): Promise<void> => {
+    if (out.length >= 500 || depth > 12) return
+    if (i === parts.length) {
+      out.push(dir)
+      return
+    }
+    const part = parts[i]
+    const here = join(root, dir)
+    if (part === '**') {
+      // No folder, or one more folder and "**" again.
+      await walk(dir, i + 1, depth)
+      const entries = await fs.readdir(here, { withFileTypes: true }).catch(() => [])
+      for (const e of entries) if (e.isDirectory() && !NOT_SEARCHED.has(e.name)) await walk(dir ? `${dir}/${e.name}` : e.name, i, depth + 1)
+      return
+    }
+    if (!/[*?]/.test(part)) {
+      const next = dir ? `${dir}/${part}` : part
+      if (await fs.stat(join(root, next)).catch(() => null)) await walk(next, i + 1, depth + 1)
+      return
+    }
+    const re = toRe(part)
+    const entries = await fs.readdir(here, { withFileTypes: true }).catch(() => [])
+    for (const e of entries) {
+      if (!re.test(e.name) || (i < parts.length - 1 && !e.isDirectory())) continue
+      await walk(dir ? `${dir}/${e.name}` : e.name, i + 1, depth + 1)
+    }
+  }
+  await walk('', 0, 0)
+  return [...new Set(out)].filter(Boolean)
 }
 
 // Ignored files worth giving every worktree: env files, keys, local configs.
