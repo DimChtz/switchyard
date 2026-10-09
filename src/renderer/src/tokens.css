@@ -85,6 +85,10 @@ button {
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+/* Where a vertical and a horizontal bar meet (white by default). */
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
 @keyframes sy-tip-in {
   from {
     opacity: 0;

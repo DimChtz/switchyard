@@ -96,7 +96,7 @@ export function FilePreview(): React.JSX.Element | null {
         ) : binary ? (
           <Note>A binary file - open it in the editor or the file manager.</Note>
         ) : (
-          <CodeMirror value={text} height="100%" theme={codeTheme} extensions={extensions} basicSetup={{ ...editorBasicSetup(prefs), highlightActiveLine: false }} editable={false} autoFocus />
+          <CodeMirror value={text} height="100%" style={{ height: '100%' }} theme={codeTheme} extensions={extensions} basicSetup={{ ...editorBasicSetup(prefs), highlightActiveLine: false }} editable={false} autoFocus />
         )}
       </div>
     </Modal>

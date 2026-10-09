@@ -5,6 +5,7 @@ import type { BasicSetupOptions } from '@uiw/react-codemirror'
 import { EDITOR_FONTS } from '@shared/constants'
 import type { Prefs } from '@shared/types'
 import { folding } from './folding'
+import { findBar } from './findPanel'
 
 export function editorFontStack(font: string): string {
   return `${font && font !== 'Geist Mono' ? `'${font}', ` : ''}'Geist Mono Variable', 'Geist Mono', ui-monospace, monospace`
@@ -20,7 +21,8 @@ export function editorExtensions(p: Prefs): Extension[] {
       fontVariantLigatures: p.editorLigatures ? 'contextual' : 'none',
       fontFeatureSettings: p.editorLigatures ? 'normal' : '"liga" 0, "calt" 0'
     },
-    '.cm-gutters': { backgroundColor: 'transparent', color: 'var(--t5)', border: 'none' },
+    // Opaque, so code scrolled sideways passes under the line numbers instead of through them.
+    '.cm-gutters': { backgroundColor: 'var(--bg-code, var(--bg-console))', color: 'var(--t5)', border: 'none' },
     '.cm-activeLine': { backgroundColor: 'color-mix(in srgb, var(--ov) 3%, transparent)' },
     '.cm-activeLineGutter': { backgroundColor: 'transparent', color: 'var(--t2)' },
     '.cm-highlightSpace': { backgroundImage: 'radial-gradient(circle at 50% 55%, color-mix(in srgb, var(--ov) 18%, transparent) 11%, transparent 5%)' },
@@ -35,6 +37,7 @@ export function editorExtensions(p: Prefs): Extension[] {
     // How wide a tab character shows (basicSetup's tabSize only sets the indent unit).
     EditorState.tabSize.of(p.editorTabSize),
     folding,
+    findBar,
     ...(p.editorWordWrap ? [EditorView.lineWrapping] : []),
     ...(p.editorWhitespace ? [highlightWhitespace()] : [])
   ]

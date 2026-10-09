@@ -14,9 +14,10 @@ const chrome = EditorView.theme({
   '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection': {
     backgroundColor: 'color-mix(in srgb, var(--c-blue) 24%, transparent) !important'
   },
-  '.cm-panels': { backgroundColor: 'var(--bg-panel)', color: 'var(--t1)' },
-  '.cm-panels.cm-panels-top': { borderBottom: '1px solid var(--bd-2)' },
-  '.cm-panels.cm-panels-bottom': { borderTop: '1px solid var(--bd-2)' },
+  // Like the file editor's header bar above it.
+  '.cm-panels': { backgroundColor: 'var(--bg-input)', color: 'var(--t1)' },
+  '.cm-panels.cm-panels-top': { borderBottom: '1px solid var(--bd-1)' },
+  '.cm-panels.cm-panels-bottom': { borderTop: '1px solid var(--bd-1)' },
   '.cm-searchMatch': { backgroundColor: 'color-mix(in srgb, var(--c-amber) 22%, transparent)', outline: '1px solid color-mix(in srgb, var(--c-amber) 45%, transparent)' },
   '.cm-searchMatch.cm-searchMatch-selected': { backgroundColor: 'color-mix(in srgb, var(--c-amber) 40%, transparent)' },
   '.cm-activeLine': { backgroundColor: 'color-mix(in srgb, var(--ov) 3%, transparent)' },

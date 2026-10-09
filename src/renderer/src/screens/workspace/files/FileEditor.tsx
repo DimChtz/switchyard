@@ -280,6 +280,8 @@ export function FileEditor({ path, visible }: { path: string; visible: boolean }
           <CodeMirror
             value={text}
             height="100%"
+            // The editor scrolls itself (both bars always in view), not the box around it.
+            style={{ height: '100%' }}
             theme={codeTheme}
             extensions={[...languageFor(path), ...extensions, ...(blameExt ? [blameExt] : [])]}
             onChange={(value) => {
