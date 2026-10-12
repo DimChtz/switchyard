@@ -63,6 +63,13 @@ const NAV_ICONS: Record<string, React.JSX.Element> = {
       <path d="M7.6 3.1 6.1 4.4l1.5 1.3" />
     </>
   ),
+  processes: (
+    <>
+      <rect x="1.6" y="2" width="10.8" height="4" rx="1" />
+      <rect x="1.6" y="8" width="10.8" height="4" rx="1" />
+      <path d="M3.8 4h.01M3.8 10h.01M6.4 4h3.8M6.4 10h3.8" />
+    </>
+  ),
   map: (
     <>
       <rect x="1.6" y="1.6" width="10.8" height="10.8" rx="1.2" />
@@ -321,7 +328,8 @@ function useNav(): NavItem[] {
     nav('team', 'Team', 'team'),
     nav('inbox', 'Inbox', 'inbox', { badge: inboxCount || undefined }),
     nav('summary', 'Summary', 'summary', { dot: summaryUnseen(activity, state.prefs, Date.now()) ? 'Today’s summary is ready' : undefined }),
-    nav('map', 'Map', 'map')
+    nav('map', 'Map', 'map'),
+    nav('processes', 'Processes', 'processes')
   ]
 }
 

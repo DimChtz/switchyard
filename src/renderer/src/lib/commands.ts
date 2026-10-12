@@ -113,6 +113,7 @@ export function useCommands(): { menus: MenuModel[]; run: (id: string) => void }
           { id: 'nav-summary', label: 'Summary', key: k('nav-summary') },
           { id: 'nav-map', label: 'Map', key: k('nav-map'), enabled: state.projects.length > 0 },
           { id: 'nav-prs', label: 'Pull requests', key: k('nav-prs'), enabled: state.projects.length > 0 },
+          { id: 'nav-processes', label: 'Processes', key: k('nav-processes') },
           { id: 'notifications', label: 'Notifications', key: k('notifications') },
           { id: 'next-blocked', label: 'Next blocked agent', key: k('next-blocked') },
           { id: 'toggle-zen', label: state.zen ? 'Leave Zen mode' : 'Zen mode', key: k('toggle-zen') },
@@ -255,6 +256,8 @@ export function useCommands(): { menus: MenuModel[]; run: (id: string) => void }
           return dispatch({ type: 'NAV', view: 'map' })
         case 'nav-prs':
           return dispatch({ type: 'NAV', view: 'prs' })
+        case 'nav-processes':
+          return dispatch({ type: 'NAV', view: 'processes' })
         case 'notifications':
           return toggleNoticeCenter()
         case 'open-logs':

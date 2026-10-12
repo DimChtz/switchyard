@@ -7,6 +7,7 @@ import type { UsageEntry } from '@shared/usage'
 import type { PackagePreview, PluginCommandContext, PluginInfo, PluginUiEvent } from '@shared/plugins'
 import type {
   ActivityEvent,
+  ProcessSnapshot,
   BaseStatus,
   PrDetails,
   FileDoc,
@@ -237,6 +238,8 @@ const api = {
     stashDrop: (worktreePath: string, ref: string): Promise<void> => ipcRenderer.invoke(IPC.gitStashDrop, worktreePath, ref),
     fileHistory: (worktreePath: string, path: string): Promise<FileCommit[]> => ipcRenderer.invoke(IPC.gitFileHistory, worktreePath, path),
     blame: (worktreePath: string, path: string): Promise<Blame> => ipcRenderer.invoke(IPC.gitBlame, worktreePath, path),
+    /** A file as the last commit has it - null when it isn't in that commit or isn't text. */
+    headText: (worktreePath: string, path: string): Promise<string | null> => ipcRenderer.invoke(IPC.gitHeadText, worktreePath, path),
     syncState: (worktreePath: string): Promise<SyncState | null> => ipcRenderer.invoke(IPC.gitSyncState, worktreePath),
     markResolved: (worktreePath: string, path: string): Promise<void> => ipcRenderer.invoke(IPC.gitMarkResolved, worktreePath, path),
     takeSide: (worktreePath: string, path: string, side: 'ours' | 'theirs'): Promise<void> => ipcRenderer.invoke(IPC.gitTakeSide, worktreePath, path, side),
@@ -560,6 +563,12 @@ const api = {
     write: (id: string, data: string): void => ipcRenderer.send(IPC.ptyWrite, id, data),
     resize: (id: string, cols: number, rows: number): void => ipcRenderer.send(IPC.ptyResize, id, cols, rows),
     kill: (id: string): Promise<void> => ipcRenderer.invoke(IPC.ptyKill, id),
+    /** Every running terminal's processes, their ports and memory, and what was left running. */
+    processes: (): Promise<ProcessSnapshot> => ipcRenderer.invoke(IPC.ptyProcesses),
+    /** Ends a listed process and everything it started. */
+    stopProcess: (pid: number): Promise<void> => ipcRenderer.invoke(IPC.ptyStopProcess, pid),
+    /** Ends a terminal's processes (the terminal shows it exited). */
+    stopSession: (id: string): Promise<void> => ipcRenderer.invoke(IPC.ptyStopSession, id),
     list: (prefix: string): Promise<string[]> => ipcRenderer.invoke(IPC.ptyList, prefix),
     killPrefix: (prefix: string): Promise<void> => ipcRenderer.invoke(IPC.ptyKillPrefix, prefix),
     onData: (cb: (id: string, data: string) => void): (() => void) => {

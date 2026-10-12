@@ -26,6 +26,7 @@ interface Session {
   /** Output not sent to the window yet (sent in batches). */
   outbox: string
   outTimer: NodeJS.Timeout | null
+  startedAt: number
 }
 
 const sessions = new Map<string, Session>()
@@ -136,7 +137,8 @@ export function spawn(sender: WebContents, opts: PtySpawnOptions): void {
     lastSent: null,
     bracketed: false,
     outbox: '',
-    outTimer: null
+    outTimer: null,
+    startedAt: Date.now()
   }
   sessions.set(opts.id, session)
   events.emit('spawn', opts.id, session.cwd)
@@ -283,6 +285,11 @@ export function list(prefix: string): string[] {
 /** Stops every session whose id starts with `prefix` - e.g. all of a task's terminals. */
 export function killPrefix(prefix: string): void {
   for (const id of list(prefix)) kill(id)
+}
+
+/** Every session still running: its id, its process, where and since when (for the Processes view). */
+export function runningSessions(): { id: string; pid: number; cwd: string; startedAt: number }[] {
+  return [...sessions.entries()].filter(([, s]) => s.exitCode === null).map(([id, s]) => ({ id, pid: s.proc.pid, cwd: s.cwd, startedAt: s.startedAt }))
 }
 
 /** Agent processes that are still running (for the quit confirmation). */

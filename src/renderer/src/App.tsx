@@ -32,6 +32,7 @@ import { Inbox } from './screens/Inbox'
 import { Summary } from './screens/Summary'
 import { RepoMap } from './screens/RepoMap'
 import { PullRequests } from './screens/PullRequests'
+import { Processes } from './screens/Processes'
 import { useSummaryAnnouncement } from './lib/activity'
 import { AGENTS, COLUMN_ORDER } from '@shared/constants'
 import { inProject } from './lib/multiRepo'
@@ -52,7 +53,9 @@ const VIEW_NAME: Partial<Record<string, string>> = {
   team: 'Team',
   inbox: 'the Inbox',
   summary: 'the Summary',
-  map: 'the Map'
+  map: 'the Map',
+  prs: 'Pull requests',
+  processes: 'Processes'
 }
 
 function isTyping(): boolean {
@@ -239,6 +242,7 @@ function Shell(): React.JSX.Element {
           {state.view === 'summary' ? <Summary /> : null}
           {state.view === 'map' ? <RepoMap /> : null}
           {state.view === 'prs' ? <PullRequests /> : null}
+          {state.view === 'processes' ? <Processes /> : null}
           </ErrorBoundary>
         </div>
       </div>

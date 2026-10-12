@@ -6,6 +6,7 @@ import * as store from './services/store'
 import * as git from './services/git'
 import { pushNotice, type PushNotice } from './services/push'
 import * as ptyService from './services/pty'
+import * as processes from './services/processes'
 import * as agentsService from './services/agents'
 import * as agentStatus from './services/agentStatus'
 import * as ports from './services/ports'
@@ -214,6 +215,7 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.gitStashDrop, (_e, worktreePath: string, ref: string) => git.stashDrop(worktreePath, ref))
   ipcMain.handle(IPC.gitFileHistory, (_e, worktreePath: string, path: string) => git.fileHistory(worktreePath, path))
   ipcMain.handle(IPC.gitBlame, (_e, worktreePath: string, path: string) => git.blame(worktreePath, path))
+  ipcMain.handle(IPC.gitHeadText, (_e, worktreePath: string, path: string) => git.headText(worktreePath, path))
   ipcMain.handle(IPC.gitSyncState, (_e, worktreePath: string) => git.syncState(worktreePath))
   ipcMain.handle(IPC.gitMarkResolved, (_e, worktreePath: string, path: string) => git.markResolved(worktreePath, path))
   ipcMain.handle(IPC.gitTakeSide, (_e, worktreePath: string, path: string, side: 'ours' | 'theirs') => git.takeSide(worktreePath, path, side === 'theirs' ? 'theirs' : 'ours'))
@@ -275,6 +277,9 @@ export function registerIpcHandlers(): void {
   ipcMain.on(IPC.ptyWrite, (_e, id: string, data: string) => ptyService.write(id, data))
   ipcMain.on(IPC.ptyResize, (_e, id: string, cols: number, rows: number) => ptyService.resize(id, cols, rows))
   ipcMain.handle(IPC.ptyKill, (_e, id: string) => ptyService.kill(id))
+  ipcMain.handle(IPC.ptyProcesses, () => processes.snapshot())
+  ipcMain.handle(IPC.ptyStopProcess, (_e, pid: number) => processes.stopProcess(Number(pid)))
+  ipcMain.handle(IPC.ptyStopSession, (_e, id: string) => processes.stopSession(String(id)))
   ipcMain.handle(IPC.ptyList, (_e, prefix: string) => ptyService.list(prefix))
   ipcMain.handle(IPC.ptyKillPrefix, (_e, prefix: string) => ptyService.killPrefix(prefix))
 

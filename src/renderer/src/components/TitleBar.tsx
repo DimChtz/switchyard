@@ -18,7 +18,9 @@ const VIEW_TITLE: Record<string, string> = {
   team: 'Team',
   inbox: 'Inbox',
   summary: 'Summary',
-  map: 'Map'
+  map: 'Map',
+  prs: 'Pull requests',
+  processes: 'Processes'
 }
 
 export function TitleBar({ menus, run }: { menus: MenuModel[]; run: (id: string) => void }): React.JSX.Element {

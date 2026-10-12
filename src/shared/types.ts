@@ -2,7 +2,7 @@ import type { KeyBinding } from './keybindings'
 
 export type AgentStatus = 'working' | 'waiting' | 'failed' | 'done' | 'paused' | null
 
-export type ViewName = 'dashboard' | 'board' | 'agents' | 'worktrees' | 'workspace' | 'settings' | 'notes' | 'usage' | 'team' | 'inbox' | 'summary' | 'map' | 'prs'
+export type ViewName = 'dashboard' | 'board' | 'agents' | 'worktrees' | 'workspace' | 'settings' | 'notes' | 'usage' | 'team' | 'inbox' | 'summary' | 'map' | 'prs' | 'processes'
 
 export type BoardColumn = 'backlog' | 'ready' | 'progress' | 'review' | 'done'
 
@@ -592,6 +592,39 @@ export interface PtySpawnOptions {
   env?: Record<string, string>
   cols?: number
   rows?: number
+}
+
+/** A process in the Processes view: one of a terminal's, at its depth in the tree. */
+export interface ProcessEntry {
+  pid: number
+  name: string
+  cmd: string
+  /** Memory in use (bytes). */
+  mem: number
+  /** TCP ports it listens on. */
+  ports: number[]
+  depth: number
+}
+
+/** A terminal (agent, shell, dev server, tests, setup) and the processes under it. */
+export interface ProcessGroup {
+  sessionId: string
+  cwd: string
+  pid: number
+  startedAt: number
+  /** Its process first, then everything it started (empty when they couldn't be read). */
+  procs: ProcessEntry[]
+  ports: number[]
+  mem: number
+}
+
+export interface ProcessSnapshot {
+  groups: ProcessGroup[]
+  /** Started under a terminal that has since gone, and still running. */
+  orphans: { sessionId: string; procs: ProcessEntry[]; ports: number[]; mem: number }[]
+  at: number
+  /** Why the system's process list couldn't be read (the terminals are still listed). */
+  error?: string
 }
 
 export interface FileEntry {

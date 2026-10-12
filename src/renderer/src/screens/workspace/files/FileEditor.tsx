@@ -14,6 +14,7 @@ import { useFiles } from './FilesContext'
 import { useChangesMaybe } from '../changes/ChangesContext'
 import { blameGutter } from '../../../lib/blameGutter'
 import { taskOfCommit } from '../../../lib/commitTask'
+import { changeGutter, setChangeBase } from '../../../lib/changeGutter'
 import type { Blame } from '@shared/types'
 
 /** A file's editor tab. */
@@ -63,6 +64,27 @@ export function FileEditor({ path, visible }: { path: string; visible: boolean }
     [blame, state.tasks]
   )
   const waited = useRef(0)
+  // Change markers: the file as the last commit has it, compared with the editor's text as it changes.
+  // (Read again after a commit, or when the file's status changes.)
+  const headRef = useRef<string | null>(null)
+  const status = f.entries?.find((e) => e.path === path)?.status
+  useEffect(() => {
+    let live = true
+    const set = (t: string | null): void => {
+      headRef.current = t
+      viewRef.current?.dispatch({ effects: setChangeBase.of(t) })
+    }
+    if (!repo) set(null)
+    else
+      window.api.git
+        .headText(repo.path, repo.rel)
+        .then((t) => live && set(t))
+        .catch(() => live && set(null))
+    return () => {
+      live = false
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [repo?.path, repo?.rel, changes?.commits.length, status])
 
   useEffect(() => f.ensureLoaded(path), [path, f.ensureLoaded]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -283,7 +305,7 @@ export function FileEditor({ path, visible }: { path: string; visible: boolean }
             // The editor scrolls itself (both bars always in view), not the box around it.
             style={{ height: '100%' }}
             theme={codeTheme}
-            extensions={[...languageFor(path), ...extensions, ...(blameExt ? [blameExt] : [])]}
+            extensions={[...languageFor(path), changeGutter, ...extensions, ...(blameExt ? [blameExt] : [])]}
             onChange={(value) => {
               f.setEdit(path, value)
               f.scheduleAutoSave(path)
@@ -293,6 +315,7 @@ export function FileEditor({ path, visible }: { path: string; visible: boolean }
             }}
             onCreateEditor={(view) => {
               viewRef.current = view
+              if (headRef.current !== null) view.dispatch({ effects: setChangeBase.of(headRef.current) })
             }}
             basicSetup={editorBasicSetup(prefs)}
           />

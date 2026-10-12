@@ -907,6 +907,12 @@ export async function fileHistory(worktreePath: string, path: string, limit = 20
  * Who last changed each line of the file as it is in the worktree: per line, its commit's id
  * (all zeros for a line not committed yet), with each commit's author, time and subject.
  */
+/** A file as HEAD has it (path from the repo's root): null when it isn't in HEAD, isn't text or is too big. */
+export async function headText(worktreePath: string, path: string): Promise<string | null> {
+  const r = await execFileP('git', gitArgs(['show', `HEAD:${path}`]), { cwd: worktreePath, windowsHide: true, env: gitEnv(), encoding: 'buffer', maxBuffer: MAX_TEXT_BYTES + 1024 }).catch(() => null)
+  return r ? textOf(r.stdout as Buffer) : null
+}
+
 export async function blame(worktreePath: string, path: string): Promise<Blame> {
   const { stdout } = await execFileP('git', gitArgs(['blame', '--porcelain', '--', path]), { cwd: worktreePath, windowsHide: true, env: gitEnv(), maxBuffer: 64 * 1024 * 1024 })
   const commits: Blame['commits'] = {}

@@ -82,6 +82,7 @@ export function keyCommands(mac: boolean): KeyCommand[] {
     { id: 'nav-inbox', title: 'Go to Inbox', category: 'View', key: `${mod}+8` },
     { id: 'nav-summary', title: 'Go to Summary', category: 'View', key: `${mod}+9` },
     { id: 'nav-map', title: 'Go to Map', category: 'View' },
+    { id: 'nav-processes', title: 'Go to Processes', category: 'View' },
     { id: 'notifications', title: 'Notifications', category: 'View', key: `${mod}+shift+j` },
     { id: 'toggle-zen', title: 'Zen mode', category: 'View', key: `${mod}+alt+z` },
     // (Ctrl+B is the shell's own in a Windows/Linux terminal, and bold in an editor.)
