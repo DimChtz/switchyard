@@ -162,6 +162,7 @@ export const IPC = {
   sysNotify: 'sys:notify',
   sysPush: 'sys:push',
   sysPushTest: 'sys:pushTest',
+  sysMicAccess: 'sys:micAccess',
   sysHomeDir: 'sys:homeDir',
   sysOpenExternal: 'sys:openExternal',
   sysOpenTerminal: 'sys:openTerminal',

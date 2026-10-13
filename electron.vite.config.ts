@@ -33,6 +33,8 @@ export default defineConfig({
         '@shared': resolve('src/shared')
       }
     },
-    plugins: [react()]
+    plugins: [react()],
+    // (Voice input's engine runs in a module worker.)
+    worker: { format: 'es' }
   }
 })

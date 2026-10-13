@@ -70,6 +70,8 @@ export function keyCommands(mac: boolean): KeyCommand[] {
     { id: 'quick-open', title: 'Go to file…', category: 'Edit', key: `${mod}+p` },
     // (Ctrl+E is end-of-line in a Windows/Linux shell.)
     { id: 'recent-files', title: 'Recent files…', category: 'Edit', key: `${mod}+e`, when: notInTerminal },
+    // (Pressed: listening until pressed again. Held: push-to-talk.)
+    { id: 'voice-input', title: 'Voice input (dictate)', category: 'Edit', key: `${mod}+shift+space` },
     { id: 'edit-desc', title: 'Edit task description', category: 'Edit' },
     { id: 'copy-branch', title: 'Copy branch name', category: 'Edit' },
     // Alt+←/→ move the cursor by word in a Windows/Linux shell.

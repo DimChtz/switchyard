@@ -387,6 +387,12 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.sysOpenTerminal, (_e, path: string) => system.openTerminal(path))
   ipcMain.on(IPC.sysCopy, (_e, text: string) => system.copyText(text))
   ipcMain.on(IPC.sysPush, (_e, n: PushNotice) => void pushNotice(n))
+  ipcMain.handle(IPC.sysMicAccess, async () => {
+    if (process.platform !== 'darwin') return true
+    const { systemPreferences } = await import('electron')
+    if (systemPreferences.getMediaAccessStatus('microphone') === 'granted') return true
+    return systemPreferences.askForMediaAccess('microphone')
+  })
   ipcMain.handle(IPC.sysPushTest, () => pushNotice({ kind: 'done', taskKey: '', taskTitle: 'Notifications from Switchyard reach you here.', text: 'Switchyard test', detail: null }, true))
   ipcMain.on(IPC.sysNotify, (_e, title: string, body: string, taskId: string | null, actions?: NotifyAction[]) =>
     system.notify(title, body, taskId, Array.isArray(actions) ? actions.filter((a) => typeof a?.id === 'string' && typeof a?.label === 'string').slice(0, 3) : [])

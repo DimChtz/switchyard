@@ -39,6 +39,8 @@ export const PROJECT_SETTING_KEYS: ProjectSettingKey[] = ['prefix', 'defaultBran
  * project's .switchyard/settings.json can't set these (the rest it can).
  */
 export const APP_PREF_KEYS: (keyof Prefs)[] = [
+  'voiceModel',
+  'voiceLanguage',
   'defaultAgent',
   'notifyInput',
   'notifyDone',
@@ -141,6 +143,8 @@ export const DEFAULT_PREFS: Prefs = {
   pushService: 'ntfy',
   pushKinds: ['permission', 'failed', 'agent-question', 'waiting', 'done', 'tests-failed', 'pr-merged', 'limit'],
   pushWhenAway: true,
+  voiceModel: 'base',
+  voiceLanguage: '',
   spendAlert: 0,
   spendAlertWeek: 0,
   agentTools: true,

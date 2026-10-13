@@ -820,6 +820,10 @@ export interface Prefs {
   pushService: 'ntfy' | 'slack' | 'discord' | 'webhook'
   pushKinds: NoticeKind[]
   pushWhenAway: boolean
+  /** Voice input's Whisper model (bigger: more accurate, slower, a bigger download). */
+  voiceModel: 'tiny' | 'base' | 'small'
+  /** The language you speak ("en", "el"…); empty: Whisper guesses. */
+  voiceLanguage: string
   /** Projects whose events raise no notifications - neither the bell nor the system's. */
   mutedProjects: string[]
   /** A notice once a day's agent cost (at API prices) reaches this many dollars; 0: never. */

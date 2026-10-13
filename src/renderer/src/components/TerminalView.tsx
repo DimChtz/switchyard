@@ -18,6 +18,7 @@ import { FILE_DRAG_TYPE, pathStyleFor, pathsForTerminal } from '../lib/dropPaths
 import type { ILink, ITheme } from '@xterm/xterm'
 import { useFilesMaybe } from '../screens/workspace/files/FilesContext'
 import { inCheckout, pathMatches } from '../lib/termLinks'
+import { registerTerminal } from '../lib/voice/voice'
 import type { FileEntry } from '@shared/types'
 
 /** A checkout's files (not folders), by path - built once per listing. */
@@ -191,6 +192,8 @@ export function TerminalView({ sessionId, cwd, cmd, args, execCommand, onExit, a
         }
       })
       term.open(container)
+      // Voice input into this terminal: typed in as a paste (no Enter).
+      const unregisterVoice = registerTerminal(container, (text) => term.paste(text), 'the terminal')
       // Drawn with the GPU (Settings → Terminal); back to the default renderer if WebGL goes away.
       if (gpuRef.current) {
         try {
@@ -270,8 +273,9 @@ export function TerminalView({ sessionId, cwd, cmd, args, execCommand, onExit, a
           setFind((f) => f ?? (term.hasSelection() ? term.getSelection() : ''))
           return false
         }
-        // Ctrl+Tab switches tasks (the app's shortcut), not a tab for the shell.
+        // Ctrl+Tab switches tasks and Ctrl+Shift+Space dictates (the app's shortcuts) - not keys for the shell.
         if (e.ctrlKey && e.key === 'Tab') return false
+        if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.code === 'Space') return false
         if (isMac) return true
         {
           if (e.type !== 'keydown' || !e.ctrlKey || !e.shiftKey || e.altKey) return true
@@ -316,6 +320,7 @@ export function TerminalView({ sessionId, cwd, cmd, args, execCommand, onExit, a
         onSelect.dispose()
         resizeObserver.disconnect()
         window.removeEventListener('switchyard:theme', onTheme)
+        unregisterVoice()
         termRef.current = null
         term.dispose()
       }

@@ -19,6 +19,7 @@ import { useActiveTheme, useThemes } from '../lib/theme'
 import type { Theme } from '@shared/themes'
 import { priceOf, type ModelPrice } from '@shared/usage'
 import { useUsage } from '../lib/usage'
+import { preloadVoice, useVoice, voiceModelReady } from '../lib/voice/voice'
 import { Button, FooterNote, IconButton, Menu, Modal, Segmented, SectionLabel, Select as MenuSelect, TextArea as UITextArea, TextInput, Toggle as UIToggle, confirm, type MenuAnchor } from '../components/ui'
 import { askInstall, usePlugins } from '../lib/plugins'
 import type { PluginInfo, PluginSource } from '@shared/plugins'
@@ -576,6 +577,7 @@ function GlobalSettings({ section, scope, onScope }: { section: string; scope: P
           </Row>
         </Group>
       ) : null}
+      {!scope ? <VoiceSettings pf={pf} set={set} /> : null}
       {!scope ? (
         <Group title="Phone and chat" note="Agents that need you, when you're away from the computer - through ntfy (an app for your phone), Slack, Discord, or any webhook.">
           <Row k="pushService" label="Send through">
@@ -1728,6 +1730,92 @@ function TextArea({ value, placeholder, rows, onChange }: { value: string; place
         if (local !== value) onChange(local)
       }}
     />
+  )
+}
+
+const VOICE_LANGUAGES: [string, string][] = [
+  ['', 'Detect it'],
+  ['en', 'English'],
+  ['el', 'Greek'],
+  ['de', 'German'],
+  ['fr', 'French'],
+  ['es', 'Spanish'],
+  ['it', 'Italian'],
+  ['pt', 'Portuguese'],
+  ['nl', 'Dutch'],
+  ['pl', 'Polish'],
+  ['tr', 'Turkish'],
+  ['ru', 'Russian'],
+  ['uk', 'Ukrainian'],
+  ['ja', 'Japanese'],
+  ['zh', 'Chinese'],
+  ['ko', 'Korean']
+]
+
+/** Voice input: which model, which language, and the model's download (once). */
+function VoiceSettings({ pf, set }: { pf: Prefs; set: (patch: Partial<Prefs>) => void }): React.JSX.Element {
+  const v = useVoice()
+  const [ready, setReady] = useState<boolean | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  useEffect(() => {
+    let live = true
+    setReady(null)
+    voiceModelReady(pf.voiceModel).then((r) => live && setReady(r))
+    return () => {
+      live = false
+    }
+  }, [pf.voiceModel, busy])
+  const download = (): void => {
+    setBusy(true)
+    setErr(null)
+    preloadVoice(pf.voiceModel)
+      .catch((e: unknown) => setErr(errText(e)))
+      .finally(() => setBusy(false))
+  }
+  const key = shortcut('voice-input')
+  return (
+    <Group
+      title="Voice input"
+      note={`Dictate into whatever has the cursor - an agent's terminal, a message, a note${key ? `: ${key} (press to start and stop, or hold while you speak)` : ''}, or the mic in the status bar. Speech is turned into text on this computer (Whisper).`}
+    >
+      <Row label="Model" sub="Bigger is more accurate, slower, and a bigger download (Base: about 200 MB on a GPU, less on the CPU) - once, the first time you dictate.">
+        <Seg
+          value={pf.voiceModel}
+          options={[
+            ['tiny', 'Tiny'],
+            ['base', 'Base'],
+            ['small', 'Small']
+          ]}
+          onChange={(m) => set({ voiceModel: m as Prefs['voiceModel'] })}
+        />
+      </Row>
+      <Row label="Language" sub="The one you speak. Detecting it works too, a little less reliably for short phrases.">
+        <Select value={pf.voiceLanguage} options={VOICE_LANGUAGES} onChange={(l) => set({ voiceLanguage: l })} />
+      </Row>
+      <Row
+        label="Model files"
+        sub={
+          busy && v.download?.total
+            ? `Downloading… ${Math.round((v.download.loaded / v.download.total) * 100)}% of ${Math.round(v.download.total / 1_000_000)} MB`
+            : busy
+              ? 'Loading…'
+              : err
+                ? `Couldn't get it: ${err}`
+                : ready
+                  ? `Downloaded - works offline${v.device ? ` · runs on the ${v.device.toUpperCase()}` : ''}.`
+                  : ready === false
+                    ? 'Not downloaded yet - it is, the first time you dictate. Or now:'
+                    : ''
+        }
+      >
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <Button size="sm" disabled={busy} onClick={download}>
+            {busy ? 'Working…' : ready ? 'Load it now' : 'Download now'}
+          </Button>
+        </div>
+      </Row>
+    </Group>
   )
 }
 

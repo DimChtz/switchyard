@@ -204,7 +204,14 @@ const PREVIEW_PARTITION = 'persist:preview'
 function limitPermissions(): void {
   const previewOk = new Set(['clipboard-sanitized-write', 'fullscreen', 'pointerLock'])
   session.fromPartition(PREVIEW_PARTITION).setPermissionRequestHandler((_wc, permission, done) => done(previewOk.has(permission)))
-  session.defaultSession.setPermissionRequestHandler((_wc, permission, done) => done(permission === 'clipboard-sanitized-write' || permission === 'fullscreen'))
+  session.defaultSession.setPermissionRequestHandler((_wc, permission, done, details) => {
+    // The microphone for voice input - audio only, never the camera.
+    if (permission === 'media') {
+      const types = (details as { mediaTypes?: string[] }).mediaTypes ?? []
+      return done(types.length > 0 && types.every((t) => t === 'audio'))
+    }
+    done(permission === 'clipboard-sanitized-write' || permission === 'fullscreen')
+  })
 }
 
 function start(): void {

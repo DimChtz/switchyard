@@ -35,6 +35,7 @@ import { PullRequests } from './screens/PullRequests'
 import { Processes } from './screens/Processes'
 import { TaskSwitcher } from './components/TaskSwitcher'
 import { KeyboardHelp, toggleKeyboardHelp } from './components/KeyboardHelp'
+import { VoiceIndicator } from './components/VoiceInput'
 import { recordTaskVisit } from './lib/taskSwitcher'
 import { useSummaryAnnouncement } from './lib/activity'
 import { AGENTS, COLUMN_ORDER } from '@shared/constants'
@@ -120,6 +121,23 @@ function Shell(): React.JSX.Element {
     return () => window.removeEventListener('mouseup', onUp)
   }, [run])
 
+  // Shortcuts that work in every field, even ones that keep their keys to themselves: dictating
+  // (into that field) and switching tasks. Taken before anything else sees the key.
+  useEffect(() => {
+    const EVERYWHERE = new Set(['voice-input', 'switch-task', 'switch-task-back'])
+    const onKey = (e: KeyboardEvent): void => {
+      const chord = eventChord(e)
+      if (!chord || (!chord.ctrl && !chord.meta && !chord.alt)) return
+      const command = matchBinding(bindings(), chord, { [state.view]: true, terminalFocus: !!(e.target as HTMLElement | null)?.closest?.('.xterm'), inputFocus: isTyping(), dialogOpen: false })
+      if (!command || !EVERYWHERE.has(command)) return
+      e.preventDefault()
+      e.stopPropagation()
+      run(command)
+    }
+    window.addEventListener('keydown', onKey, true)
+    return () => window.removeEventListener('keydown', onKey, true)
+  }, [run, state.view])
+
   useEffect(() => {
     function onKey(e: KeyboardEvent): void {
       const meta = e.metaKey || e.ctrlKey
@@ -142,7 +160,7 @@ function Shell(): React.JSX.Element {
         const plain = !chord.ctrl && !chord.meta && !chord.alt
         const command = plain && typing ? null : matchBinding(bindings(), chord, ctx)
         // With the palette, Start modal or a preview open only Find and Go to file work; the rest is theirs.
-        if (command && (!dialogOpen || command === 'find' || command === 'quick-open' || command === 'recent-files')) {
+        if (command && (!dialogOpen || command === 'find' || command === 'quick-open' || command === 'recent-files' || command === 'voice-input')) {
           e.preventDefault()
           return run(command)
         }
@@ -264,6 +282,7 @@ function Shell(): React.JSX.Element {
       <CommandPalette menus={menus} run={run} />
       <TaskSwitcher />
       <KeyboardHelp />
+      <VoiceIndicator />
       <FilePreview />
       <StartTaskModal />
       <NewProjectModal />

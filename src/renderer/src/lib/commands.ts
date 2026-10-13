@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toggleNoticeCenter } from './notices'
 import { recentTasks, stepSwitcher } from './taskSwitcher'
 import { toggleKeyboardHelp } from '../components/KeyboardHelp'
+import { toggleVoice } from './voice/voice'
+import { voiceOptions } from '../components/VoiceInput'
 import { focusBoardSearch } from './boardFilter'
 import { useAppStore } from '../store/AppStore'
 import { blockedTasks } from './derive'
@@ -95,6 +97,7 @@ export function useCommands(): { menus: MenuModel[]; run: (id: string) => void }
           { id: 'find', label: 'Find…', key: k('find') },
           { id: 'quick-open', label: 'Go to file…', key: k('quick-open'), enabled: state.projects.length > 0 },
           { id: 'recent-files', label: 'Recent files…', key: k('recent-files'), enabled: state.projects.length > 0 },
+          { id: 'voice-input', label: 'Voice input', key: k('voice-input') },
           SEP,
           { id: 'edit-desc', label: 'Edit task description', key: k('edit-desc'), enabled: canDesc },
           { id: 'copy-branch', label: 'Copy branch name', key: k('copy-branch'), enabled: !!worktree?.branch }
@@ -198,6 +201,8 @@ export function useCommands(): { menus: MenuModel[]; run: (id: string) => void }
         case 'open-settings-json':
           window.api.settings.openUserFile().catch((err: unknown) => dispatch({ type: 'TOAST', text: errText(err) }))
           return
+        case 'voice-input':
+          return toggleVoice(voiceOptions(state.prefs, dispatch), true)
         case 'keyboard-help':
           return toggleKeyboardHelp()
         case 'keyboard-shortcuts':

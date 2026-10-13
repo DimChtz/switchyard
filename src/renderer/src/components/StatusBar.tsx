@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+import { VoiceButton } from './VoiceInput'
 import { useAppStore } from '../store/AppStore'
 import { useHover } from '../lib/useHover'
 import { needsYou, statusColor } from '../lib/status'
@@ -109,6 +110,7 @@ export function StatusBar(): React.JSX.Element {
       <span style={{ color: 'var(--t2)' }}>{ctx}</span>
       {shortcut('next-blocked') ? <span style={{ color: 'var(--t5)' }}>{shortcut('next-blocked')} next blocked</span> : null}
       <UpdateChip />
+      <VoiceButton />
       <NoticeBell />
     </div>
   )

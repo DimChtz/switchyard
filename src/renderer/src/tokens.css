@@ -89,6 +89,16 @@ button {
 ::-webkit-scrollbar-corner {
   background: transparent;
 }
+@keyframes sy-voice-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+@keyframes sy-voice-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 @keyframes sy-tip-in {
   from {
     opacity: 0;

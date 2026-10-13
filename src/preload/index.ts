@@ -386,6 +386,8 @@ const api = {
     push: (n: Pick<Notice, 'kind' | 'taskKey' | 'taskTitle' | 'text' | 'detail'>): void => ipcRenderer.send(IPC.sysPush, n),
     /** A test notification there; rejects with why when it doesn't get through. */
     pushTest: (): Promise<void> => ipcRenderer.invoke(IPC.sysPushTest),
+    /** May the app use the microphone (macOS asks the first time). */
+    micAccess: (): Promise<boolean> => ipcRenderer.invoke(IPC.sysMicAccess),
     /** A notification's button was clicked (see notify's `actions`). */
     onNotifyAction: (cb: (taskId: string, actionId: string) => void): (() => void) => {
       const handler = (_e: Electron.IpcRendererEvent, taskId: string, actionId: string): void => cb(taskId, actionId)

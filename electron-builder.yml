@@ -46,6 +46,8 @@ mac:
   hardenedRuntime: true
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
+  extendInfo:
+    NSMicrophoneUsageDescription: Switchyard uses the microphone only while you dictate (voice input) - the speech is turned into text on this computer.
 dmg:
   # One per architecture (Apple Silicon, Intel) - the same name made one replace the other on upload.
   artifactName: ${name}-${version}-${arch}.${ext}
