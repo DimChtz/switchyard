@@ -1,4 +1,4 @@
-import React, { useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '../store/AppStore'
 import { pluginCommands, runPluginCommand } from '../lib/plugins'
 import { statusColor } from '../lib/status'
@@ -13,7 +13,12 @@ import { taskRoot } from '../lib/multiRepo'
 import { defaultScope, recentFiles, rememberFile, sameScope, scopeLabel, scopeRoot, scopesOf, searchFiles, useCheckoutFiles, type FileHit } from '../lib/quickOpen'
 import { Menu } from './ui'
 import { recentCommands, recentFirst, rememberCommand } from '../lib/commandHistory'
+import { matchSettings, onSettingsIndex, revealSetting, settingsIndex, type Reveal } from '../lib/settingsIndex'
+import { SettingsIndexer } from '../screens/Settings'
 import type { MenuModel } from '@shared/types'
+
+/** The settings were read off their pages (once a session). */
+let indexed = false
 
 interface Cmd {
   id: string
@@ -46,6 +51,18 @@ export function CommandPalette({ menus, run }: { menus: MenuModel[]; run: (id: s
   const [scopeMenu, setScopeMenu] = useState<{ x: number; y: number } | null>(null)
   const runRef = useRef(run)
   runRef.current = run
+  // The settings, read off their pages once - the first time the palette is asked for something.
+  const [settingsList, setSettingsList] = useState(settingsIndex)
+  useEffect(() => onSettingsIndex(() => setSettingsList(settingsIndex())), [])
+  const [indexing, setIndexing] = useState(false)
+  const wantIndex = !!palette && !filesMode && !!palette.query.trim() && !indexed
+  useEffect(() => {
+    if (wantIndex) setIndexing(true)
+  }, [wantIndex])
+  const indexDone = useCallback(() => {
+    indexed = true
+    setIndexing(false)
+  }, [])
 
   const recentOnly = filesMode && !!palette?.recent
   const hits = useMemo<FileHit[]>(() => {
@@ -187,9 +204,27 @@ export function CommandPalette({ menus, run }: { menus: MenuModel[]; run: (id: s
       .slice(0, 8)
       .map((n) => ({ id: `note-${n.id}`, label: `Note · ${n.title}`, sub: state.projects.find((p) => p.id === n.projectId)?.name, run: () => dispatch({ type: 'OPEN_NOTE', id: n.id }) }))
     const text = (x: React.ReactNode): string => (typeof x === 'string' ? x.toLowerCase() : '')
-    return [...ranked.filter((c) => text(c.label).includes(q) || text(c.sub).includes(q)), ...notes]
+    // Settings, by name ("font size"): Settings opens on that row.
+    const openSettings = (section: string, reveal: Reveal): void => {
+      dispatch({ type: 'OPEN_SETTINGS', section })
+      revealSetting(reveal)
+    }
+    const settings: Cmd[] = matchSettings(settingsList ?? [], q).map((s) => ({
+      id: `setting-${s.section}-${s.label}`,
+      icon: <span style={{ width: 18, flex: 'none', textAlign: 'center', color: 'var(--t4)', fontSize: 13 }}>⚙</span>,
+      label: `Settings: ${s.label}`,
+      sub: s.group && s.group !== s.label ? `${s.page} › ${s.group}` : s.page,
+      run: () => openSettings(s.section, { label: s.label })
+    }))
+    const searchAll: Cmd = {
+      id: 'settings-search',
+      icon: <span style={{ width: 18, flex: 'none', textAlign: 'center', color: 'var(--t4)', fontSize: 13 }}>⚙</span>,
+      label: `Search settings for “${state.palette.query.trim()}”`,
+      run: () => openSettings(state.settingsSection, { query: state.palette?.query.trim() ?? '' })
+    }
+    return [...ranked.filter((c) => text(c.label).includes(q) || text(c.sub).includes(q)), ...settings, ...notes, searchAll]
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.palette, state.projects, state.tasks, state.notes, state.projectId, dispatch, hits, menus])
+  }, [state.palette, state.projects, state.tasks, state.notes, state.projectId, dispatch, hits, menus, settingsList])
 
   useEffect(() => {
     if (state.palette) inputRef.current?.focus()
@@ -357,6 +392,7 @@ export function CommandPalette({ menus, run }: { menus: MenuModel[]; run: (id: s
           </div>
         ) : null}
       </div>
+      {indexing ? <SettingsIndexer onDone={indexDone} /> : null}
       {scopeMenu && scope ? (
         <Menu
           anchor={scopeMenu}

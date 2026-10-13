@@ -41,6 +41,8 @@ export const PROJECT_SETTING_KEYS: ProjectSettingKey[] = ['prefix', 'defaultBran
 export const APP_PREF_KEYS: (keyof Prefs)[] = [
   'voiceModel',
   'voiceLanguage',
+  'voiceCommands',
+  'voiceLive',
   'defaultAgent',
   'notifyInput',
   'notifyDone',
@@ -145,6 +147,8 @@ export const DEFAULT_PREFS: Prefs = {
   pushWhenAway: true,
   voiceModel: 'base',
   voiceLanguage: '',
+  voiceCommands: true,
+  voiceLive: true,
   spendAlert: 0,
   spendAlertWeek: 0,
   agentTools: true,

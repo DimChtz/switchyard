@@ -193,7 +193,7 @@ export function TerminalView({ sessionId, cwd, cmd, args, execCommand, onExit, a
       })
       term.open(container)
       // Voice input into this terminal: typed in as a paste (no Enter).
-      const unregisterVoice = registerTerminal(container, (text) => term.paste(text), 'the terminal')
+      const unregisterVoice = registerTerminal(container, (text) => term.paste(text), () => window.api.pty.write(sessionId, '\r'), 'the terminal')
       // Drawn with the GPU (Settings → Terminal); back to the default renderer if WebGL goes away.
       if (gpuRef.current) {
         try {

@@ -16,11 +16,11 @@ Track your projects on a board, start a task with an agent, and Switchyard creat
 - **Worktrees:** every worktree across projects, with ahead/behind and dirty state, and cleanup. New ones get the project's untracked files (`.env`, keys - patterns like `apps/*/.env`) and, if you like, a copy of the installed dependencies when the lockfile matches.
 - **Pull requests:** every open PR across your projects with its checks, review state and conflicts, linked to its task, and a Merge button (GitHub CLI).
 - **Processes:** everything the app's terminals started - agents, shells, dev servers, test runs - with the ports they listen on and their memory, what was left running after its terminal closed, and Stop.
-- **Voice input:** dictate into an agent's terminal, a message, a note or a comment (`Ctrl+Shift+Space` / `⇧⌘Space` - press to start and stop, or hold while you speak; or the mic in the status bar). Speech becomes text on your machine with Whisper (the model downloads once, then it works offline); the text goes in without pressing Enter.
+- **Voice input:** dictate into an agent's terminal, a message, a note or a comment (`Ctrl+Shift+Space` / `⇧⌘Space` - press to start and stop, or hold while you speak; or the mic in the status bar). Speech becomes text on your machine with Whisper (the model downloads once, then it works offline); the text goes in without pressing Enter - unless you end with "send". "New line" and "scratch that" work too, and the words show while you speak.
 - **Phone and chat notifications:** agents that need you, sent through ntfy, Slack, Discord or a webhook while you're away.
 - **Notes, Inbox, Summary, Usage, Team and Map views.**
-- **Keyboard cheat sheet** (`?`): the shortcuts that work where you are. **Command palette** (`Ctrl+K` / `⌘K`, the commands you ran lately first), **Go to file** (`Ctrl+P`), **recent files** in the task (`Ctrl+E`), **recent tasks** (`Ctrl+Tab`, as switching editor tabs), and rebindable shortcuts. Pinned tasks (right-click → Pin) stay at the top of the sidebar and of their board column.
-- **Themes, settings as JSON, and plugins** (`.syplugin` packages that add commands and agents).
+- **Keyboard cheat sheet** (`?`): the shortcuts that work where you are. **Command palette** (`Ctrl+K` / `⌘K`, the commands you ran lately first, and every setting by name - it opens on that row), **Go to file** (`Ctrl+P`), **recent files** in the task (`Ctrl+E`), **recent tasks** (`Ctrl+Tab`, as switching editor tabs), and rebindable shortcuts. Pinned tasks (right-click → Pin) stay at the top of the sidebar and of their board column.
+- **Themes, searchable settings (also as JSON), and plugins** (`.syplugin` packages that add commands and agents).
 
 ### Supported agents
 

@@ -824,6 +824,10 @@ export interface Prefs {
   voiceModel: 'tiny' | 'base' | 'small'
   /** The language you speak ("en", "el"…); empty: Whisper guesses. */
   voiceLanguage: string
+  /** Spoken commands: "send", "new line", "new paragraph", "scratch that". */
+  voiceCommands: boolean
+  /** The words so far, shown while you speak. */
+  voiceLive: boolean
   /** Projects whose events raise no notifications - neither the bell nor the system's. */
   mutedProjects: string[]
   /** A notice once a day's agent cost (at API prices) reaches this many dollars; 0: never. */

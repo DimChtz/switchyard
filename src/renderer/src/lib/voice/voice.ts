@@ -22,9 +22,11 @@ export interface VoiceState {
   device: 'gpu' | 'cpu' | null
   /** Where the text will go, said in the indicator. */
   target: string | null
+  /** What it has heard so far (the live preview, while listening). */
+  partial: string
 }
 
-let state: VoiceState = { phase: 'idle', since: 0, level: 0, download: null, device: null, target: null }
+let state: VoiceState = { phase: 'idle', since: 0, level: 0, download: null, device: null, target: null, partial: '' }
 const listeners = new Set<() => void>()
 function set(patch: Partial<VoiceState>): void {
   state = { ...state, ...patch }
@@ -43,25 +45,48 @@ export function useVoice(): VoiceState {
 
 // ── Where the words go ──
 
-type Target = { kind: 'terminal'; paste: (text: string) => void; label: string } | { kind: 'field'; el: HTMLElement; label: string } | null
+type Target = { kind: 'terminal'; paste: (text: string) => void; enter: () => void; label: string } | { kind: 'field'; el: HTMLElement; label: string } | null
 
 /** The terminals on screen, so dictation into a focused one types into its program. */
-const terminals = new Map<HTMLElement, { paste: (text: string) => void; label: string }>()
-export function registerTerminal(el: HTMLElement, paste: (text: string) => void, label: string): () => void {
-  terminals.set(el, { paste, label })
+const terminals = new Map<HTMLElement, { paste: (text: string) => void; enter: () => void; label: string }>()
+export function registerTerminal(el: HTMLElement, paste: (text: string) => void, enter: () => void, label: string): () => void {
+  terminals.set(el, { paste, enter, label })
   return () => terminals.delete(el)
 }
 
 function captureTarget(): Target {
   const a = document.activeElement as HTMLElement | null
   if (!a || a === document.body) return null
-  for (const [el, t] of terminals) if (el.contains(a)) return { kind: 'terminal', paste: t.paste, label: t.label }
+  for (const [el, t] of terminals) if (el.contains(a)) return { kind: 'terminal', paste: t.paste, enter: t.enter, label: t.label }
   const field = a.tagName === 'TEXTAREA' || (a.tagName === 'INPUT' && /^(text|search|url|email|)$/i.test((a as HTMLInputElement).type)) || a.isContentEditable
   if (!field) return null
   const named = a.getAttribute('aria-label') || a.getAttribute('placeholder') || ''
   // (Short: a field's placeholder can be a sentence.)
   const label = a.closest('.cm-editor') ? 'the editor' : named && named.length <= 28 ? `“${named.replace(/[….]+$/, '')}”` : 'the text field'
   return { kind: 'field', el: a, label }
+}
+
+/**
+ * Spoken commands in what was said: "new line" and "new paragraph" become
+ * line breaks; "send" (or "send it", "submit") at the end presses Enter once
+ * it's typed in; "scratch that" at the end throws the whole thing away.
+ */
+export function voiceCommands(text: string): { text: string; send: boolean; discard: boolean } {
+  let t = text.trim()
+  if (/\bscratch that[.!]?$/i.test(t)) return { text: '', send: false, discard: true }
+  let send = false
+  const end = /[,.;]?\s*\b(?:send(?: it)?|submit)[.!]?$/i
+  if (end.test(t)) {
+    send = true
+    t = t.replace(end, '').trim()
+  }
+  t = t
+    .replace(/[,.;]?\s*\bnew paragraph\b[,.;]?\s*/gi, '\n\n')
+    .replace(/[,.;]?\s*\bnew line\b[,.;]?\s*/gi, '\n')
+    // ("…page.\nAnd" - Whisper capitalizes after the break itself.)
+    .replace(/[ \t]+\n/g, '\n')
+    .trim()
+  return { text: t, send, discard: false }
 }
 
 /** Whisper's words for silence, not something you said. */
@@ -73,6 +98,15 @@ export function cleanTranscript(text: string): string {
     .replace(/\s+/g, ' ')
     .trim()
   return NOISE.test(t) ? '' : t
+}
+
+/** "Send": Enter in a terminal; in a field, the app's send key (Ctrl/⌘+Enter - plain Enter in a one-line field). */
+function pressEnter(target: Target): void {
+  if (target?.kind === 'terminal') return target.enter()
+  if (target?.kind !== 'field') return
+  const mac = window.electron.process.platform === 'darwin'
+  const multi = target.el.tagName === 'TEXTAREA' || target.el.isContentEditable
+  target.el.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true, cancelable: true, ctrlKey: multi && !mac, metaKey: multi && mac }))
 }
 
 function insert(target: Target, text: string, onNowhere: (text: string) => void): void {
@@ -166,12 +200,17 @@ interface Recording {
   byKey: boolean
   stopKeys: () => void
   timer: ReturnType<typeof setTimeout>
+  live: ReturnType<typeof setInterval> | null
 }
 let rec: Recording | null = null
 
 export interface VoiceOptions {
   model: string
   language: string
+  /** "send", "new line", "scratch that". */
+  commands: boolean
+  /** Show the words while you speak. */
+  live: boolean
   /** Something went wrong, or there's nothing to say where the text went. */
   toast: (text: string, action?: { label: string; run: () => void }) => void
 }
@@ -195,7 +234,7 @@ async function startVoice(o: VoiceOptions, byKey: boolean): Promise<void> {
     const ctx = new AudioContext({ sampleRate: 16000 })
     const source = ctx.createMediaStreamSource(stream)
     const proc = ctx.createScriptProcessor(4096, 1, 1)
-    const r: Recording = { stream, ctx, chunks: [], peak: 0, target, byKey, stopKeys: () => {}, timer: setTimeout(() => void stopVoice(o), MAX_MS) }
+    const r: Recording = { stream, ctx, chunks: [], peak: 0, target, byKey, stopKeys: () => {}, timer: setTimeout(() => void stopVoice(o), MAX_MS), live: null }
     proc.onaudioprocess = (e) => {
       const data = new Float32Array(e.inputBuffer.getChannelData(0))
       r.chunks.push(data)
@@ -222,16 +261,51 @@ async function startVoice(o: VoiceOptions, byKey: boolean): Promise<void> {
       window.removeEventListener('keyup', onKey, true)
     }
     rec = r
-    // The model loads (or downloads) while you speak.
-    preloadVoice(o.model).catch(() => {})
+    set({ partial: '' })
+    // The model loads (or downloads) while you speak; then, the words so far every few seconds.
+    preloadVoice(o.model)
+      .then(() => {
+        if (o.live && rec === r) r.live = setInterval(() => void livePreview(r, o), 2000)
+      })
+      .catch(() => {})
   } catch (err) {
     set({ phase: 'idle', level: 0 })
     o.toast(err instanceof Error && err.name === 'NotAllowedError' ? 'Switchyard isn’t allowed to use the microphone.' : `Voice input: ${err instanceof Error ? err.message : String(err)}`)
   }
 }
 
+/** Seconds of speech the preview looks at (the end of what was said). */
+const PREVIEW_SECONDS = 20
+let previewing = false
+
+async function livePreview(r: Recording, o: VoiceOptions): Promise<void> {
+  if (previewing || rec !== r) return
+  const length = r.chunks.reduce((n, c) => n + c.length, 0)
+  if (length < 16000 || r.peak < 0.01) return
+  previewing = true
+  try {
+    const want = Math.min(length, 16000 * PREVIEW_SECONDS)
+    const audio = new Float32Array(want)
+    // (The newest chunks, back to front.)
+    let at = want
+    for (let i = r.chunks.length - 1; i >= 0 && at > 0; i--) {
+      const c = r.chunks[i]
+      const take = Math.min(c.length, at)
+      audio.set(c.subarray(c.length - take), at - take)
+      at -= take
+    }
+    const m = await ask({ type: 'transcribe', model: o.model, audio, language: o.language }, [audio.buffer])
+    if (rec === r && m.type === 'text') set({ partial: (length > want ? '… ' : '') + cleanTranscript(m.text) })
+  } catch {
+    // (Only a preview.)
+  } finally {
+    previewing = false
+  }
+}
+
 function release(r: Recording): void {
   clearTimeout(r.timer)
+  if (r.live) clearInterval(r.live)
   r.stopKeys()
   for (const t of r.stream.getTracks()) t.stop()
   void r.ctx.close()
@@ -241,7 +315,7 @@ function release(r: Recording): void {
 export function cancelVoice(): void {
   if (rec) release(rec)
   rec = null
-  set({ phase: 'idle', level: 0 })
+  set({ phase: 'idle', level: 0, partial: '' })
 }
 
 async function stopVoice(o: VoiceOptions): Promise<void> {
@@ -264,12 +338,22 @@ async function stopVoice(o: VoiceOptions): Promise<void> {
   set({ phase: 'transcribing', level: 0 })
   try {
     const m = await ask({ type: 'transcribe', model: o.model, audio, language: o.language }, [audio.buffer])
-    const text = m.type === 'text' ? cleanTranscript(m.text) : ''
-    if (!text) o.toast('Didn’t catch any words.')
-    else insert(r.target, text, (t) => o.toast(`Heard: “${t.length > 80 ? `${t.slice(0, 80)}…` : t}”`, { label: 'Copy', run: () => window.api.sys.copy(t) }))
+    const heard = m.type === 'text' ? cleanTranscript(m.text) : ''
+    const said = o.commands ? voiceCommands(heard) : { text: heard, send: false, discard: false }
+    if (said.discard) o.toast('Scratched - nothing typed.')
+    else if (!said.text && !said.send) o.toast('Didn’t catch any words.')
+    else {
+      let typed = true
+      if (said.text) insert(r.target, said.text, (t) => {
+        typed = false
+        o.toast(`Heard: “${t.length > 80 ? `${t.slice(0, 80)}…` : t}”`, { label: 'Copy', run: () => window.api.sys.copy(t) })
+      })
+      // ("Send": once what was said is in - a terminal's program reads a paste and an Enter apart.)
+      if (said.send && typed) setTimeout(() => pressEnter(r.target), said.text.includes('\n') ? 150 : 60)
+    }
   } catch (err) {
     o.toast(`Voice input: ${err instanceof Error ? err.message : String(err)}`)
   } finally {
-    set({ phase: 'idle', download: null })
+    set({ phase: 'idle', download: null, partial: '' })
   }
 }

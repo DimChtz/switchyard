@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import React, { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { plural } from '../lib/summary'
 import { codeTheme } from '../lib/codeTheme'
 import CodeMirror from '@uiw/react-codemirror'
@@ -20,6 +20,7 @@ import type { Theme } from '@shared/themes'
 import { priceOf, type ModelPrice } from '@shared/usage'
 import { useUsage } from '../lib/usage'
 import { preloadVoice, useVoice, voiceModelReady } from '../lib/voice/voice'
+import { onReveal, revealSetting, setSettingsIndex, takeReveal, type Reveal, type SettingEntry } from '../lib/settingsIndex'
 import { Button, FooterNote, IconButton, Menu, Modal, Segmented, SectionLabel, Select as MenuSelect, TextArea as UITextArea, TextInput, Toggle as UIToggle, confirm, type MenuAnchor } from '../components/ui'
 import { askInstall, usePlugins } from '../lib/plugins'
 import type { PluginInfo, PluginSource } from '@shared/plugins'
@@ -48,25 +49,109 @@ export function Settings(): React.JSX.Element {
   // Preferences for everyone (settings.json) or one project (its .switchyard files).
   const [scopeId, setScopeId] = useState('')
   const scopeProject = state.projects.find((p) => p.id === scopeId) ?? null
+  const [query, setQuery] = useState('')
+  const searching = !!query.trim()
+  const pane = useRef<HTMLDivElement>(null)
+
+  // From the command palette: a search, or one row - scrolled to and lit up.
+  useEffect(() => {
+    let stop = (): void => {}
+    let looking: Reveal | null = null
+    const reveal = (r: Reveal): void => {
+      stop()
+      if ('query' in r) return setQuery(r.query)
+      setQuery('')
+      looking = r
+      // (Once its page is on screen - some rows come in as the page loads.)
+      const until = Date.now() + 2500
+      let frame = 0
+      const look = (): void => {
+        const row = [...(pane.current?.querySelectorAll<HTMLElement>('[data-sy-row]') ?? [])].find((el) => el.dataset.syRow === r.label)
+        if (!row) {
+          if (Date.now() < until) frame = requestAnimationFrame(look)
+          else looking = null
+          return
+        }
+        looking = null
+        const cell = row.closest<HTMLElement>('[data-sy-cell]') ?? row
+        cell.scrollIntoView({ block: 'center' })
+        cell.animate([{ background: 'color-mix(in srgb, var(--c-blue) 16%, transparent)' }, { background: 'color-mix(in srgb, var(--c-blue) 16%, transparent)', offset: 0.5 }, { background: 'transparent' }], {
+          duration: 2200,
+          easing: 'ease-out'
+        })
+      }
+      frame = requestAnimationFrame(look)
+      stop = () => cancelAnimationFrame(frame)
+    }
+    const first = takeReveal()
+    if (first) reveal(first)
+    const off = onReveal(reveal)
+    return () => {
+      off()
+      stop()
+      // (Not found yet - as React mounts twice in development: for the next one.)
+      if (looking) revealSetting(looking)
+    }
+  }, [])
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: '220px minmax(0,1fr)' }}>
-      <div style={{ borderRight: '1px solid var(--bd-1)', padding: '22px 10px', display: 'flex', flexDirection: 'column', gap: 1, overflow: 'auto' }}>
+      <div style={{ borderRight: '1px solid var(--bd-1)', padding: '18px 10px 22px', display: 'flex', flexDirection: 'column', gap: 1, overflow: 'auto' }}>
+        <div style={{ padding: '0 2px 10px' }}>
+          <TextInput
+            size="sm"
+            value={query}
+            autoFocus
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape' && query) {
+                e.stopPropagation()
+                setQuery('')
+              }
+            }}
+            placeholder="Search settings"
+            style={{ fontSize: 12.5 }}
+          />
+        </div>
         <NavHeading first>Preferences</NavHeading>
         {SECTIONS.map(([k, l]) => (
-          <NavRow key={k} label={l} active={sec === k} onClick={() => dispatch({ type: 'OPEN_SETTINGS', section: k })} />
+          <NavRow
+            key={k}
+            label={l}
+            active={!searching && sec === k}
+            onClick={() => {
+              setQuery('')
+              dispatch({ type: 'OPEN_SETTINGS', section: k })
+            }}
+          />
         ))}
         <NavHeading>Projects</NavHeading>
         {state.projects.map((p) => (
-          <NavRow key={p.id} label={p.name} active={sec === `project:${p.id}`} onClick={() => dispatch({ type: 'OPEN_SETTINGS', section: `project:${p.id}` })} />
+          <NavRow
+            key={p.id}
+            label={p.name}
+            active={!searching && sec === `project:${p.id}`}
+            onClick={() => {
+              setQuery('')
+              dispatch({ type: 'OPEN_SETTINGS', section: `project:${p.id}` })
+            }}
+          />
         ))}
         <HoverText onClick={() => dispatch({ type: 'OPEN_ADD_PROJECT' })} style={{ height: 28, padding: '0 10px', display: 'flex', alignItems: 'center', fontSize: 13, marginTop: 4 }}>
           + Add project…
         </HoverText>
       </div>
-      <div style={{ overflow: 'auto', padding: '28px 40px 64px', minWidth: 0 }}>
+      <div ref={pane} style={{ overflow: 'auto', padding: '28px 40px 64px', minWidth: 0 }}>
         <div style={{ maxWidth: 780, display: 'flex', flexDirection: 'column', gap: 26 }}>
-          {project ? (
+          {searching ? (
+            <SettingsSearch
+              query={query}
+              onOpen={(k) => {
+                setQuery('')
+                dispatch({ type: 'OPEN_SETTINGS', section: k })
+              }}
+            />
+          ) : project ? (
             <ProjectSettings key={project.id} project={project} />
           ) : sec === 'keys' ? (
             <KeyboardShortcuts />
@@ -82,6 +167,141 @@ export function Settings(): React.JSX.Element {
     </div>
   )
 }
+
+/* ---------- search ---------- */
+
+/** The pages search looks through: the preferences (shortcuts and plugins have their own lists). */
+const SEARCHED = SECTIONS.filter(([k]) => k !== 'keys' && k !== 'plugins')
+
+/**
+ * Every preference page at once, showing only the rows that match - by
+ * their label, description, value or their group's title (every word typed).
+ * A page's name matches all of it ("appearance").
+ */
+function SettingsSearch({ query, onOpen }: { query: string; onOpen: (section: string) => void }): React.JSX.Element {
+  const ref = useRef<HTMLDivElement>(null)
+  const [found, setFound] = useState<number | null>(null)
+  useLayoutEffect(() => {
+    const root = ref.current
+    if (!root) return
+    const words = query.toLowerCase().split(/\s+/).filter(Boolean)
+    const hit = (t: string): boolean => words.every((w) => t.toLowerCase().includes(w))
+    const run = (): void => {
+      let total = 0
+      for (const sec of root.querySelectorAll<HTMLElement>('[data-sy-sec]')) {
+        const all = hit(sec.dataset.sySec ?? '')
+        let shown = 0
+        const body = sec.querySelector<HTMLElement>('[data-sy-body]')
+        for (const part of body ? [...body.children] : []) {
+          const el = part as HTMLElement
+          const groups = el.matches('[data-sy-group]') ? [el] : [...el.querySelectorAll<HTMLElement>('[data-sy-group]')]
+          if (!groups.length) {
+            // (A page's header, a theme picker: shown when the page's name matches.)
+            el.style.display = all ? '' : 'none'
+            continue
+          }
+          let inPart = 0
+          for (const g of groups) {
+            const title = g.dataset.syGroup ?? ''
+            const titled = all || hit(title)
+            let n = 0
+            for (const cell of g.querySelectorAll<HTMLElement>('[data-sy-cell]')) {
+              // (The words can be split between the group's title and the row: "notification sound".)
+              const show = titled || hit(`${title} ${cell.textContent ?? ''}`)
+              cell.style.display = show ? '' : 'none'
+              if (show) cell.style.borderTopColor = n++ ? 'var(--bd-1)' : 'transparent'
+            }
+            g.style.display = n ? '' : 'none'
+            inPart += n
+          }
+          el.style.display = inPart ? '' : 'none'
+          shown += inPart
+        }
+        sec.style.display = shown || all ? '' : 'none'
+        total += shown
+      }
+      setFound((f) => (f === total ? f : total))
+    }
+    run()
+    // (Pages fill in as they load - agents found, shells listed: matched again.)
+    const watch = new MutationObserver(() => {
+      watch.disconnect()
+      run()
+      watch.observe(root, { childList: true, subtree: true })
+    })
+    watch.observe(root, { childList: true, subtree: true })
+    return () => watch.disconnect()
+  }, [query])
+  return (
+    <div ref={ref} style={{ display: 'flex', flexDirection: 'column', gap: 34 }}>
+      {SEARCHED.map(([k, label]) => (
+        <div key={k} data-sy-sec={label} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+          <span onClick={() => onOpen(k)} title={`Open ${label}`} style={{ font: '600 16px var(--font-ui)', color: 'var(--t1)', cursor: 'pointer', alignSelf: 'flex-start' }}>
+            {label} <span style={{ font: '12px var(--font-ui)', color: 'var(--c-blue)' }}>open ›</span>
+          </span>
+          <div data-sy-body="" style={{ display: 'flex', flexDirection: 'column', gap: 26 }}>
+            {k === 'appearance' ? <Appearance /> : <GlobalSettings section={k} scope={null} onScope={() => {}} />}
+          </div>
+        </div>
+      ))}
+      {found === 0 ? <div style={{ font: '13px var(--font-ui)', color: 'var(--t3)' }}>No setting matches “{query.trim()}”. Keyboard shortcuts and plugins have their own pages.</div> : null}
+    </div>
+  )
+}
+
+/**
+ * The preference pages, out of sight, read for the command palette's index
+ * of settings (as the pages fill in - agents found, shells listed). The
+ * palette shows it while it's asked for settings, until `done`.
+ */
+export const SettingsIndexer = React.memo(function SettingsIndexer({ onDone }: { onDone: () => void }): React.JSX.Element {
+  const ref = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const root = ref.current
+    if (!root) return
+    let last = ''
+    const read = (): void => {
+      const entries: SettingEntry[] = []
+      const seen = new Set<string>()
+      for (const sec of root.querySelectorAll<HTMLElement>('[data-sy-sec]')) {
+        const page = sec.dataset.sySec ?? ''
+        const section = sec.dataset.syKey ?? ''
+        for (const row of sec.querySelectorAll<HTMLElement>('[data-sy-row]')) {
+          // (A page opens on its first row of that name.)
+          if (seen.has(`${section} ${row.dataset.syRow}`)) continue
+          seen.add(`${section} ${row.dataset.syRow}`)
+          const group = row.closest<HTMLElement>('[data-sy-group]')?.querySelector('[data-sy-title]')?.textContent ?? ''
+          entries.push({ section, page, group, label: row.dataset.syRow ?? '', sub: row.dataset.sySub ?? '' })
+        }
+      }
+      // (Only what changed - the pages re-render as it's read.)
+      const now = JSON.stringify(entries)
+      if (now !== last) {
+        last = now
+        setSettingsIndex(entries)
+      }
+    }
+    read()
+    const watch = new MutationObserver(read)
+    watch.observe(root, { childList: true, subtree: true })
+    // (Long enough for the pages to finish loading.)
+    const t = setTimeout(onDone, 4000)
+    return () => {
+      watch.disconnect()
+      clearTimeout(t)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+  return (
+    <div ref={ref} aria-hidden style={{ display: 'none' }}>
+      {SEARCHED.map(([k, label]) => (
+        <div key={k} data-sy-sec={label} data-sy-key={k}>
+          {k === 'appearance' ? <Appearance /> : <GlobalSettings section={k} scope={null} onScope={() => {}} />}
+        </div>
+      ))}
+    </div>
+  )
+})
 
 /* ---------- global preferences ---------- */
 
@@ -1091,13 +1311,13 @@ function Group({ title, note, children }: { title: string; note?: string; childr
   const rows = React.Children.toArray(children).filter((r) => !(scope?.project && React.isValidElement(r) && r.type === Row && !projectCanSet((r.props as { k?: keyof Prefs }).k)))
   if (!rows.length) return null
   return (
-    <div style={{ display: 'flex', flexDirection: 'column' }}>
+    <div data-sy-group={`${title} ${note ?? ''}`} style={{ display: 'flex', flexDirection: 'column' }}>
       <SectionLabel note={note} style={{ paddingBottom: 8 }}>
-        {title}
+        <span data-sy-title="">{title}</span>
       </SectionLabel>
       <div style={{ border: '1px solid var(--bd-2)', borderRadius: 8, background: 'var(--bg-panel-2)', display: 'flex', flexDirection: 'column' }}>
         {rows.map((r, i) => (
-          <div key={i} style={{ borderTop: `1px solid ${i ? 'var(--bd-1)' : 'transparent'}` }}>
+          <div key={i} data-sy-cell="" style={{ borderTop: `1px solid ${i ? 'var(--bd-1)' : 'transparent'}` }}>
             {r}
           </div>
         ))}
@@ -1110,7 +1330,7 @@ function Row({ label, sub, k, children }: { label: string; sub?: string; k?: key
   const scope = useContext(PrefScope)
   if (scope?.project && !projectCanSet(k)) return null
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,340px)', gap: 24, alignItems: 'center', padding: '12px 16px' }}>
+    <div data-sy-row={label} data-sy-sub={sub ?? ''} style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,340px)', gap: 24, alignItems: 'center', padding: '12px 16px' }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 0 }}>
         <span style={{ font: '500 13px var(--font-ui)', color: 'var(--t1)' }}>{label}</span>
         {sub ? <span style={{ font: '12px/1.45 var(--font-ui)', color: 'var(--t3)', textWrap: 'pretty' } as React.CSSProperties}>{sub}</span> : null}
@@ -1792,6 +2012,12 @@ function VoiceSettings({ pf, set }: { pf: Prefs; set: (patch: Partial<Prefs>) =>
       </Row>
       <Row label="Language" sub="The one you speak. Detecting it works too, a little less reliably for short phrases.">
         <Select value={pf.voiceLanguage} options={VOICE_LANGUAGES} onChange={(l) => set({ voiceLanguage: l })} />
+      </Row>
+      <Row label="Spoken commands" sub="Say “send” at the end to press Enter, “new line” or “new paragraph” for line breaks, “scratch that” at the end to type nothing.">
+        <Toggle on={pf.voiceCommands} onChange={(on) => set({ voiceCommands: on })} />
+      </Row>
+      <Row label="Show the words while I speak" sub="A preview in the listening pill, every couple of seconds (it uses the GPU or CPU while you talk).">
+        <Toggle on={pf.voiceLive} onChange={(on) => set({ voiceLive: on })} />
       </Row>
       <Row
         label="Model files"

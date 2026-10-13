@@ -11,6 +11,8 @@ export function voiceOptions(prefs: Prefs, dispatch: Dispatch): VoiceOptions {
   return {
     model: prefs.voiceModel,
     language: prefs.voiceLanguage,
+    commands: prefs.voiceCommands,
+    live: prefs.voiceLive,
     toast: (text, action) => dispatch({ type: 'TOAST', text, action })
   }
 }
@@ -61,7 +63,16 @@ export function VoiceIndicator(): React.JSX.Element | null {
           <span style={{ width: 64, height: 4, borderRadius: 2, background: 'var(--bd-3)', overflow: 'hidden' }}>
             <span style={{ display: 'block', height: '100%', width: `${Math.round(v.level * 100)}%`, background: 'var(--c-green)', transition: 'width 80ms' }} />
           </span>
-          {v.target ? <span style={{ color: 'var(--t3)' }}>into {v.target}</span> : <span style={{ color: 'var(--t4)' }}>nothing focused - you&apos;ll get the text to copy</span>}
+          {v.partial ? (
+            // The words so far (the end of them).
+            <span style={{ color: 'var(--t1)', maxWidth: 360, overflow: 'hidden', textOverflow: 'ellipsis', direction: 'rtl', textAlign: 'left' }}>
+              <bdi>{v.partial}</bdi>
+            </span>
+          ) : v.target ? (
+            <span style={{ color: 'var(--t3)' }}>into {v.target}</span>
+          ) : (
+            <span style={{ color: 'var(--t4)' }}>nothing focused - you&apos;ll get the text to copy</span>
+          )}
         </>
       ) : (
         <>
