@@ -15,6 +15,8 @@ import { useChangesMaybe } from '../changes/ChangesContext'
 import { blameGutter } from '../../../lib/blameGutter'
 import { taskOfCommit } from '../../../lib/commitTask'
 import { changeGutter, setChangeBase } from '../../../lib/changeGutter'
+import { rememberFile } from '../../../lib/quickOpen'
+import { taskRoot } from '../../../lib/multiRepo'
 import type { Blame } from '@shared/types'
 
 /** A file's editor tab. */
@@ -87,6 +89,11 @@ export function FileEditor({ path, visible }: { path: string; visible: boolean }
   }, [repo?.path, repo?.rel, changes?.commits.length, status])
 
   useEffect(() => f.ensureLoaded(path), [path, f.ensureLoaded]) // eslint-disable-line react-hooks/exhaustive-deps
+  // Shown: one of this task's recent files (Ctrl+E, and first in Go to file).
+  useEffect(() => {
+    const root = taskRoot(task)
+    if (visible && root) rememberFile(root, path)
+  }, [visible, path, task])
 
   const text = f.text(path)
   const meta = f.meta(path)

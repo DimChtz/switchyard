@@ -9,6 +9,7 @@ import { askText } from '../lib/agentControl'
 import type { Task } from '@shared/types'
 import { whereLabel } from '@shared/scratch'
 import { Button, useContextMenu } from '../components/ui'
+import { EmptyState } from '../components/EmptyState'
 import { taskMenuItems } from '../lib/menus'
 import { shortcut } from '../lib/shortcuts'
 import { prefsFor } from '../lib/projectPrefs'
@@ -272,7 +273,25 @@ export function Agents(): React.JSX.Element {
         </span>
       </div>
 
-      {empty ? (
+      {empty && state.agentFilter === 'all' && !state.tasks.some((t) => t.agentKind && !t.scratch) ? (
+        <EmptyState
+          title="No agents yet"
+          actions={
+            state.projects.length ? (
+              <Button variant="primary" size="sm" onClick={() => dispatch({ type: 'NAV', view: 'board', projectId: state.projectId ?? state.projects[0].id })}>
+                Open the board
+              </Button>
+            ) : (
+              <Button variant="primary" size="sm" hint={shortcut('new-project')} onClick={() => dispatch({ type: 'OPEN_ADD_PROJECT' })}>
+                Add a project
+              </Button>
+            )
+          }
+          hint={state.projects.length ? 'On the board: select a card and press S, or drag it to In Progress' : undefined}
+        >
+          Every agent you start, across all your projects, shows up here - the ones waiting for you (an approval, a question, a failure) first.
+        </EmptyState>
+      ) : empty ? (
         <div style={{ border: '1px solid var(--bd-2)', borderRadius: 6, padding: 16, font: '13px var(--font-ui)', color: 'var(--t3)' }}>
           {emptyText(state.agentFilter, state.tasks.filter((t) => t.st === 'paused').length, state.projects.length > 0)}
         </div>

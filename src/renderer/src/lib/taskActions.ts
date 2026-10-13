@@ -319,6 +319,8 @@ export async function deleteTask(task: Task, project: Project, dispatch: Dispatc
   }
   const kept = !removeWorktree && task.worktreePath
   dispatch({ type: 'DELETE_TASK', taskId: task.id, toast: kept ? `Deleted ${task.key} - its worktree is kept (see Worktrees).` : `Deleted ${task.key}.` })
+  const gone = removeWorktree && !!task.worktreePath && !!task.branch && !task.inPlace
+  if (!gone) dispatch({ type: 'TOAST', text: kept ? `Deleted ${task.key} - its worktree is kept.` : `Deleted ${task.key}.`, action: { label: 'Undo', run: () => dispatch({ type: 'RESTORE_TASK', task }) } })
 }
 
 /**

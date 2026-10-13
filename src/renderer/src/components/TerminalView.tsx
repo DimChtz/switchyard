@@ -15,7 +15,18 @@ import { Menu, type MenuItem } from './ui'
 import { prefsFor, projectIdForPath } from '../lib/projectPrefs'
 import { tokenValue } from '../lib/theme'
 import { FILE_DRAG_TYPE, pathStyleFor, pathsForTerminal } from '../lib/dropPaths'
-import type { ITheme } from '@xterm/xterm'
+import type { ILink, ITheme } from '@xterm/xterm'
+import { useFilesMaybe } from '../screens/workspace/files/FilesContext'
+import { inCheckout, pathMatches } from '../lib/termLinks'
+import type { FileEntry } from '@shared/types'
+
+/** A checkout's files (not folders), by path - built once per listing. */
+const fileSets = new WeakMap<FileEntry[], Set<string>>()
+function fileSet(entries: FileEntry[]): Set<string> {
+  let set = fileSets.get(entries)
+  if (!set) fileSets.set(entries, (set = new Set(entries.filter((e) => !e.isDir).map((e) => e.path))))
+  return set
+}
 
 /** The theme's terminal colors. */
 function terminalTheme(): ITheme {
@@ -69,9 +80,13 @@ interface Props {
   env?: Record<string, string>
   /** Takes the keyboard when it opens (not when it opens hidden, behind another tab). Default: yes. */
   autoFocus?: boolean
+  /** Typed in (and run) once a new shell has started - not when reattaching to a running one. */
+  initialInput?: string
 }
 
-export function TerminalView({ sessionId, cwd, cmd, args, execCommand, onExit, attachOnly, env, autoFocus = true }: Props): React.JSX.Element {
+export function TerminalView({ sessionId, cwd, cmd, args, execCommand, onExit, attachOnly, env, autoFocus = true, initialInput }: Props): React.JSX.Element {
+  const initialInputRef = useRef(initialInput)
+  initialInputRef.current = initialInput
   const autoFocusRef = useRef(autoFocus)
   autoFocusRef.current = autoFocus
   const containerRef = useRef<HTMLDivElement>(null)
@@ -92,6 +107,12 @@ export function TerminalView({ sessionId, cwd, cmd, args, execCommand, onExit, a
   const [find, setFind] = useState<string | null>(null)
   const gpuRef = useRef(prefs.termGpu)
   gpuRef.current = prefs.termGpu
+  // In a task's workspace: its files, for the paths in the output to open.
+  const files = useFilesMaybe()
+  const filesRef = useRef(files)
+  filesRef.current = files
+  const cwdRef = useRef(cwd)
+  cwdRef.current = cwd
 
   // Settings → Terminal applies to open terminals too.
   const optionsKey = JSON.stringify(options)
@@ -142,6 +163,33 @@ export function TerminalView({ sessionId, cwd, cmd, args, execCommand, onExit, a
           if ((e.ctrlKey || e.metaKey) && /^https?:\/\//i.test(uri)) window.api.sys.openExternal(uri)
         })
       )
+      // A file of the task in the output ("src/app.ts:42:7") opens there with Ctrl/⌘+click.
+      term.registerLinkProvider({
+        provideLinks(y, done) {
+          const f = filesRef.current
+          const row = term.buffer.active.getLine(y - 1)
+          if (!f?.entries || !row) return done(undefined)
+          const known = fileSet(f.entries)
+          const root = f.abs('')
+          const windows = window.electron.process.platform === 'win32'
+          const text = row.translateToString(true)
+          const links: ILink[] = []
+          for (const m of pathMatches(text)) {
+            // From the terminal's folder, else the checkout's root (it may have cd'd since).
+            const rel = [cwdRef.current, root].map((base) => inCheckout(m.path, base, root, window.api.sys.homeDir, windows)).find((r) => r && known.has(r))
+            if (!rel) continue
+            links.push({
+              range: { start: { x: m.start + 1, y }, end: { x: m.end, y } },
+              text: text.slice(m.start, m.end),
+              decorations: { underline: true, pointerCursor: true },
+              activate: (e) => {
+                if (e.ctrlKey || e.metaKey) filesRef.current?.jumpTo(rel, Math.max(0, (m.line ?? 1) - 1), Math.max(0, (m.col ?? 1) - 1), 0)
+              }
+            })
+          }
+          done(links.length ? links : undefined)
+        }
+      })
       term.open(container)
       // Drawn with the GPU (Settings → Terminal); back to the default renderer if WebGL goes away.
       if (gpuRef.current) {
@@ -175,7 +223,14 @@ export function TerminalView({ sessionId, cwd, cmd, args, execCommand, onExit, a
         if (cancelled) return
         if (!info) {
           if (attachOnly) return
-          window.api.pty.spawn({ id: sessionId, cwd, cmd, args, execCommand, env, cols: term.cols, rows: term.rows }).catch((err: unknown) => {
+          window.api.pty
+            .spawn({ id: sessionId, cwd, cmd, args, execCommand, env, cols: term.cols, rows: term.rows })
+            .then(() => {
+              // (Once the shell has had a moment to show its prompt.)
+              const run = initialInputRef.current
+              if (run) setTimeout(() => window.api.pty.sendText(sessionId, run), 600)
+            })
+            .catch((err: unknown) => {
             if (cancelled) return
             const message = errText(err)
             term.write(`\r\n\x1b[31mFailed to start: ${message}\x1b[0m\r\n`)
@@ -215,6 +270,8 @@ export function TerminalView({ sessionId, cwd, cmd, args, execCommand, onExit, a
           setFind((f) => f ?? (term.hasSelection() ? term.getSelection() : ''))
           return false
         }
+        // Ctrl+Tab switches tasks (the app's shortcut), not a tab for the shell.
+        if (e.ctrlKey && e.key === 'Tab') return false
         if (isMac) return true
         {
           if (e.type !== 'keydown' || !e.ctrlKey || !e.shiftKey || e.altKey) return true

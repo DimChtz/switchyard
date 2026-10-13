@@ -528,20 +528,39 @@ export function ChangesProvider({ task, project, root, children }: { task: Task;
   }
 
   const discard = async (path: string): Promise<void> => {
-    const ok = await confirm({
-      title: `Discard the changes to ${path.split('/').pop()}?`,
-      body: 'Its uncommitted changes are thrown away; a new file is deleted. This can’t be undone.',
-      detail: path,
-      confirmLabel: 'Discard changes',
-      danger: true
-    })
-    if (!ok) return
+    const r = inRepo(path)
+    if (!r) return dispatch({ type: 'TOAST', text: 'Could not discard: not in one of the task’s repositories' })
+    const abs = `${r.path}/${r.rel}`
+    // The file as it is now, to put back on Undo - a text file's; anything else is asked about first.
+    const doc = await window.api.fs.readDoc(abs).catch(() => null)
+    const keep = doc && doc.kind === 'text' && doc.text !== undefined ? doc : null
+    if (!keep) {
+      const ok = await confirm({
+        title: `Discard the changes to ${path.split('/').pop()}?`,
+        body: 'Its uncommitted changes are thrown away; a new file is deleted. This can’t be undone.',
+        detail: path,
+        confirmLabel: 'Discard changes',
+        danger: true
+      })
+      if (!ok) return
+    }
     try {
-      const r = inRepo(path)
-      if (!r) throw new Error('not in one of the task’s repositories')
       await window.api.git.discardFile(r.path, r.rel)
-      dispatch({ type: 'TOAST', text: `Discarded changes to ${path}` })
       refresh()
+      const undo = keep
+        ? {
+            label: 'Undo',
+            run: () =>
+              window.api.fs
+                .writeDoc(abs, keep.text!, { eol: keep.eol, bom: keep.bom })
+                .then(() => {
+                  dispatch({ type: 'TOAST', text: `${path.split('/').pop()} is back as it was.`, tone: 'done' })
+                  refresh()
+                })
+                .catch((err: unknown) => dispatch({ type: 'TOAST', text: `Could not put it back: ${errText(err)}` }))
+          }
+        : undefined
+      dispatch({ type: 'TOAST', text: `Discarded changes to ${path}`, action: undo })
     } catch (err) {
       dispatch({ type: 'TOAST', text: `Could not discard: ${errText(err)}` })
     }

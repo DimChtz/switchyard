@@ -8,9 +8,11 @@ import { fileIcon } from '../lib/fileLang'
 import { SEP } from '../lib/paths'
 import { errText } from '../lib/errors'
 import { keyLabel } from '../lib/keys'
-import { wsOpen } from '../lib/wsStore'
+import { addShell, wsOpen } from '../lib/wsStore'
+import { taskRoot } from '../lib/multiRepo'
 import { defaultScope, recentFiles, rememberFile, sameScope, scopeLabel, scopeRoot, scopesOf, searchFiles, useCheckoutFiles, type FileHit } from '../lib/quickOpen'
 import { Menu } from './ui'
+import { recentCommands, recentFirst, rememberCommand } from '../lib/commandHistory'
 import type { MenuModel } from '@shared/types'
 
 interface Cmd {
@@ -22,6 +24,8 @@ interface Cmd {
   run: () => void
   /** Ctrl/Cmd+Enter: a file opens in the external editor. */
   runAlt?: () => void
+  /** Run from the palette lately. */
+  recent?: boolean
 }
 
 /**
@@ -43,7 +47,13 @@ export function CommandPalette({ menus, run }: { menus: MenuModel[]; run: (id: s
   const runRef = useRef(run)
   runRef.current = run
 
-  const hits = useMemo<FileHit[]>(() => (filesMode && root && list ? searchFiles(list, query, recentFiles(root)) : []), [filesMode, root, list, query])
+  const recentOnly = filesMode && !!palette?.recent
+  const hits = useMemo<FileHit[]>(() => {
+    if (!filesMode || !root || !list) return []
+    const recent = recentFiles(root)
+    const all = searchFiles(list, query, recent, recentOnly ? 100_000 : 80)
+    return recentOnly ? all.filter((h) => h.recent) : all
+  }, [filesMode, recentOnly, root, list, query])
 
   const openFile = (hit: FileHit, external: boolean): void => {
     if (!scope || !root) return
@@ -94,6 +104,18 @@ export function CommandPalette({ menus, run }: { menus: MenuModel[]; run: (id: s
           if (sc) setTimeout(() => dispatch({ type: 'OPEN_FILE_SEARCH', scope: sc }), 0)
         }
       },
+      // The project's saved commands, in the open task's terminal.
+      ...(() => {
+        const task = state.view === 'workspace' ? state.tasks.find((t) => t.id === state.taskId) : undefined
+        const project = task ? state.projects.find((p) => p.id === task.projectId) : undefined
+        if (!task || !project?.commands?.length) return []
+        return project.commands.map((c) => ({
+          id: `run-${project.id}-${c.name}`,
+          label: `Run: ${c.name}`,
+          sub: c.name !== c.cmd ? c.cmd : undefined,
+          run: () => addShell(task.id, { taskRoot: taskRoot(task) ?? undefined, run: c })
+        }))
+      })(),
       {
         id: 'new-note',
         label: 'New note',
@@ -154,15 +176,18 @@ export function CommandPalette({ menus, run }: { menus: MenuModel[]; run: (id: s
       })
     }
 
+    // The ones run lately first (marked), as VS Code's "recently used".
+    const used = new Set(recentCommands())
+    const ranked = recentFirst(list, recentCommands()).map((c) => (used.has(c.id) ? { ...c, recent: true } : c))
     const q = state.palette.query.trim().toLowerCase()
-    if (!q) return list
+    if (!q) return ranked
     // Notes come up when searching - by title or by what they say.
     const notes = state.notes
       .filter((n) => n.title.toLowerCase().includes(q) || n.body.toLowerCase().includes(q))
       .slice(0, 8)
       .map((n) => ({ id: `note-${n.id}`, label: `Note · ${n.title}`, sub: state.projects.find((p) => p.id === n.projectId)?.name, run: () => dispatch({ type: 'OPEN_NOTE', id: n.id }) }))
     const text = (x: React.ReactNode): string => (typeof x === 'string' ? x.toLowerCase() : '')
-    return [...list.filter((c) => text(c.label).includes(q) || text(c.sub).includes(q)), ...notes]
+    return [...ranked.filter((c) => text(c.label).includes(q) || text(c.sub).includes(q)), ...notes]
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.palette, state.projects, state.tasks, state.notes, state.projectId, dispatch, hits, menus])
 
@@ -237,13 +262,15 @@ export function CommandPalette({ menus, run }: { menus: MenuModel[]; run: (id: s
               const last = Math.max(0, commands.length - 1)
               dispatch({ type: 'SET_PALETTE_INDEX', index: Math.min(last, Math.max(0, index + (e.key === 'ArrowDown' ? 1 : -1))) })
             } else if (e.key === 'Enter') {
-              commands[index]?.run()
+              const c = commands[index]
+              if (c && !filesMode) rememberCommand(c.id)
+              c?.run()
               if (!filesMode) dispatch({ type: 'CLOSE_PALETTE' })
             } else if (e.key === 'Escape') {
               dispatch({ type: 'CLOSE_PALETTE' })
             }
           }}
-          placeholder={filesMode ? 'Go to file…  (> for commands)' : 'Search or run…'}
+          placeholder={recentOnly ? 'Recent files in this task…' : filesMode ? 'Go to file…  (> for commands)' : 'Search or run…'}
           style={{
             height: 44,
             flex: 'none',
@@ -286,7 +313,7 @@ export function CommandPalette({ menus, run }: { menus: MenuModel[]; run: (id: s
         <div style={{ overflow: 'auto', padding: 4, minHeight: 0 }}>
           {commands.length === 0 ? (
             <div style={{ padding: '14px 16px', color: 'var(--t3)', fontSize: 13 }}>
-              {filesMode && !root ? 'This checkout has no folder on disk.' : filesMode && !list ? 'Listing files…' : filesMode ? 'No file matches.' : 'No results.'}
+              {filesMode && !root ? 'This checkout has no folder on disk.' : filesMode && !list ? 'Listing files…' : recentOnly ? (query.trim() ? 'No recent file matches.' : 'No files opened here yet - Go to file finds any.') : filesMode ? 'No file matches.' : 'No results.'}
             </div>
           ) : (
             commands.map((c, i) => (
@@ -295,6 +322,7 @@ export function CommandPalette({ menus, run }: { menus: MenuModel[]; run: (id: s
                 ref={i === index ? selectedRef : undefined}
                 onMouseMove={() => i !== index && dispatch({ type: 'SET_PALETTE_INDEX', index: i })}
                 onClick={(e) => {
+                  if (!filesMode) rememberCommand(c.id)
                   if ((e.ctrlKey || e.metaKey) && c.runAlt) c.runAlt()
                   else c.run()
                   if (!filesMode) dispatch({ type: 'CLOSE_PALETTE' })
@@ -314,6 +342,7 @@ export function CommandPalette({ menus, run }: { menus: MenuModel[]; run: (id: s
                 {c.dot ? <span style={{ width: 6, height: 6, borderRadius: '50%', background: c.dot }} /> : null}
                 {c.icon}
                 <span style={{ flex: 1, minWidth: 0, color: 'var(--t1)' }}>{c.label}</span>
+                {c.recent ? <span style={{ font: '11px var(--font-ui)', color: 'var(--t4)', flex: 'none' }}>recently used</span> : null}
                 {c.sub ? <span style={{ font: "11px var(--font-mono)", color: 'var(--t4)', flex: 'none' }}>{c.sub}</span> : null}
               </div>
             ))

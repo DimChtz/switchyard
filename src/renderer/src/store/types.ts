@@ -59,6 +59,8 @@ export interface PaletteState {
   mode: 'commands' | 'files'
   /** Go to file's checkout. */
   scope: FileScope | null
+  /** Only the files opened there lately (Ctrl+E). */
+  recent?: boolean
 }
 
 /** A file of a project's main checkout, shown read-only (Go to file outside a task). */
@@ -71,6 +73,13 @@ export interface ToastState {
   id: number
   text: string
   tone: 'plain' | 'waiting' | 'done'
+  /** A button on it (Undo) - the toast stays up longer. */
+  action?: ToastAction
+}
+
+export interface ToastAction {
+  label: string
+  run: () => void
 }
 
 export interface AppState {
@@ -176,7 +185,7 @@ export type Action =
   /** A task's repositories changed (attached one); with its new folder and worktree when they moved. */
   | { type: 'SET_TASK_REPOS'; taskId: string; repos: string[]; taskDir?: string | null; worktreePath?: string | null }
   /** Go to file in this checkout; closes it when it's already open. */
-  | { type: 'OPEN_FILE_SEARCH'; scope: FileScope }
+  | { type: 'OPEN_FILE_SEARCH'; scope: FileScope; recent?: boolean }
   | { type: 'SET_PALETTE_MODE'; mode: 'commands' | 'files'; query?: string }
   | { type: 'SET_PALETTE_SCOPE'; scope: FileScope }
   | { type: 'OPEN_FILE_PREVIEW'; projectId: string; path: string }
@@ -219,7 +228,7 @@ export type Action =
   /** Show a note in the Notes screen (null: just the screen). */
   | { type: 'OPEN_NOTE'; id: string | null }
   | { type: 'IMPORT_ISSUES'; projectId: string; issues: Issue[] }
-  | { type: 'TOAST'; text: string; tone?: ToastState['tone'] }
+  | { type: 'TOAST'; text: string; tone?: ToastState['tone']; action?: ToastAction }
   | { type: 'DISMISS_TOAST'; id: number }
   | { type: 'HYDRATE'; projects: Project[]; tasks: Task[]; prefs: Prefs; keyHigh?: Record<string, number> }
   | { type: 'OPEN_ADD_PROJECT' }
@@ -248,6 +257,10 @@ export type Action =
   /** Finished tasks off the board, into the archive (or back). */
   | { type: 'ARCHIVE_TASKS'; taskIds: string[] }
   | { type: 'UNARCHIVE_TASK'; taskId: string }
+  /** Undo of an archive: back in Done, quietly. */
+  | { type: 'UNARCHIVE_TASKS'; taskIds: string[] }
+  /** Undo of a delete: the task back as it was (its agent stopped). */
+  | { type: 'RESTORE_TASK'; task: Task }
   | { type: 'OPEN_ARCHIVE'; projectId: string | null }
   /** Keep it at the top of its column (or not). */
   | { type: 'PIN_TASK'; taskId: string; pinned: boolean }

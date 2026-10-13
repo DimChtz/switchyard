@@ -265,7 +265,8 @@ function ScratchRow({ project }: { project: Project }): React.JSX.Element {
   )
 }
 
-function TaskRow({ taskId }: { taskId: string }): React.JSX.Element {
+/** A task in the sidebar - under its project, or in Pinned (with its project, and its key in place of the agent). */
+function TaskRow({ taskId, pinned }: { taskId: string; pinned?: boolean }): React.JSX.Element {
   const { state, dispatch } = useAppStore()
   const [hover, hoverProps] = useHover()
   const task = state.tasks.find((t) => t.id === taskId)!
@@ -273,7 +274,7 @@ function TaskRow({ taskId }: { taskId: string }): React.JSX.Element {
   const ctx = useContextMenu(() => taskMenuItems(task, state.projects.find((p) => p.id === task.projectId), prefsFor(state, task.projectId), dispatch, { projects: state.projects }))
   return (
     <div
-      onClick={() => dispatch({ type: 'OPEN_TASK', taskId })}
+      onClick={() => (task.scratch ? dispatch({ type: 'OPEN_SCRATCH', projectId: task.projectId }) : dispatch({ type: 'OPEN_TASK', taskId }))}
       onContextMenu={ctx.onContextMenu}
       {...hoverProps}
       style={{
@@ -293,9 +294,15 @@ function TaskRow({ taskId }: { taskId: string }): React.JSX.Element {
       <span style={{ flex: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
         {task.title}
       </span>
-      <span style={{ font: "10.5px var(--font-mono)", color: statusColor(task.st) }}>
-        {task.st === 'done' ? '✓' : agentShort(task.agentKind)}
-      </span>
+      {pinned ? (
+        <span title={`${task.key} · ${state.projects.find((p) => p.id === task.projectId)?.name ?? ''}`} style={{ font: "10.5px var(--font-mono)", color: task.agentKind && task.st ? statusColor(task.st) : 'var(--t4)', whiteSpace: 'nowrap' }}>
+          {task.key}
+        </span>
+      ) : (
+        <span style={{ font: "10.5px var(--font-mono)", color: statusColor(task.st) }}>
+          {task.st === 'done' ? '✓' : agentShort(task.agentKind)}
+        </span>
+      )}
       {ctx.menu}
     </div>
   )
@@ -412,6 +419,7 @@ function FullSidebar(): React.JSX.Element {
           <NavRow key={n.icon} icon={n.icon} label={n.label} shortcut={n.key} active={n.active} badge={n.badge} dot={n.dot} onClick={n.onClick} />
         ))}
       </div>
+      <PinnedList />
       <ProjectsHeading padding="8px 18px 6px" />
       <div style={{ padding: '0 8px', display: 'flex', flexDirection: 'column', gap: 1, flex: 1, minHeight: 0, overflow: 'auto' }}>
         <ProjectList />
@@ -438,6 +446,23 @@ function FullSidebar(): React.JSX.Element {
         <span style={{ font: "11px var(--font-mono)", color: 'var(--t5)' }}>{shortcut('preferences')}</span>
       </div>
     </div>
+  )
+}
+
+/** Pinned tasks, from every project, in the order they were pinned (right-click a task → Pin). */
+function PinnedList(): React.JSX.Element | null {
+  const { state } = useAppStore()
+  const pinned = state.tasks.filter((t) => t.pinnedAt && !t.archivedAt).sort((a, b) => a.pinnedAt! - b.pinnedAt!)
+  if (!pinned.length) return null
+  return (
+    <>
+      <div style={{ padding: '8px 18px 6px', font: "500 11px var(--font-mono)", letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--t4)' }}>Pinned</div>
+      <div style={{ padding: '0 8px 6px', display: 'flex', flexDirection: 'column', gap: 1, maxHeight: 190, overflow: 'auto', flex: 'none' }}>
+        {pinned.map((t) => (
+          <TaskRow key={t.id} taskId={t.id} pinned />
+        ))}
+      </div>
+    </>
   )
 }
 

@@ -11,6 +11,7 @@ import { followUpMessage, where } from '../lib/review'
 import { conflictMessage } from '../lib/conflicts'
 import { isMulti, repoDir } from '../lib/multiRepo'
 import { Button } from '../components/ui'
+import { EmptyState } from '../components/EmptyState'
 import type { Task } from '@shared/types'
 import { baseOf } from '../lib/stack'
 
@@ -194,9 +195,10 @@ export function Inbox(): React.JSX.Element {
         <span style={{ font: '11.5px var(--font-mono)', color: 'var(--t5)' }}>j/k move · keys on each action · r reply</span>
       </div>
       {!items.length ? (
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 8 }}>
-          <div style={{ font: '500 15px var(--font-ui)', color: 'var(--t1)' }}>All clear</div>
-          <div style={{ font: '13px var(--font-ui)', color: 'var(--t4)' }}>Approvals, questions, failures, clashes and finished turns show up here.</div>
+        <div style={{ flex: 1, display: 'flex' }}>
+          <EmptyState title="All clear" center hint="Ctrl+J jumps to the next agent that needs you, from anywhere">
+            Approvals, questions, failed tests, clashing changes and finished turns show up here - one list to work through, with the action for each.
+          </EmptyState>
         </div>
       ) : (
         <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: '380px 1fr' }}>

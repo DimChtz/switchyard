@@ -8,7 +8,7 @@ const TONE_COLOR: Record<string, string> = {
 }
 
 export function Toast(): React.JSX.Element | null {
-  const { state } = useAppStore()
+  const { state, dispatch } = useAppStore()
   if (!state.toast) return null
   return (
     <div
@@ -38,6 +38,19 @@ export function Toast(): React.JSX.Element | null {
         }}
       />
       {state.toast.text}
+      {state.toast.action ? (
+        <button
+          type="button"
+          onClick={() => {
+            const t = state.toast!
+            dispatch({ type: 'DISMISS_TOAST', id: t.id })
+            t.action!.run()
+          }}
+          style={{ marginLeft: 4, padding: '2px 9px', borderRadius: 4, border: '1px solid var(--bd-4)', color: 'var(--c-blue)', font: '500 12px var(--font-ui)', cursor: 'pointer' }}
+        >
+          {state.toast.action.label}
+        </button>
+      ) : null}
     </div>
   )
 }

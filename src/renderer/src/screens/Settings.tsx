@@ -23,7 +23,7 @@ import { Button, FooterNote, IconButton, Menu, Modal, Segmented, SectionLabel, S
 import { askInstall, usePlugins } from '../lib/plugins'
 import type { PluginInfo, PluginSource } from '@shared/plugins'
 import { AGENTS, APP_PREF_KEYS, COLUMN_LABEL, COLUMN_ORDER, DEFAULT_MESSAGE_TEMPLATE, DEFAULT_PREFS, LANGUAGES, PROJECT_SETTING_KEYS, firstMessage, parseEnv } from '@shared/constants'
-import type { AgentKind, EditorOption, NoticeKind, Prefs, Project, ProjectSettingKey, ProjectSettingScope, RepoScan, ShellOption } from '@shared/types'
+import type { AgentKind, EditorOption, NoticeKind, Prefs, Project, ProjectSettingKey, ProjectSettingScope, RepoScan, SavedCommand, ShellOption } from '@shared/types'
 
 const MONO = "var(--font-mono)"
 const G = 'var(--c-green)'
@@ -1022,6 +1022,10 @@ function ProjectSettings({ project: p }: { project: Project }): React.JSX.Elemen
         {field('Setup', 'setupCmd', 'Runs in every new worktree before the agent starts', 'none')}
         {field('Test', 'testCmd', 'Used by the Tests check in the workspace', 'none')}
         {field('Dev server', 'devCmd', 'Powers the Preview tab (gets a free port as PORT)', 'none')}
+        <Row label="Saved commands" sub={'Run in a new terminal tab with a click: Sessions → Commands, a group\'s + menu, or "Run:" in the palette'}>
+          <SavedCommands value={p.commands ?? []} onChange={(commands) => update({ commands: commands.length ? commands : undefined })} />
+          {where('commands')}
+        </Row>
       </Group>
       <Group title="Remove">
         <Row
@@ -1616,6 +1620,39 @@ function ColumnsEditor({ prefs, set }: { prefs: Prefs; set: (patch: Partial<Pref
           />
         </React.Fragment>
       ))}
+    </div>
+  )
+}
+
+/** A project's saved commands: a name and a command per row. */
+function SavedCommands({ value, onChange }: { value: SavedCommand[]; onChange: (v: SavedCommand[]) => void }): React.JSX.Element {
+  // Rows being typed in stay, even before they have a command.
+  const [rows, setRows] = useState<SavedCommand[]>(value)
+  const key = JSON.stringify(value)
+  useEffect(() => {
+    setRows((r) => (JSON.stringify(r.filter((c) => c.cmd.trim())) === key ? r : value))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key])
+  const set = (next: SavedCommand[]): void => {
+    setRows(next)
+    onChange(next.filter((c) => c.cmd.trim()).map((c) => ({ name: c.name.trim() || c.cmd.trim(), cmd: c.cmd.trim() })))
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {rows.map((c, i) => (
+        <div key={i} style={{ display: 'grid', gridTemplateColumns: '96px minmax(0, 1fr) 24px', gap: 6, alignItems: 'center' }}>
+          <TextField value={c.name} placeholder="name" onChange={(name) => set(rows.map((r, j) => (j === i ? { ...r, name } : r)))} />
+          <TextField value={c.cmd} placeholder="npm run lint" onChange={(cmd) => set(rows.map((r, j) => (j === i ? { ...r, cmd } : r)))} />
+          <IconButton title="Remove" onClick={() => set(rows.filter((_, j) => j !== i))}>
+            ×
+          </IconButton>
+        </div>
+      ))}
+      <div>
+        <Button size="xs" onClick={() => setRows([...rows, { name: '', cmd: '' }])}>
+          Add command
+        </Button>
+      </div>
     </div>
   )
 }

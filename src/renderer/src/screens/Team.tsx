@@ -8,6 +8,7 @@ import { errText } from '../lib/errors'
 import { keyLabel } from '../lib/keys'
 import { useTeam } from '../lib/team'
 import { Button, Select } from '../components/ui'
+import { EmptyState } from '../components/EmptyState'
 import type { Task, TeamMessage } from '@shared/types'
 
 const STATE_TEXT: Record<TeamMessage['state'], string> = {
@@ -82,9 +83,9 @@ export function Team(): React.JSX.Element {
         <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           <div ref={feed} style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: 12 }}>
             {!shown.length ? (
-              <div style={{ margin: 'auto', maxWidth: 460, textAlign: 'center', font: '13px/1.6 var(--font-ui)', color: 'var(--t4)' }}>
-                Nothing yet. Agents with Switchyard&apos;s tools (Claude Code, Codex, OpenCode, Copilot CLI) can see who else is working (list_active_tasks) and message them (send_message); when the conflict radar finds two whose changes clash, Switchyard introduces them here.
-              </div>
+              <EmptyState title="No messages yet" center>
+                Agents with Switchyard&apos;s tools (Claude Code, Codex, OpenCode, Copilot CLI) can see who else is working and message each other; when two agents&apos; changes clash, Switchyard introduces them here. You can write to any of them below.
+              </EmptyState>
             ) : (
               shown.map((m) => <Message key={m.id} m={m} name={name} tasks={state.tasks} onOpen={(id) => dispatch({ type: 'OPEN_TASK', taskId: id })} />)
             )}

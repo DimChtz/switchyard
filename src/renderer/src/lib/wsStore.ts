@@ -165,11 +165,23 @@ export interface ShellTab {
   cwd?: string
   /** The terminal profile it runs (none: the default one, Settings → Terminal). */
   profile?: ShellOption
+  /** Typed in once its shell starts (a project's saved command). */
+  run?: string
 }
 
 // The shells keep running when the workspace closes (they're the main
-// process's); their names and how they started are kept here.
-const shells = new Map<string, ShellTab[]>()
+// process's); their names and how they started are kept here - and in
+// local storage, so a reload of the window finds them under their names.
+const SHELLS_KEY = 'sy.shellTabs'
+function loadShells(): Map<string, ShellTab[]> {
+  try {
+    const v = JSON.parse(localStorage.getItem(SHELLS_KEY) ?? '{}') as Record<string, ShellTab[]>
+    return new Map(Object.entries(v).filter(([, list]) => Array.isArray(list)))
+  } catch {
+    return new Map()
+  }
+}
+const shells = loadShells()
 const NONE: ShellTab[] = []
 
 export function shellsOf(taskId: string): ShellTab[] {
@@ -181,7 +193,13 @@ export function useShells(taskId: string): ShellTab[] {
 }
 
 function setShells(taskId: string, list: ShellTab[]): void {
-  shells.set(taskId, list)
+  if (list.length) shells.set(taskId, list)
+  else shells.delete(taskId)
+  try {
+    localStorage.setItem(SHELLS_KEY, JSON.stringify(Object.fromEntries(shells)))
+  } catch {
+    // (Kept for this window only.)
+  }
   emit()
 }
 
@@ -189,14 +207,17 @@ function setShells(taskId: string, list: ShellTab[]): void {
  * A new shell tab - in `cwd` (the task's folder when unset), with a
  * profile - in the focused group, or in a new group beside one.
  */
-export function addShell(taskId: string, o: { cwd?: string; profile?: ShellOption; taskRoot?: string; beside?: { gid: string; zone: Exclude<Zone, 'center'> } } = {}): string {
+export function addShell(
+  taskId: string,
+  o: { cwd?: string; profile?: ShellOption; taskRoot?: string; beside?: { gid: string; zone: Exclude<Zone, 'center'> }; run?: { name: string; cmd: string } } = {}
+): string {
   const id = `${shellPrefix(taskId)}${Date.now().toString(36)}`
   const list = shellsOf(taskId)
   // Named after its folder when it starts somewhere inside the task's, or its profile.
   const norm = (p: string): string => p.split(/[\\/]/).filter(Boolean).join('/').toLowerCase()
   const folder = o.cwd && (!o.taskRoot || norm(o.cwd) !== norm(o.taskRoot)) ? o.cwd.split(/[\\/]/).filter(Boolean).pop() : undefined
-  const name = folder ?? (o.profile ? o.profile.label.replace(/ \(WSL\)$/, '') : `shell ${list.length + 1}`)
-  setShells(taskId, [...list, { id, name, cwd: o.cwd, profile: o.profile }])
+  const name = o.run?.name ?? folder ?? (o.profile ? o.profile.label.replace(/ \(WSL\)$/, '') : `shell ${list.length + 1}`)
+  setShells(taskId, [...list, { id, name, cwd: o.cwd, profile: o.profile, run: o.run?.cmd }])
   const tab = `shell:${id}`
   setLayout(taskId, (L) => (o.beside ? openBeside(L, o.beside.gid, o.beside.zone, tab) : openTab(L, tab)))
   return id

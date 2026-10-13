@@ -33,6 +33,9 @@ import { Summary } from './screens/Summary'
 import { RepoMap } from './screens/RepoMap'
 import { PullRequests } from './screens/PullRequests'
 import { Processes } from './screens/Processes'
+import { TaskSwitcher } from './components/TaskSwitcher'
+import { KeyboardHelp, toggleKeyboardHelp } from './components/KeyboardHelp'
+import { recordTaskVisit } from './lib/taskSwitcher'
 import { useSummaryAnnouncement } from './lib/activity'
 import { AGENTS, COLUMN_ORDER } from '@shared/constants'
 import { inProject } from './lib/multiRepo'
@@ -98,6 +101,11 @@ function Shell(): React.JSX.Element {
 
   const { menus, run } = useCommands()
 
+  // The order tasks were opened in, for Ctrl+Tab.
+  useEffect(() => {
+    if (state.view === 'workspace' && state.taskId) recordTaskVisit(state.taskId)
+  }, [state.view, state.taskId])
+
   // The macOS menu bar (and native menu shortcuts) run the same commands.
   useEffect(() => window.api.menu.onCommand(run), [run])
 
@@ -134,7 +142,7 @@ function Shell(): React.JSX.Element {
         const plain = !chord.ctrl && !chord.meta && !chord.alt
         const command = plain && typing ? null : matchBinding(bindings(), chord, ctx)
         // With the palette, Start modal or a preview open only Find and Go to file work; the rest is theirs.
-        if (command && (!dialogOpen || command === 'find' || command === 'quick-open')) {
+        if (command && (!dialogOpen || command === 'find' || command === 'quick-open' || command === 'recent-files')) {
           e.preventDefault()
           return run(command)
         }
@@ -166,6 +174,12 @@ function Shell(): React.JSX.Element {
       }
 
       if (state.palette || state.start || state.filePreview) return
+
+      // ? (anywhere you aren't typing): the keyboard cheat sheet.
+      if (e.key === '?' && !e.ctrlKey && !e.metaKey && !e.altKey && !isTyping()) {
+        e.preventDefault()
+        return toggleKeyboardHelp()
+      }
 
       // The board's arrow keys (and hjkl) below; Ctrl+C and friends aren't them.
       if (meta || e.altKey) return
@@ -248,6 +262,8 @@ function Shell(): React.JSX.Element {
       </div>
       {state.zen ? <ZenExit onExit={() => dispatch({ type: 'SET_ZEN', on: false })} /> : <StatusBar />}
       <CommandPalette menus={menus} run={run} />
+      <TaskSwitcher />
+      <KeyboardHelp />
       <FilePreview />
       <StartTaskModal />
       <NewProjectModal />

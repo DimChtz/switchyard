@@ -11,6 +11,7 @@ export function trustLines(values: Record<string, unknown>): string[] {
   if (values.setupCmd) out.push(`run \`${v('setupCmd')}\` when a task starts`)
   if (values.testCmd) out.push(`run tests with \`${v('testCmd')}\``)
   if (values.devCmd) out.push(`start the dev server with \`${v('devCmd')}\``)
+  if (Array.isArray(values.commands)) for (const c of values.commands as { name: string; cmd: string }[]) out.push(`offer \`${c.cmd}\` as its "${c.name}" command`)
   if (values.env) {
     const keys = v('env')
       .split('\n')

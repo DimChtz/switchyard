@@ -6,6 +6,7 @@ import { errText } from '../lib/errors'
 import { plural } from '../lib/summary'
 import { prefsFor } from '../lib/projectPrefs'
 import { Button, Segmented, confirm } from '../components/ui'
+import { EmptyState } from '../components/EmptyState'
 import type { OpenPr, Project, Task } from '@shared/types'
 
 /** A project's open pull requests, or why they can't be read. */
@@ -101,7 +102,22 @@ export function PullRequests(): React.JSX.Element {
           {loading ? 'Refreshing…' : 'Refresh'}
         </Button>
       </div>
-      {!projects.length ? <Empty text="Add a project to see its pull requests." /> : null}
+      {!projects.length ? (
+        <EmptyState
+          title="No projects yet"
+          actions={
+            <Button variant="primary" size="sm" onClick={() => dispatch({ type: 'OPEN_ADD_PROJECT' })}>
+              Add a project
+            </Button>
+          }
+        >
+          Every open pull request across your projects shows up here, with its checks, reviews and conflicts, linked to the task it came from.
+        </EmptyState>
+      ) : at && filter === 'all' && onGithub.length && !total ? (
+        <EmptyState title="No open pull requests">
+          Open one from a task when it&apos;s ready (Open PR, in its header) - it shows up here with its checks and reviews, and you can merge it from here.
+        </EmptyState>
+      ) : null}
       {shown.map((d) => (
         <section key={d.project.id} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, padding: '0 4px 4px', borderBottom: '1px solid var(--bd-1)' }}>
@@ -126,10 +142,6 @@ export function PullRequests(): React.JSX.Element {
       ))}
     </div>
   )
-}
-
-function Empty({ text }: { text: string }): React.JSX.Element {
-  return <div style={{ padding: 24, font: '13px var(--font-ui)', color: 'var(--t3)' }}>{text}</div>
 }
 
 function Badge({ tone, title, children }: { tone: string; title?: string; children: React.ReactNode }): React.JSX.Element {

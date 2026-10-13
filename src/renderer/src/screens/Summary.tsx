@@ -8,6 +8,7 @@ import { agentName, buildSummary, lines, periodRange, plural, summaryMarkdown, w
 import { COLUMN_LABEL } from '@shared/constants'
 import { formatCost } from '@shared/usage'
 import { Button, Menu, type MenuAnchor } from '../components/ui'
+import { EmptyState } from '../components/EmptyState'
 import type { Task } from '@shared/types'
 
 const MONO = 'var(--font-mono)'
@@ -182,9 +183,9 @@ export function Summary(): React.JSX.Element {
         ) : null}
 
         {nothing && !summary.attention.length && !summary.review.length ? (
-          <div style={{ font: '13px/1.6 var(--font-ui)', color: 'var(--t3)', maxWidth: 520 }}>
+          <EmptyState title="Nothing to sum up for this period">
             The summary fills in as agents work: their turns, what they changed and said, what reached Review and what got merged. Try another period above.
-          </div>
+          </EmptyState>
         ) : null}
       </div>
       {menu ? (

@@ -60,12 +60,16 @@ export function keyCommands(mac: boolean): KeyCommand[] {
     { id: 'preferences', title: 'Preferences', category: 'File', key: `${mod}+,` },
     { id: 'open-settings-json', title: 'Open settings.json', category: 'File' },
     { id: 'keyboard-shortcuts', title: 'Keyboard shortcuts', category: 'File' },
+    // (? opens it too, anywhere you aren't typing.)
+    { id: 'keyboard-help', title: 'Keyboard cheat sheet', category: 'Help' },
     { id: 'open-keybindings-json', title: 'Open keybindings.json', category: 'File' },
     { id: 'open-editor', title: 'Open in external editor', category: 'File', key: `${mod}+shift+e` },
     { id: 'reveal-worktree', title: 'Reveal worktree in the file manager', category: 'File' },
     { id: 'close-workspace', title: 'Close workspace', category: 'File', key: `${mod}+w`, when: notInTerminal },
     { id: 'find', title: 'Find… (command palette)', category: 'Edit', key: `${mod}+k` },
     { id: 'quick-open', title: 'Go to file…', category: 'Edit', key: `${mod}+p` },
+    // (Ctrl+E is end-of-line in a Windows/Linux shell.)
+    { id: 'recent-files', title: 'Recent files…', category: 'Edit', key: `${mod}+e`, when: notInTerminal },
     { id: 'edit-desc', title: 'Edit task description', category: 'Edit' },
     { id: 'copy-branch', title: 'Copy branch name', category: 'Edit' },
     // Alt+←/→ move the cursor by word in a Windows/Linux shell.
@@ -88,6 +92,9 @@ export function keyCommands(mac: boolean): KeyCommand[] {
     // (Ctrl+B is the shell's own in a Windows/Linux terminal, and bold in an editor.)
     { id: 'toggle-sidebar', title: 'Toggle the sidebar', category: 'View', key: `${mod}+b`, when: mac ? '!inputFocus || terminalFocus' : '!inputFocus' },
     { id: 'next-blocked', title: 'Next blocked agent', category: 'View', key: `${mod}+j` },
+    // (Ctrl on the Mac too, as in VS Code.)
+    { id: 'switch-task', title: 'Switch to recent task', category: 'View', key: 'ctrl+tab' },
+    { id: 'switch-task-back', title: 'Switch to recent task (backwards)', category: 'View', key: 'ctrl+shift+tab' },
     { id: 'start-task', title: 'Start the selected task', category: 'Board', key: 's', when: 'board' },
     { id: 'board-search', title: 'Search the board', category: 'Board', key: '/', when: 'board' },
     { id: 'ws-terminal', title: 'Show the agent’s session', category: 'Workspace', key: 't', when: 'workspace' },

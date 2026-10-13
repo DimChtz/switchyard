@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { toggleNoticeCenter } from './notices'
+import { recentTasks, stepSwitcher } from './taskSwitcher'
+import { toggleKeyboardHelp } from '../components/KeyboardHelp'
 import { focusBoardSearch } from './boardFilter'
 import { useAppStore } from '../store/AppStore'
 import { blockedTasks } from './derive'
@@ -92,6 +94,7 @@ export function useCommands(): { menus: MenuModel[]; run: (id: string) => void }
           SEP,
           { id: 'find', label: 'Find…', key: k('find') },
           { id: 'quick-open', label: 'Go to file…', key: k('quick-open'), enabled: state.projects.length > 0 },
+          { id: 'recent-files', label: 'Recent files…', key: k('recent-files'), enabled: state.projects.length > 0 },
           SEP,
           { id: 'edit-desc', label: 'Edit task description', key: k('edit-desc'), enabled: canDesc },
           { id: 'copy-branch', label: 'Copy branch name', key: k('copy-branch'), enabled: !!worktree?.branch }
@@ -102,6 +105,7 @@ export function useCommands(): { menus: MenuModel[]; run: (id: string) => void }
         items: [
           { id: 'go-back', label: 'Back', key: k('go-back'), enabled: canBack },
           { id: 'go-forward', label: 'Forward', key: k('go-forward'), enabled: canForward },
+          { id: 'switch-task', label: 'Switch to recent task', key: k('switch-task') },
           SEP,
           { id: 'nav-dashboard', label: 'Projects', key: k('nav-dashboard') },
           { id: 'nav-agents', label: 'Agents', key: k('nav-agents') },
@@ -140,6 +144,8 @@ export function useCommands(): { menus: MenuModel[]; run: (id: string) => void }
       {
         label: 'Help',
         items: [
+          { id: 'keyboard-help', label: 'Keyboard cheat sheet', key: k('keyboard-help') },
+          SEP,
           { id: 'check-updates', label: 'Check for updates…' },
           { id: 'open-logs', label: 'Open logs folder' },
           ...(isMac ? [] : [SEP, role('about', 'About Switchyard')])
@@ -164,11 +170,11 @@ export function useCommands(): { menus: MenuModel[]; run: (id: string) => void }
       }
       const dialogOpen = !!(state.palette || state.start || state.addProjectOpen || state.issuesFor || state.filePreview)
       if (id === 'find') return dispatch({ type: 'TOGGLE_PALETTE' })
-      if (id === 'quick-open') {
+      if (id === 'quick-open' || id === 'recent-files') {
         // The open task's worktree (its branch), else the project's main checkout.
         const scope = state.palette?.mode === 'files' ? state.palette.scope : defaultScope(state)
         if (!scope) return dispatch({ type: 'TOAST', text: 'Add a project first - Go to file searches its files.' })
-        return dispatch({ type: 'OPEN_FILE_SEARCH', scope })
+        return dispatch({ type: 'OPEN_FILE_SEARCH', scope, recent: id === 'recent-files' })
       }
       if (dialogOpen) return
       switch (id) {
@@ -192,6 +198,8 @@ export function useCommands(): { menus: MenuModel[]; run: (id: string) => void }
         case 'open-settings-json':
           window.api.settings.openUserFile().catch((err: unknown) => dispatch({ type: 'TOAST', text: errText(err) }))
           return
+        case 'keyboard-help':
+          return toggleKeyboardHelp()
         case 'keyboard-shortcuts':
           return dispatch({ type: 'OPEN_SETTINGS', section: 'keys' })
         case 'open-keybindings-json':
@@ -232,6 +240,20 @@ export function useCommands(): { menus: MenuModel[]; run: (id: string) => void }
           if (state.zen) dispatch({ type: 'SET_ZEN', on: false })
           else toggleSidebar()
           return
+        case 'switch-task':
+        case 'switch-task-back': {
+          const usable = (id: string): boolean => {
+            const t = state.tasks.find((x) => x.id === id)
+            return !!t && !t.archivedAt
+          }
+          const ids = recentTasks(usable)
+          // Then the other started tasks, latest activity first (until there's a history to go by).
+          const rest = state.tasks
+            .filter((t) => !t.archivedAt && (t.worktreePath || t.scratch) && !ids.includes(t.id))
+            .sort((a, b) => (b.lastActivityAt ?? 0) - (a.lastActivityAt ?? 0))
+            .map((t) => t.id)
+          return stepSwitcher(id === 'switch-task' ? 1 : -1, [...ids, ...rest].slice(0, 30), state.view === 'workspace' ? state.taskId : null)
+        }
         case 'go-back':
           return dispatch({ type: 'GO', dir: -1 })
         case 'go-forward':

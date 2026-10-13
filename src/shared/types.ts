@@ -49,6 +49,8 @@ export interface Project {
   depFolders?: string[]
   /** KEY=value lines, set for every process run in the project's worktrees. */
   env?: string
+  /** Commands kept for its terminals: run in a new terminal tab (Sessions → Commands, the + menu, the palette). */
+  commands?: SavedCommand[]
   /** The Start modal's first message; {key} {title} {desc} {branch}. */
   messageTemplate?: string
   /**
@@ -73,7 +75,13 @@ export interface Project {
 }
 
 /** Project settings a repository can carry in .switchyard/settings.json. */
-export type ProjectSettingKey = 'prefix' | 'defaultBranch' | 'lang' | 'agentKind' | 'setupCmd' | 'testCmd' | 'devCmd' | 'copyFiles' | 'shareDeps' | 'depFolders' | 'messageTemplate' | 'env'
+/** A project's saved terminal command: "lint" → npm run lint. */
+export interface SavedCommand {
+  name: string
+  cmd: string
+}
+
+export type ProjectSettingKey = 'prefix' | 'defaultBranch' | 'lang' | 'agentKind' | 'setupCmd' | 'testCmd' | 'devCmd' | 'copyFiles' | 'shareDeps' | 'depFolders' | 'messageTemplate' | 'env' | 'commands'
 
 /** Where a project setting is kept: Switchyard on this machine, or the repo's shared file. */
 export type ProjectSettingScope = 'machine' | 'shared'

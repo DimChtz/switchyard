@@ -1,5 +1,7 @@
 import { EditorView, keymap, runScopeHandlers, showPanel, type Panel, type ViewUpdate } from '@codemirror/view'
 import { EditorSelection, Prec, StateEffect, StateField, type EditorState, type Extension } from '@codemirror/state'
+import { ensureSyntaxTree, syntaxTree } from '@codemirror/language'
+import { filterSymbols, symbolsOf, type CodeSymbol, type SymbolKind } from './symbols'
 import { SearchQuery, closeSearchPanel, findNext, findPrevious, getSearchQuery, replaceAll, replaceNext, search, searchPanelOpen, setSearchQuery } from '@codemirror/search'
 
 /** Counting stops here, so a huge file doesn't stall typing. */
@@ -274,7 +276,137 @@ function openGoto(view: EditorView): boolean {
     return true
   }
   if (searchPanelOpen(view.state)) closeSearchPanel(view)
-  view.dispatch({ effects: toggleGoto.of(true) })
+  view.dispatch({ effects: [toggleSymbols.of(false), toggleGoto.of(true)] })
+  return true
+}
+
+// ── Go to symbol (Ctrl+Shift+O) ──
+
+const toggleSymbols = StateEffect.define<boolean>()
+
+const symbolsOpen = StateField.define<boolean>({
+  create: () => false,
+  update(open, tr) {
+    for (const e of tr.effects) if (e.is(toggleSymbols)) open = e.value
+    if (open && searchPanelOpen(tr.state)) open = false
+    return open
+  },
+  provide: (f) => showPanel.from(f, (open) => (open ? symbolPanel : null))
+})
+
+const KIND_MARK: Record<SymbolKind, [string, string]> = {
+  function: ['ƒ', 'var(--syn-function)'],
+  method: ['m', 'var(--syn-function)'],
+  class: ['C', 'var(--syn-type)'],
+  interface: ['I', 'var(--syn-type)'],
+  type: ['T', 'var(--syn-type)'],
+  enum: ['E', 'var(--syn-type)'],
+  property: ['p', 'var(--syn-property)'],
+  variable: ['v', 'var(--t3)'],
+  heading: ['#', 'var(--t2)'],
+  rule: ['{}', 'var(--syn-tag)']
+}
+
+function symbolPanel(view: EditorView): Panel {
+  const dom = el('div', 'sy-float sy-sym')
+  const field = el('div', 'sy-find-field')
+  const input = el('input', '', { 'aria-label': 'Go to symbol', spellcheck: 'false' })
+  field.append(input)
+  const list = el('div', 'sy-sym-list')
+  dom.append(field, list)
+
+  const state = view.state
+  const tree = ensureSyntaxTree(state, state.doc.length, 500) ?? syntaxTree(state)
+  const all = symbolsOf(tree, state.doc.toString())
+  const head = state.selection.main.head
+  let shown: CodeSymbol[] = all
+  // Starts on the symbol the cursor is in (or the last one before it).
+  let index = Math.max(0, all.reduce((at, s, i) => (s.from <= head ? i : at), -1))
+  input.placeholder = all.length ? `Go to symbol (${all.length})` : 'Go to symbol'
+
+  const close = (jump: CodeSymbol | null): void => {
+    view.dispatch(
+      jump
+        ? { selection: EditorSelection.range(jump.from, jump.to), effects: [toggleSymbols.of(false), EditorView.scrollIntoView(jump.from, { y: 'center' })] }
+        : { effects: toggleSymbols.of(false) }
+    )
+    view.focus()
+  }
+  const render = (): void => {
+    list.replaceChildren()
+    if (!shown.length) {
+      const empty = el('div', 'sy-sym-empty')
+      empty.textContent = all.length ? 'No symbol matches.' : 'No symbols in this file.'
+      list.append(empty)
+      return
+    }
+    const flat = !!input.value.trim()
+    shown.slice(0, 400).forEach((s, i) => {
+      const row = el('div', `sy-sym-row${i === index ? ' sy-on' : ''}`, { 'data-i': String(i) })
+      const [mark, color] = KIND_MARK[s.kind]
+      const kind = el('span', 'sy-sym-kind', { title: s.kind })
+      kind.textContent = mark
+      kind.style.color = color
+      const name = el('span', 'sy-sym-name')
+      name.textContent = s.name
+      name.title = s.name
+      if (!flat) name.style.paddingLeft = `${Math.min(s.depth, 6) * 12}px`
+      const line = el('span', 'sy-sym-line')
+      line.textContent = String(state.doc.lineAt(s.from).number)
+      row.append(kind, name, line)
+      row.onmousedown = (e) => e.preventDefault()
+      row.onclick = () => close(s)
+      row.onmousemove = (e) => {
+        if ((e.movementX || e.movementY) && i !== index) move(i)
+      }
+      list.append(row)
+    })
+  }
+  const move = (i: number): void => {
+    if (!shown.length) return
+    index = (i + shown.length) % shown.length
+    list.querySelectorAll('.sy-on').forEach((r) => r.classList.remove('sy-on'))
+    const row = list.querySelector<HTMLElement>(`[data-i="${index}"]`)
+    row?.classList.add('sy-on')
+    row?.scrollIntoView({ block: 'nearest' })
+    // A look at it, without moving the cursor.
+    view.dispatch({ effects: EditorView.scrollIntoView(shown[index].from, { y: 'center' }) })
+  }
+  input.oninput = () => {
+    shown = filterSymbols(all, input.value)
+    index = 0
+    render()
+  }
+  input.onkeydown = (e) => {
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      e.preventDefault()
+      move(index + (e.key === 'ArrowDown' ? 1 : -1))
+    } else if (e.key === 'Enter') {
+      e.preventDefault()
+      close(shown[index] ?? null)
+    } else if (e.key === 'Escape') {
+      e.preventDefault()
+      close(null)
+    }
+  }
+  render()
+  return {
+    dom,
+    top: true,
+    mount() {
+      input.focus()
+      list.querySelector<HTMLElement>('.sy-on')?.scrollIntoView({ block: 'nearest' })
+    }
+  }
+}
+
+function openSymbols(view: EditorView): boolean {
+  if (view.state.field(symbolsOpen, false)) {
+    ;(view.dom.querySelector('.sy-sym input') as HTMLInputElement | null)?.select()
+    return true
+  }
+  if (searchPanelOpen(view.state)) closeSearchPanel(view)
+  view.dispatch({ effects: [toggleGoto.of(false), toggleSymbols.of(true)] })
   return true
 }
 
@@ -306,6 +438,14 @@ const floatTheme = EditorView.theme({
   },
   // chevron | find field | count | ↑ | ↓ | ×
   '.sy-find': { gridTemplateColumns: '22px minmax(0, 1fr) 86px 24px 24px 24px', width: 'min(440px, calc(100vw - 80px))' },
+  '.sy-sym': { gridTemplateColumns: 'minmax(0, 1fr)', width: 'min(420px, calc(100vw - 80px))', paddingLeft: '5px' },
+  '.sy-sym-list': { maxHeight: '320px', overflow: 'auto', margin: '0 -1px' },
+  '.sy-sym-row': { display: 'grid', gridTemplateColumns: '20px minmax(0, 1fr) auto', alignItems: 'center', columnGap: '6px', height: '24px', padding: '0 8px 0 4px', borderRadius: '4px', cursor: 'pointer' },
+  '.sy-sym-row.sy-on': { background: 'color-mix(in srgb, var(--c-blue) 16%, transparent)' },
+  '.sy-sym-kind': { font: '600 11px var(--font-mono)', textAlign: 'center' },
+  '.sy-sym-name': { font: '12.5px var(--font-mono)', color: 'var(--t1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' },
+  '.sy-sym-line': { font: '11px var(--font-mono)', color: 'var(--t4)' },
+  '.sy-sym-empty': { padding: '8px 10px', color: 'var(--t4)', font: '12px var(--font-ui)' },
   '.sy-goto': { gridTemplateColumns: 'minmax(0, 1fr) 80px 24px', width: 'min(340px, calc(100vw - 80px))', paddingLeft: '5px' },
   '.sy-find-field': {
     display: 'flex',
@@ -350,11 +490,18 @@ const floatTheme = EditorView.theme({
   '.sy-find-more.sy-open svg': { transform: 'rotate(90deg)' }
 })
 
-/** Ctrl+F's find widget and Ctrl+G's go to line, styled like the rest of the app. */
+/** Ctrl+F's find widget, Ctrl+G's go to line and Ctrl+Shift+O's go to symbol, styled like the rest of the app. */
 export const findBar: Extension = [
   search({ top: true, createPanel: findPanel }),
   gotoOpen,
+  symbolsOpen,
   // Ctrl+G (on the Mac too, as VS Code) - instead of CodeMirror's "find next" there; ⌘G stays find next.
-  Prec.highest(keymap.of([{ key: 'Ctrl-g', run: openGoto, preventDefault: true }])),
+  // Ctrl+Shift+O / ⇧⌘O: go to symbol.
+  Prec.highest(
+    keymap.of([
+      { key: 'Ctrl-g', run: openGoto, preventDefault: true },
+      { key: 'Mod-Shift-o', run: openSymbols, preventDefault: true }
+    ])
+  ),
   Prec.highest(floatTheme)
 ]

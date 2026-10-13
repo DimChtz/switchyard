@@ -580,7 +580,8 @@ ${u.ask}` : ''}`, task.id, actions)
   useEffect(() => {
     if (!state.toast) return
     const id = state.toast.id
-    const t = setTimeout(() => dispatch({ type: 'DISMISS_TOAST', id }), 3200)
+    // (Long enough to reach for Undo.)
+    const t = setTimeout(() => dispatch({ type: 'DISMISS_TOAST', id }), state.toast.action ? 8000 : 3200)
     return () => clearTimeout(t)
   }, [state.toast, dispatch])
 

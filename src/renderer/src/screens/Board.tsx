@@ -45,6 +45,7 @@ import { plainText } from '../lib/noteText'
 import { OutsideStrip } from '../components/OutsideWork'
 import { BaseStrip } from '../components/BaseStrip'
 import { TrustStrip } from '../components/TrustStrip'
+import { EmptyState } from '../components/EmptyState'
 import { prSummary } from '@shared/pr'
 import { baseFor, parentFinished, parentOf, waitsFor } from '@shared/stack'
 
@@ -520,13 +521,14 @@ function PrTip({ d }: { d: PrDetails }): React.JSX.Element {
 function ColumnHead({ col, all, shown, filtering }: { col: BoardColumn; all: Task[]; shown: Task[]; filtering: boolean }): React.JSX.Element {
   const { state, dispatch } = useAppStore()
 
-  const clearDone = async (): Promise<void> => {
-    const ok = await confirm({
-      title: `Archive ${all.length} finished task${all.length > 1 ? 's' : ''}?`,
-      body: 'They leave the board and go to the archive, where you can search them and bring them back.',
-      confirmLabel: 'Archive'
+  const clearDone = (): void => {
+    const ids = state.tasks.filter((t) => t.projectId === state.projectId && t.col === 'done' && !t.archivedAt).map((t) => t.id)
+    dispatch({ type: 'CLEAR_DONE', projectId: state.projectId!, count: ids.length })
+    dispatch({
+      type: 'TOAST',
+      text: `Archived ${ids.length} finished task${ids.length === 1 ? '' : 's'} - Archive in the Done column finds them.`,
+      action: { label: 'Undo', run: () => dispatch({ type: 'UNARCHIVE_TASKS', taskIds: ids }) }
     })
-    if (ok) dispatch({ type: 'CLEAR_DONE', projectId: state.projectId!, count: all.length })
   }
   const archived = col === 'done' ? state.tasks.filter((t) => t.projectId === state.projectId && t.archivedAt).length : 0
   const openArchive = (): void => dispatch({ type: 'OPEN_ARCHIVE', projectId: state.projectId })
@@ -546,7 +548,7 @@ function ColumnHead({ col, all, shown, filtering }: { col: BoardColumn; all: Tas
           ]
         : col === 'done'
           ? [
-              { label: `Archive ${all.length} finished…`, disabled: !all.length, onClick: clearDone },
+              { label: `Archive ${all.length} finished`, disabled: !all.length, onClick: clearDone },
               { label: `Open the archive${archived ? ` (${archived})` : ''}`, onClick: openArchive }
             ]
           : [{ label: 'Project settings', shortcut: shortcut('project-settings'), onClick: () => dispatch({ type: 'OPEN_SETTINGS', section: `project:${state.projectId}` }) }]
@@ -1084,6 +1086,27 @@ export function Board(): React.JSX.Element | null {
       <TrustStrip project={project} />
       <BaseStrip project={project} />
       <OutsideStrip project={project} />
+      {!all.length && !state.addingTask ? (
+        <EmptyState
+          title={`${project.name}'s board is empty`}
+          actions={
+            <>
+              <Button variant="primary" size="sm" hint={shortcut('new-task')} onClick={() => dispatch({ type: 'BEGIN_ADD_TASK' })}>
+                New task
+              </Button>
+              {remote?.github ? (
+                <Button size="sm" onClick={() => dispatch({ type: 'OPEN_ISSUES', projectId: project.id })}>
+                  Import GitHub issues
+                </Button>
+              ) : null}
+            </>
+          }
+          hint="From a terminal: switchyard new &quot;Fix the login&quot; (Settings → General → Install command)"
+          style={{ margin: '14px 16px 0' }}
+        >
+          A task is a piece of work for an agent. Starting one gives it its own branch and worktree, so several agents can work at once without touching each other&apos;s files - or yours.
+        </EmptyState>
+      ) : null}
       {group === 'none' ? (
         <div style={{ ...grid, flex: 1, minHeight: 0, padding: '14px 16px' }}>
           {cols.map((col) => (

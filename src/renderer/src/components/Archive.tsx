@@ -47,7 +47,10 @@ function Body({ projectId, name }: { projectId: string; name: string }): React.J
   })
   const remove = async (t: Task): Promise<void> => {
     const ok = await confirm({ title: `Delete ${t.key} for good?`, body: 'It leaves the archive. Its key stays used, so a new task never gets it.', confirmLabel: 'Delete', danger: true })
-    if (ok) dispatch({ type: 'DELETE_TASK', taskId: t.id, toast: `Deleted ${t.key}.` })
+    if (ok) {
+      dispatch({ type: 'DELETE_TASK', taskId: t.id, toast: `Deleted ${t.key}.` })
+      dispatch({ type: 'TOAST', text: `Deleted ${t.key}.`, action: { label: 'Undo', run: () => dispatch({ type: 'RESTORE_TASK', task: t }) } })
+    }
   }
   return (
     <Modal width={720} top={64} onClose={close}>

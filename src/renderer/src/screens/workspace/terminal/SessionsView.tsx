@@ -11,13 +11,14 @@ import { taskRoot } from '../../../lib/multiRepo'
 import { addShell, setDrag, startTabDrag, useShells, wsOpen } from '../../../lib/wsStore'
 import type { Layout } from '../../../lib/wsLayout'
 import { groupsOf } from '../../../lib/wsLayout'
-import type { ShellOption, Task } from '@shared/types'
+import type { SavedCommand, ShellOption, Task } from '@shared/types'
 import { PanelHeader, PanelIcon, type PanelChrome } from '../layout/PanelHeader'
 
 /** The Sessions side bar view: the agent, the terminals and the tools - click to show, drag onto a group (or its edge). */
 export function SessionsView({ task, layout, chrome }: { task: Task; layout: Layout; chrome: PanelChrome }): React.JSX.Element {
   const { state, dispatch } = useAppStore()
   const shells = useShells(task.id)
+  const project = state.projects.find((p) => p.id === task.projectId)
   const [hasSetup, setHasSetup] = useState(false)
   useEffect(() => {
     window.api.pty.info(setupSessionId(task.id)).then((i) => setHasSetup(!!i))
@@ -63,6 +64,19 @@ export function SessionsView({ task, layout, chrome }: { task: Task; layout: Lay
         {t ? row('tests', 'tests', t.status === 'running' ? 'running' : t.status, '›', 'var(--t3)', t.status === 'running' ? 'var(--c-amber)' : t.status === 'passed' ? 'var(--c-green)' : 'var(--c-red)') : null}
         {shells.map((s) => row(`shell:${s.id}`, s.name, s.profile?.label ?? (s.cwd ? s.cwd.split(/[\\/]/).filter(Boolean).pop() ?? 'shell' : 'shell'), '›', 'var(--t3)'))}
         {!hasSetup && !t && !shells.length ? <div style={{ padding: '2px 8px 4px', font: '12px var(--font-ui)', color: 'var(--t4)' }}>No terminals open.</div> : null}
+        <Head>Commands</Head>
+        {(project?.commands ?? []).map((c, i) => (
+          <CommandRow key={`${i}:${c.name}`} c={c} onRun={() => addShell(task.id, { taskRoot: root, run: c })} />
+        ))}
+        {!project?.commands?.length ? (
+          <div style={{ padding: '2px 8px 4px', font: '12px/1.5 var(--font-ui)', color: 'var(--t4)' }}>
+            None saved.{' '}
+            <span onClick={() => dispatch({ type: 'OPEN_SETTINGS', section: `project:${task.projectId}` })} style={{ color: 'var(--c-blue)', cursor: 'pointer' }}>
+              Add one
+            </span>{' '}
+            - lint, a build, docker compose up - to run with a click.
+          </div>
+        ) : null}
         <Head>Tools</Head>
         {row('preview', 'Preview', devPort ? `localhost:${devPort}` : 'no server', '◎', 'var(--c-green)')}
         {row('timeline', 'Timeline', 'turns · undo', '↺', 'var(--t2)')}
@@ -84,6 +98,23 @@ export function SessionsView({ task, layout, chrome }: { task: Task; layout: Lay
         />
       ) : null}
     </>
+  )
+}
+
+/** A saved command: click to run it in a new terminal tab. */
+function CommandRow({ c, onRun }: { c: SavedCommand; onRun: () => void }): React.JSX.Element {
+  const [hover, hoverProps] = useHover()
+  return (
+    <div
+      {...hoverProps}
+      onClick={onRun}
+      title={`Run ${c.cmd} in a new terminal`}
+      style={{ display: 'flex', alignItems: 'center', gap: 9, height: 28, padding: '0 8px', borderRadius: 4, cursor: 'pointer', background: hover ? 'color-mix(in srgb, var(--ov) 5%, transparent)' : 'transparent' }}
+    >
+      <span style={{ width: 12, textAlign: 'center', font: '10px var(--font-mono)', color: hover ? 'var(--c-green)' : 'var(--t3)' }}>▶</span>
+      <span style={{ font: '12.5px var(--font-ui)', color: 'var(--t1)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: '0 1 auto', minWidth: 0 }}>{c.name}</span>
+      <span style={{ font: '11px var(--font-mono)', color: 'var(--t4)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1, minWidth: 0 }}>{c.name !== c.cmd ? c.cmd : ''}</span>
+    </div>
   )
 }
 

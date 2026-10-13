@@ -5,6 +5,7 @@ import { timeAgo } from '../lib/status'
 import { errText } from '../lib/errors'
 import { plural } from '../lib/summary'
 import { Button, Segmented, confirm } from '../components/ui'
+import { EmptyState } from '../components/EmptyState'
 import { formatMem, headline, sessionKind, shortCmd, type Kind } from '../lib/processView'
 import type { ProcessEntry, ProcessGroup, ProcessSnapshot, Project, Task } from '@shared/types'
 
@@ -175,7 +176,12 @@ export function Processes(): React.JSX.Element {
 
       {filter !== 'left' ? (
         <>
-          {snap && !sections.length ? <Empty text={filter === 'ports' ? 'Nothing is listening on a port.' : 'No terminals are running.'} /> : null}
+          {snap && !sections.length && filter === 'ports' ? <Empty text="Nothing is listening on a port." /> : null}
+          {snap && !sections.length && filter === 'all' ? (
+            <EmptyState title="Nothing running">
+              Agents, shells, dev servers and test runs you start in tasks show up here, with the ports they listen on and the memory they use - and anything still running after its terminal closed, to stop.
+            </EmptyState>
+          ) : null}
           {sections.map((s) => (
             <section key={s.task?.id ?? 'other'} style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
               <SectionHead

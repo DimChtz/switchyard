@@ -2,7 +2,7 @@ import type { BoardColumn, Note, Prefs, Task } from '@shared/types'
 import { columnName, visibleColumns, wipLimit } from '../lib/boardPrefs'
 import { inProject } from '../lib/multiRepo'
 import { NO_FILTER, boardFilterOf, loadBoardPrefs } from '../lib/boardFilter'
-import type { Action, AppState } from './types'
+import type { Action, AppState, ToastState } from './types'
 import { AGENTS, COLUMN_ORDER, DEFAULT_PREFS, branchFor, firstMessage } from '@shared/constants'
 import { agentShort, busyAgents, nextTaskKey, raiseKeyHigh } from '../lib/derive'
 import { clock, needsYou, waitingText } from '../lib/status'
@@ -78,9 +78,9 @@ function newTaskColumn(prefs: Prefs): 'backlog' | 'ready' {
   return shown.includes(prefs.newTaskColumn) ? prefs.newTaskColumn : shown.includes('backlog') ? 'backlog' : 'ready'
 }
 
-function withToast(state: AppState, text: string, tone: 'plain' | 'waiting' | 'done' = 'plain'): AppState {
+function withToast(state: AppState, text: string, tone: 'plain' | 'waiting' | 'done' = 'plain', action?: ToastState['action']): AppState {
   toastSeq += 1
-  return { ...state, toast: { id: toastSeq, text, tone } }
+  return { ...state, toast: { id: toastSeq, text, tone, action } }
 }
 
 /**
@@ -777,12 +777,21 @@ function reduce(state: AppState, action: Action): AppState {
       }
 
     case 'CLEAR_DONE': {
-      // Into the archive, not gone: still searchable, restorable, their keys kept.
+      // Into the archive, not gone: still searchable, restorable, their keys kept. (The caller says so, with Undo.)
       const at = Date.now()
-      return withToast(
-        { ...state, tasks: state.tasks.map((t) => (t.projectId === action.projectId && t.col === 'done' && !t.archivedAt ? { ...t, archivedAt: at } : t)) },
-        `Archived ${action.count} finished task${action.count === 1 ? '' : 's'} - Archive in the Done column finds them.`
-      )
+      return { ...state, tasks: state.tasks.map((t) => (t.projectId === action.projectId && t.col === 'done' && !t.archivedAt ? { ...t, archivedAt: at } : t)) }
+    }
+
+    case 'UNARCHIVE_TASKS': {
+      const ids = new Set(action.taskIds)
+      return withToast({ ...state, tasks: state.tasks.map((t) => (ids.has(t.id) ? { ...t, archivedAt: null } : t)) }, 'Back in Done.')
+    }
+
+    case 'RESTORE_TASK': {
+      if (state.tasks.some((t) => t.id === action.task.id)) return state
+      // Its terminals were stopped when it went: an agent that was running is paused now.
+      const st = action.task.st === 'working' || action.task.st === 'waiting' ? 'paused' : action.task.st
+      return withToast({ ...state, tasks: [...state.tasks, { ...action.task, st }] }, `${action.task.key} is back.`, 'done')
     }
 
     case 'ARCHIVE_TASKS': {
@@ -842,9 +851,10 @@ function reduce(state: AppState, action: Action): AppState {
       return { ...state, palette: state.palette ? null : { query: '', index: 0, mode: 'commands', scope: null } }
 
     case 'OPEN_FILE_SEARCH':
-      if (state.palette?.mode === 'files') return { ...state, palette: null }
+      // (The same key again closes it; the other one switches.)
+      if (state.palette?.mode === 'files' && !!state.palette.recent === !!action.recent) return { ...state, palette: null }
       // (Over a file's preview, it goes to another file.)
-      return { ...state, filePreview: null, palette: { query: '', index: 0, mode: 'files', scope: action.scope } }
+      return { ...state, filePreview: null, palette: { query: '', index: 0, mode: 'files', scope: action.scope, recent: !!action.recent } }
 
     case 'SET_PALETTE_MODE':
       return state.palette ? { ...state, palette: { ...state.palette, mode: action.mode, query: action.query ?? '', index: 0 } } : state
@@ -868,7 +878,7 @@ function reduce(state: AppState, action: Action): AppState {
       return state.palette ? { ...state, palette: { ...state.palette, index: Math.max(0, action.index) } } : state
 
     case 'TOAST':
-      return withToast(state, action.text, action.tone)
+      return withToast(state, action.text, action.tone, action.action)
 
     case 'DISMISS_TOAST':
       return state.toast && state.toast.id === action.id ? { ...state, toast: null } : state

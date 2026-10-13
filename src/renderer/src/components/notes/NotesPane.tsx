@@ -275,7 +275,7 @@ export function NotesList({ task, activeId, onOpen, header, width }: { task?: Ta
               ? `No notes match “${query}”.`
               : task
                 ? `No notes for ${task.key} yet. Write down decisions, edge cases and context - notes linked to a task are attached when its agent starts.`
-                : 'No notes here yet.'}
+                : 'No notes here yet. Notes are Markdown: plans, decisions, snippets - link one to a task and its agent gets it when it starts.'}
           </div>
         ) : null}
       </div>

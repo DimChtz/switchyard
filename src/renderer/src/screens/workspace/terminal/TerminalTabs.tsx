@@ -145,7 +145,7 @@ export function ShellTab({ task, project, id, visible }: { task: Task; project: 
   const cwd = shell?.cwd ?? taskRoot(task) ?? project.repoPath ?? ''
   // Not one of the task's shells (yet): a tab left from before a restart, about to be tidied away - nothing is started for it.
   if (!shell) return <div style={{ flex: 1, minHeight: 0 }} />
-  return <TerminalView key={id} sessionId={id} cwd={cwd} cmd={shell?.profile?.path} args={shell?.profile?.args} env={projectEnv(project)} autoFocus={visible} />
+  return <TerminalView key={id} sessionId={id} cwd={cwd} cmd={shell?.profile?.path} args={shell?.profile?.args} env={projectEnv(project)} autoFocus={visible} initialInput={shell.run} />
 }
 
 /** The launch setup's or the tests' output (they run on their own; this only shows them). */

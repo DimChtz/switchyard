@@ -190,6 +190,12 @@ export function FilesProvider({ task, root: rootPath, baseBranch, bases, childre
       setLoadingSet(new Set(loadingRef.current))
       loadDoc(path)
         .catch((err: unknown) => {
+          // Deleted or moved since its tab was opened (by an agent, a checkout): the tab goes.
+          if (/ENOENT|no such file/i.test(errText(err))) {
+            forgetRef.current([path])
+            dispatch({ type: 'TOAST', text: `${path.split('/').pop()} isn't there any more (deleted or moved) - its tab closed.` })
+            return
+          }
           dispatch({ type: 'TOAST', text: `Could not open ${path}: ${errText(err)}` })
           setFileCache((c) => ({ ...c, [path]: '' }))
         })
@@ -358,6 +364,9 @@ export function FilesProvider({ task, root: rootPath, baseBranch, bases, childre
     },
     [task.id]
   )
+
+  const forgetRef = useRef(forget)
+  forgetRef.current = forget
 
   const remap = useCallback(
     (from: string, to: string): void => {

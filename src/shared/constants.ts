@@ -32,7 +32,7 @@ export const COLUMN_LABEL: Record<BoardColumn, string> = {
 }
 
 /** What .switchyard/settings.json (and settings.local.json) may set for a project. */
-export const PROJECT_SETTING_KEYS: ProjectSettingKey[] = ['prefix', 'defaultBranch', 'lang', 'agentKind', 'setupCmd', 'testCmd', 'devCmd', 'copyFiles', 'shareDeps', 'depFolders', 'messageTemplate', 'env']
+export const PROJECT_SETTING_KEYS: ProjectSettingKey[] = ['prefix', 'defaultBranch', 'lang', 'agentKind', 'setupCmd', 'testCmd', 'devCmd', 'copyFiles', 'shareDeps', 'depFolders', 'messageTemplate', 'env', 'commands']
 
 /**
  * Preferences that belong to the app as a whole, not to a project - a

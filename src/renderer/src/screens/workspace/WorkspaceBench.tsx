@@ -210,6 +210,16 @@ function Bench({ task, project }: { task: Task; project: Project }): React.JSX.E
     { label: `${agent || 'Agent'} session`, glyph: '◆', glyphColor: 'var(--c-blue)', onClick: () => wsOpen(task.id, 'agent', gid) },
     { label: 'New terminal', glyph: '›', glyphColor: 'var(--t2)', onClick: () => newShellIn(gid) },
     ...profiles.map((p, i) => ({ label: `New terminal · ${p.label}`, glyph: '›', glyphColor: 'var(--t4)', extra: true, separatorBefore: i === 0, onClick: () => newShellIn(gid, p) })),
+    ...(project.commands ?? []).map((c, i) => ({
+      label: `Run ${c.name}`,
+      glyph: '▶',
+      glyphColor: 'var(--c-green)',
+      separatorBefore: i === 0,
+      onClick: () => {
+        setLayout(task.id, (L) => focusGroup(L, gid))
+        addShell(task.id, { taskRoot: root, run: c })
+      }
+    })),
     { label: 'Preview', glyph: '◎', glyphColor: 'var(--c-green)', separatorBefore: true, onClick: () => wsOpen(task.id, 'preview', gid) },
     { label: 'Timeline', glyph: '↺', glyphColor: 'var(--t2)', onClick: () => wsOpen(task.id, 'timeline', gid) }
   ]

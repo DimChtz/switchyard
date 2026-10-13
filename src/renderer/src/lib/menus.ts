@@ -60,7 +60,7 @@ export function taskMenuItems(
     ...(task.pr ? [{ label: `Open PR #${task.pr.number ?? ''} in browser`, onClick: () => window.api.sys.openExternal(task.pr!.url) }] : [])
   ]
   const edits: MenuItem[] = [
-    { label: task.pinnedAt ? 'Unpin' : 'Pin to top', onClick: () => dispatch({ type: 'PIN_TASK', taskId: task.id, pinned: !task.pinnedAt }) },
+    { label: task.pinnedAt ? 'Unpin' : 'Pin', onClick: () => dispatch({ type: 'PIN_TASK', taskId: task.id, pinned: !task.pinnedAt }) },
     ...(opts.rename ? [{ label: 'Rename', onClick: opts.rename }] : []),
     ...(opts.editDesc ? [{ label: 'Edit description', onClick: opts.editDesc }] : []),
     // A next step that needs this one's changes: its branch starts from this one's (one in the project folder has none).

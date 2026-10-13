@@ -10,6 +10,7 @@ import { errText } from '../lib/errors'
 import { keyLabel, revealLabel } from '../lib/keys'
 import { addShell, wsOpen } from '../lib/wsStore'
 import { Button, Menu, confirm, type MenuItem } from '../components/ui'
+import { EmptyState } from '../components/EmptyState'
 import type { Action } from '../store/types'
 import type { Project, Task } from '@shared/types'
 import { prefsFor } from '../lib/projectPrefs'
@@ -536,9 +537,18 @@ export function Worktrees(): React.JSX.Element {
             )
           })}
           {worktrees.length === 0 ? (
-            <div style={{ padding: '20px 12px', color: 'var(--t4)', fontSize: 13, lineHeight: 1.55 }}>
-              No worktrees yet. Each task you start gets its own - a separate checkout on its own branch, so agents never step on each other or on your work.
-            </div>
+            <EmptyState
+              title="No worktrees yet"
+              actions={
+                state.projects.length ? (
+                  <Button size="sm" onClick={() => dispatch({ type: 'NAV', view: 'board', projectId: state.projectId ?? state.projects[0].id })}>
+                    Open the board
+                  </Button>
+                ) : null
+              }
+            >
+              Each task you start gets its own - a separate checkout on its own branch, so agents never step on each other or on your work. They show here with what&apos;s ahead, behind and uncommitted, and the ones you can clean up.
+            </EmptyState>
           ) : null}
         </div>
 

@@ -4,7 +4,7 @@ import { clock, statusColor, statusLabel, timeAgo, wakeAt } from '../lib/status'
 import { checksMessage, prSummary, reviewMessage } from '@shared/pr'
 import { agentShort } from '../lib/derive'
 import { WorkspaceBench } from './workspace/WorkspaceBench'
-import { Button, IconButton, Menu, confirm, type MenuAnchor } from '../components/ui'
+import { Button, IconButton, Menu, confirm, type MenuAnchor, type MenuItem } from '../components/ui'
 import { taskMenuItems } from '../lib/menus'
 import { attachRepo, commitMessageFor, discoverPr, finishGone, finishWithPr, mergeTask, openPullRequest, pushTask, recreateWorktree, reviewReady, taskDirty } from '../lib/taskActions'
 import { finishTask } from '../lib/finishTask'
@@ -215,6 +215,30 @@ function WorkspaceBody({ task, project }: { task: Task; project: Project }): Rea
   const prLabel = busy === 'pr' ? 'Opening PR…' : 'Open PR'
   const pushLabel = busy === 'push' ? 'Pushing…' : `Push ${unpushed}`
 
+  // The header's breadcrumbs: a project (or a column of it) - its board with this task picked out, or a jump to another task there.
+  const crumbItems = (p: Project, col: Task['col'] | null): MenuItem[] => {
+    const others = state.tasks
+      .filter((t) => t.projectId === p.id && !t.archivedAt && !t.scratch && t.id !== task.id && (col ? t.col === col : t.col === 'progress' || t.col === 'review'))
+      .sort((a, b) => (b.lastActivityAt ?? 0) - (a.lastActivityAt ?? 0))
+      .slice(0, 15)
+    const board: MenuItem = {
+      label: col ? `Show ${columnName(prefsFor(state, p.id), col)} on the board` : `Open ${p.name}'s board`,
+      onClick: () => {
+        dispatch({ type: 'NAV', view: 'board', projectId: p.id })
+        if (p.id === task.projectId) dispatch({ type: 'SET_BOARD_FOCUS', id: task.id })
+      }
+    }
+    const jump = (t: Task, first: boolean): MenuItem => ({
+      label: t.title,
+      sub: t.key,
+      dot: t.st ? statusColor(t.st) : 'var(--bd-5)',
+      separatorBefore: first,
+      onClick: () => dispatch({ type: 'OPEN_TASK', taskId: t.id })
+    })
+    const scratch: MenuItem[] = !col && p.repoPath ? [{ label: 'Scratchpad', separatorBefore: !others.length, onClick: () => dispatch({ type: 'OPEN_SCRATCH', projectId: p.id }) }] : []
+    return [board, ...others.map((t, i) => jump(t, i === 0)), ...scratch]
+  }
+
   const menuItems = taskMenuItems(task, project, prefsFor(state, task.projectId), dispatch, {
     projects: state.projects,
     inWorkspace: true,
@@ -227,11 +251,20 @@ function WorkspaceBody({ task, project }: { task: Task; project: Project }): Rea
       {/* Zen mode keeps only the editor groups. */}
       <div style={{ height: 48, flex: 'none', display: state.zen ? 'none' : 'flex', alignItems: 'center', gap: 10, padding: '0 20px', borderBottom: '1px solid var(--bd-1)', minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: '0 1 auto', whiteSpace: 'nowrap', overflow: 'hidden' }}>
-          <span style={{ fontSize: 13, color: 'var(--t3)', flex: 'none' }}>{repoProjects.map((p) => p.name).join(' + ')}</span>
+          {repoProjects.map((p, i) => (
+            <React.Fragment key={p.id}>
+              {i ? <span style={{ fontSize: 13, color: 'var(--t4)', flex: 'none' }}>+</span> : null}
+              <Crumb label={p.name} title={`${p.name} - its board, or another of its tasks`} items={() => crumbItems(p, null)} />
+            </React.Fragment>
+          ))}
           <span style={{ color: 'var(--bd-5)', flex: 'none' }}>/</span>
           {task.scratch ? null : (
             <>
-              <span style={{ fontSize: 13, color: 'var(--t3)', flex: 'none' }}>{columnName(prefsFor(state, project.id), task.col)}</span>
+              <Crumb
+                label={columnName(prefsFor(state, project.id), task.col)}
+                title="This column on the board, or another task in it"
+                items={() => crumbItems(project, task.col)}
+              />
               <span style={{ color: 'var(--bd-5)', flex: 'none' }}>/</span>
             </>
           )}
@@ -400,7 +433,35 @@ function prColor(state: PullRequest['state']): string {
   return state === 'MERGED' ? 'var(--c-green)' : state === 'CLOSED' ? 'var(--c-red)' : 'var(--c-blue)'
 }
 
-export function RenameInput({ value, onChange, onDone }: { value: string; onChange: (v: string) => void; onDone: (save: boolean) => void }): React.JSX.Element {
+export /** A part of the header's path (a project, a column): click it for a menu of where to go. */
+function Crumb({ label, title, items }: { label: string; title: string; items: () => MenuItem[] }): React.JSX.Element {
+  const [hover, hoverProps] = useHover()
+  const [anchor, setAnchor] = useState<MenuAnchor | null>(null)
+  return (
+    <>
+      <span
+        {...hoverProps}
+        title={title}
+        onClick={(e) => setAnchor({ el: e.currentTarget })}
+        style={{
+          fontSize: 13,
+          color: hover || anchor ? 'var(--t1)' : 'var(--t3)',
+          flex: 'none',
+          cursor: 'pointer',
+          padding: '2px 5px',
+          margin: '0 -5px',
+          borderRadius: 4,
+          background: hover || anchor ? 'color-mix(in srgb, var(--ov) 6%, transparent)' : 'transparent'
+        }}
+      >
+        {label}
+      </span>
+      {anchor ? <Menu anchor={anchor} items={items()} onClose={() => setAnchor(null)} /> : null}
+    </>
+  )
+}
+
+function RenameInput({ value, onChange, onDone }: { value: string; onChange: (v: string) => void; onDone: (save: boolean) => void }): React.JSX.Element {
   const ref = useRef<HTMLInputElement>(null)
   useEffect(() => ref.current?.select(), [])
   return (
