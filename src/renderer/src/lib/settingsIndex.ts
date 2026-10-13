@@ -31,7 +31,12 @@ export function onSettingsIndex(l: () => void): () => void {
  * first, then by what its description says. At most `limit`.
  */
 export function matchSettings(entries: SettingEntry[], query: string, limit = 8): SettingEntry[] {
-  const words = query.toLowerCase().split(/\s+/).filter(Boolean)
+  // (Typed as the palette shows them: "Settings: Hide".)
+  const words = query
+    .toLowerCase()
+    .replace(/^\s*settings?\s*:?\s*/, '')
+    .split(/\s+/)
+    .filter(Boolean)
   if (!words.length) return []
   const has = (t: string): boolean => {
     const s = t.toLowerCase()
@@ -39,8 +44,12 @@ export function matchSettings(entries: SettingEntry[], query: string, limit = 8)
   }
   const named = entries.filter((e) => has(`${e.page} ${e.group} ${e.label}`))
   const described = entries.filter((e) => !named.includes(e) && has(`${e.page} ${e.group} ${e.label} ${e.sub}`))
-  // (The row's own name before its group's or page's.)
-  const own = (e: SettingEntry): number => (has(e.label) ? 0 : 1)
+  // (Exactly its name first, then names starting with it, then the row's own name before its group's or page's.)
+  const typed = words.join(' ')
+  const own = (e: SettingEntry): number => {
+    const l = e.label.toLowerCase()
+    return l === typed ? 0 : l.startsWith(typed) ? 1 : has(e.label) ? 2 : 3
+  }
   return [...named.sort((a, b) => own(a) - own(b)), ...described].slice(0, limit)
 }
 

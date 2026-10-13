@@ -3,21 +3,33 @@ import { basename, dirname, join, relative, resolve, sep } from 'path'
 import { shell } from 'electron'
 import { gitAt, gitArgs, gitEnv, newestBase } from './gitEnv'
 import { execFile } from 'child_process'
-import type { FileEntry, CheckoutFiles, EditorConfigProps, FileDoc } from '@shared/types'
+import type { FileEntry, CheckoutFiles, EditorConfigProps, FileDoc, FilesPatch } from '@shared/types'
 import { editorConfigFor, parseEditorConfig, type EditorConfigFile } from '@shared/editorconfig'
 import { matchLines, pathFilter, replaceMatches, searchRegex, type FileMatches, type TextSearchOptions, type TextSearchResult } from '@shared/textSearch'
 
 const IGNORE_DIRS = new Set(['.git', 'node_modules', '.worktrees', '.switchyard-worktrees', 'dist', 'out', 'build', '.next', '.venv'])
-const MAX_FILES = 2000
+/**
+ * How far a walk of a folder that isn't a git checkout goes (a checkout lists
+ * every file) - so a task pointed at a huge folder can't walk the disk. (A setting for tests.)
+ */
+export const treeLimit = { files: 200_000 }
 
-async function gitStatusMap(root: string, baseBranch?: string): Promise<Map<string, 'added' | 'modified' | 'deleted'>> {
+/** Never in the explorer, ignored or not: git's own folder, and other checkouts kept inside the repository. */
+const HIDDEN_DIRS = new Set(['.git', '.worktrees', '.switchyard-worktrees'])
+
+/** Paths for git exactly as they are (no globbing of "[id].tsx"). */
+const literal = (paths: string[]): string[] => paths.map((p) => `:(literal)${p}`)
+
+/** Changes since the base and in the working tree - of only `paths`, when given. */
+async function gitStatusMap(root: string, baseBranch?: string, paths?: string[]): Promise<Map<string, 'added' | 'modified' | 'deleted'>> {
   const git = gitAt(root)
   const map = new Map<string, 'added' | 'modified' | 'deleted'>()
+  const only = paths ? ['--', ...literal(paths)] : []
 
   if (baseBranch) {
     try {
       // -z: names exactly as they are (spaces, tabs), and a rename's two names apart.
-      const parts = (await git.raw(['diff', '--name-status', '-z', `${await newestBase(root, baseBranch)}...HEAD`])).split('\0')
+      const parts = (await git.raw(['diff', '--name-status', '-z', `${await newestBase(root, baseBranch)}...HEAD`, ...only])).split('\0')
       for (let i = 0; i < parts.length; i++) {
         const code = parts[i]
         if (!code) continue
@@ -35,7 +47,7 @@ async function gitStatusMap(root: string, baseBranch?: string): Promise<Map<stri
     }
   }
 
-  const status = await git.status()
+  const status = await git.status(only)
   for (const f of status.created) map.set(f, 'added')
   for (const f of status.not_added) map.set(f, 'added')
   for (const f of status.modified) map.set(f, 'modified')
@@ -98,38 +110,115 @@ export async function listFiles(root: string, baseBranch?: string, bases?: Recor
   return walkFiles(root, baseBranch, bases)
 }
 
-const MAX_TREE_FILES = 25_000
 
 /** One checkout's files from git (see listFiles); null when it isn't one. */
 async function gitFiles(root: string, baseBranch?: string): Promise<FileEntry[] | null> {
   const git = gitAt(root)
-  let listed: string
+  let tracked: string
+  let untracked: string
   let ignored: string
   try {
-    ;[listed, ignored] = await Promise.all([
-      git.raw(['ls-files', '-z', '--cached', '--others', '--exclude-standard']),
-      // Ignored files, with wholly ignored folders (node_modules…) as one "dir/" entry - left out.
+    // (Tracked first: together, git lists the untracked files first.)
+    ;[tracked, untracked, ignored] = await Promise.all([
+      git.raw(['ls-files', '-z', '--cached']),
+      git.raw(['ls-files', '-z', '--others', '--exclude-standard']),
+      // Ignored files, with wholly ignored folders (node_modules…) as one "dir/" entry - listed when opened.
       git.raw(['ls-files', '-z', '--others', '--ignored', '--exclude-standard', '--directory', '--no-empty-directory']).catch(() => '')
     ])
-  } catch {
+  } catch (err) {
+    console.warn(`[fs] git couldn't list ${root} - walking the folder instead:`, err)
     return null
   }
   const statusMap = await gitStatusMap(root, baseBranch).catch((): StatusMap => new Map())
   const seen = new Set<string>()
   const out: FileEntry[] = []
-  for (const path of listed.split('\0')) {
-    if (!path || seen.has(path) || out.length >= MAX_TREE_FILES) continue
+  // Every file, however many: the tree shows only the folders that are open.
+  const add = (path: string): void => {
+    if (!path || seen.has(path)) return
     seen.add(path)
     out.push({ path, isDir: false, status: statusMap.get(path) ?? 'unchanged' })
   }
+  for (const path of tracked.split('\0')) add(path)
+  for (const path of untracked.split('\0')) add(path)
   for (const path of ignored.split('\0')) {
-    if (!path || path.endsWith('/') || seen.has(path) || out.length >= MAX_TREE_FILES) continue
-    if (path.split('/').some((part) => IGNORE_DIRS.has(part))) continue
-    out.push({ path, isDir: false, status: 'unchanged', ignored: true })
+    if (!path || seen.has(path)) continue
+    const dir = path.endsWith('/')
+    const rel = dir ? path.slice(0, -1) : path
+    if (rel.split('/').some((part) => HIDDEN_DIRS.has(part))) continue
+    seen.add(path)
+    out.push(dir ? { path: rel, isDir: true, status: 'unchanged', ignored: true, lazy: true } : { path, isDir: false, status: 'unchanged', ignored: true })
   }
-  // Deleted files still show (they're changes to look at), changed ones the cap left out too.
+  // Deleted files still show (they're changes to look at).
   for (const [path, status] of statusMap) if (!seen.has(path) && !path.endsWith('/')) out.push({ path, isDir: false, status })
   return out
+}
+
+/**
+ * What's in one folder git ignores whole (node_modules, tmp), opened in the
+ * explorer: its files and folders - folders listed in turn when they're opened.
+ */
+export async function listDir(root: string, rel: string): Promise<FileEntry[]> {
+  const entries = await fs.readdir(join(root, ...rel.split('/')), { withFileTypes: true })
+  return Promise.all(
+    entries
+      .filter((e) => !HIDDEN_DIRS.has(e.name))
+      .map(async (e): Promise<FileEntry> => {
+        const path = `${rel}/${e.name}`
+        // (A link to a folder - pnpm's node_modules - opens like one.)
+        const dir = e.isDirectory() || (e.isSymbolicLink() && !!(await fs.stat(join(root, ...path.split('/'))).catch(() => null))?.isDirectory())
+        return dir ? { path, isDir: true, status: 'unchanged', ignored: true, lazy: true } : { path, isDir: false, status: 'unchanged', ignored: true }
+      })
+  )
+}
+
+/**
+ * What some paths are now, for the explorer as files change (an agent at
+ * work): there or gone, folder or file, their git status and whether git
+ * ignores them - without listing the whole checkout again.
+ */
+export async function patchFiles(root: string, paths: string[], baseBranch?: string, bases?: Record<string, string>): Promise<FilesPatch> {
+  const subs = await subRepos(root)
+  const out: FilesPatch = { entries: [], gone: [] }
+  // Each repository's paths (a task folder holds several).
+  const groups = new Map<string, string[]>()
+  for (const p of [...new Set(paths)]) {
+    if (!p || p.split('/').some((part) => HIDDEN_DIRS.has(part))) continue
+    const sub = subs.find((s) => p.startsWith(`${s}/`)) ?? (subs.length ? null : '')
+    if (sub === null) continue
+    groups.set(sub, [...(groups.get(sub) ?? []), sub ? p.slice(sub.length + 1) : p])
+  }
+  await Promise.all(
+    [...groups].map(async ([sub, rels]) => {
+      const repo = sub ? join(root, sub) : root
+      const [stats, status, ignored] = await Promise.all([
+        Promise.all(rels.map((r) => fs.stat(join(repo, ...r.split('/'))).catch(() => null))),
+        gitStatusMap(repo, sub ? (bases?.[sub] ?? baseBranch) : baseBranch, rels).catch((): StatusMap => new Map()),
+        ignoredOf(repo, rels)
+      ])
+      rels.forEach((rel, i) => {
+        const path = sub ? `${sub}/${rel}` : rel
+        const st = stats[i]
+        const s = status.get(rel)
+        if (!st) {
+          if (s === 'deleted') out.entries.push({ path, isDir: false, status: 'deleted' })
+          else out.gone.push(path)
+        } else if (st.isDirectory()) out.entries.push({ path, isDir: true, status: 'unchanged', ...(ignored.has(rel) ? { ignored: true } : {}) })
+        else out.entries.push({ path, isDir: false, status: s ?? 'unchanged', ...(ignored.has(rel) ? { ignored: true } : {}) })
+      })
+    })
+  )
+  return out
+}
+
+/** Which of the paths git ignores. */
+function ignoredOf(repo: string, rels: string[]): Promise<Set<string>> {
+  return new Promise((done) => {
+    const child = execFile('git', gitArgs(['check-ignore', '-z', '--stdin']), { cwd: repo, env: gitEnv(), maxBuffer: 16 * 1024 * 1024, windowsHide: true }, (_err, stdout) =>
+      // (Exit 1 is "none of them".)
+      done(new Set(String(stdout ?? '').split('\0').filter(Boolean)))
+    )
+    child.stdin?.end(rels.join('\0'))
+  })
 }
 
 /** The folder walked (not a git checkout). */
@@ -137,31 +226,34 @@ async function walkFiles(root: string, baseBranch?: string, bases?: Record<strin
   const statusMap = await statusOf(root, baseBranch, bases)
   const results: FileEntry[] = []
 
-  async function walk(dir: string): Promise<void> {
-    if (results.length >= MAX_FILES) return
-    const entries = await fs.readdir(dir, { withFileTypes: true })
-    for (const entry of entries) {
-      if (results.length >= MAX_FILES) return
-      if (entry.name.startsWith('.') && entry.name !== '.env') continue
-      if (entry.isDirectory()) {
-        if (IGNORE_DIRS.has(entry.name)) continue
-        const full = join(dir, entry.name)
-        results.push({ path: relative(root, full).split(sep).join('/'), isDir: true, status: 'unchanged' })
-        await walk(full)
-      } else {
+  // A level at a time: a big first folder (a Rails app/) doesn't use up the cap before the others are seen.
+  let level = [root]
+  while (level.length && results.length < treeLimit.files) {
+    const next: string[] = []
+    for (const dir of level) {
+      const entries = await fs.readdir(dir, { withFileTypes: true }).catch((err: unknown) => {
+        if (dir === root) throw err
+        return []
+      })
+      for (const entry of entries) {
+        if (results.length >= treeLimit.files) break
+        if (entry.name.startsWith('.') && entry.name !== '.env') continue
+        if (entry.isDirectory() && IGNORE_DIRS.has(entry.name)) continue
         const full = join(dir, entry.name)
         const rel = relative(root, full).split(sep).join('/')
-        results.push({ path: rel, isDir: false, status: statusMap.get(rel) ?? 'unchanged' })
+        if (entry.isDirectory()) {
+          results.push({ path: rel, isDir: true, status: 'unchanged' })
+          next.push(full)
+        } else results.push({ path: rel, isDir: false, status: statusMap.get(rel) ?? 'unchanged' })
       }
     }
+    level = next
   }
 
-  await walk(root)
-
-  // Big repos hit MAX_FILES before the walk reaches everything - changed
+  // Big repos hit treeLimit.files before the walk reaches everything - changed
   // files must still show (they're what "Changed only" is for), so add any
   // the walk missed, with their folders.
-  if (results.length >= MAX_FILES) {
+  if (results.length >= treeLimit.files) {
     const listed = new Set(results.map((r) => r.path))
     for (const [path, status] of statusMap) {
       if (status === 'deleted' || listed.has(path) || path.endsWith('/')) continue
@@ -213,7 +305,7 @@ export async function listAllFiles(root: string): Promise<CheckoutFiles> {
   } catch {
     const walked = await listFiles(root)
     const files = walked.filter((f) => !f.isDir).map((f) => f.path)
-    return { files, changed: walked.filter((f) => !f.isDir && f.status !== 'unchanged').map((f) => f.path), truncated: files.length >= MAX_FILES }
+    return { files, changed: walked.filter((f) => !f.isDir && f.status !== 'unchanged').map((f) => f.path), truncated: files.length >= treeLimit.files }
   }
   const gone = new Set(deleted.split('\0').filter(Boolean))
   const files = [...new Set(all.split('\0'))].filter((f) => f && !gone.has(f))

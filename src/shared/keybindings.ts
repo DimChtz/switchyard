@@ -63,7 +63,8 @@ export function keyCommands(mac: boolean): KeyCommand[] {
     // (? opens it too, anywhere you aren't typing.)
     { id: 'keyboard-help', title: 'Keyboard cheat sheet', category: 'Help' },
     { id: 'open-keybindings-json', title: 'Open keybindings.json', category: 'File' },
-    { id: 'open-editor', title: 'Open in external editor', category: 'File', key: `${mod}+shift+e` },
+    // (In a task's workspace the key is the Explorer's, as in VS Code.)
+    { id: 'open-editor', title: 'Open in external editor', category: 'File', key: `${mod}+shift+e`, when: '!workspace' },
     { id: 'reveal-worktree', title: 'Reveal worktree in the file manager', category: 'File' },
     { id: 'close-workspace', title: 'Close workspace', category: 'File', key: `${mod}+w`, when: notInTerminal },
     { id: 'find', title: 'Find… (command palette)', category: 'Edit', key: `${mod}+k` },
@@ -101,6 +102,7 @@ export function keyCommands(mac: boolean): KeyCommand[] {
     { id: 'board-search', title: 'Search the board', category: 'Board', key: '/', when: 'board' },
     { id: 'ws-terminal', title: 'Show the agent’s session', category: 'Workspace', key: 't', when: 'workspace' },
     { id: 'ws-files', title: 'Show the Explorer', category: 'Workspace', key: 'f', when: 'workspace' },
+    { id: 'ws-explorer-focus', title: 'Focus the Explorer', category: 'Workspace', key: `${mod}+shift+e`, when: 'workspace' },
     { id: 'ws-preview', title: 'Open the Preview', category: 'Workspace', key: 'p', when: 'workspace' },
     { id: 'ws-changes', title: 'Show the Changes', category: 'Workspace', key: 'c', when: 'workspace' },
     { id: 'ws-notes', title: 'Show the Notes', category: 'Workspace', key: 'n', when: 'workspace' },

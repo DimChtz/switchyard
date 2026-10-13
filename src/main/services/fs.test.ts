@@ -6,7 +6,7 @@ import { join } from 'path'
 
 vi.mock('electron', () => ({ shell: { trashItem: vi.fn() } }))
 
-import { changedPaths, copyEntry, editorConfig, listAllFiles, listFiles, moveEntry, readDoc, renameEntry, replaceText, searchText, subRepos, writeDoc } from './fs'
+import { changedPaths, copyEntry, editorConfig, listAllFiles, listFiles, moveEntry, readDoc, renameEntry, replaceText, searchText, listDir, patchFiles, subRepos, treeLimit, writeDoc } from './fs'
 
 const root = mkdtempSync(join(tmpdir(), 'switchyard-fs-'))
 afterAll(() => rmSync(root, { recursive: true, force: true }))
@@ -272,6 +272,71 @@ describe('listFiles (git)', () => {
         .filter((f) => f.isDir)
         .map((f) => f.path)
         .sort()
-    ).toEqual(['.github', 'build'])
+    ).toEqual(['.github', 'build', 'node_modules'])
+    // A folder git ignores whole: dimmed, its files listed when it's opened.
+    expect(list.find((f) => f.path === 'node_modules')).toMatchObject({ isDir: true, ignored: true, lazy: true })
+    expect(await listDir(d, 'node_modules')).toEqual([{ path: 'node_modules/m.js', isDir: false, status: 'unchanged', ignored: true }])
+  })
+
+  it('tells what some paths are now, without listing everything', async () => {
+    const d = dir()
+    execFileSync('git', ['init', '-q', '-b', 'main', d])
+    writeFileSync(join(d, '.gitignore'), '*.log\n')
+    writeFileSync(join(d, 'kept.ts'), 'a')
+    writeFileSync(join(d, 'gone.ts'), 'a')
+    execFileSync('git', ['-C', d, 'add', '.'])
+    execFileSync('git', ['-C', d, '-c', 'user.email=t@t', '-c', 'user.name=t', 'commit', '-qm', 'i'])
+    writeFileSync(join(d, 'kept.ts'), 'b')
+    rmSync(join(d, 'gone.ts'))
+    writeFileSync(join(d, 'new [id].ts'), 'x')
+    writeFileSync(join(d, 'dev.log'), 'x')
+    mkdirSync(join(d, 'lib'))
+    const p = await patchFiles(d, ['kept.ts', 'gone.ts', 'new [id].ts', 'dev.log', 'lib', 'never.ts'])
+    const by = Object.fromEntries(p.entries.map((e) => [e.path, e]))
+    expect(by['kept.ts']).toMatchObject({ isDir: false, status: 'modified' })
+    // (Deleted from git's point of view: still shown, as deleted.)
+    expect(by['gone.ts']).toMatchObject({ status: 'deleted' })
+    expect(by['new [id].ts']).toMatchObject({ status: 'added' })
+    expect(by['dev.log']).toMatchObject({ ignored: true })
+    expect(by['lib']).toMatchObject({ isDir: true })
+    expect(p.gone).toEqual(['never.ts'])
+  })
+
+  it('lists every file, tracked and new, however many (a Rails app with an unignored bundle)', async () => {
+    const d = dir()
+    execFileSync('git', ['init', '-q', d])
+    for (const f of ['app/a.rb', 'app/b.rb', 'config/routes.rb', 'db/schema.rb', 'lib/x.rb']) {
+      mkdirSync(join(d, f, '..'), { recursive: true })
+      writeFileSync(join(d, f), 'x')
+    }
+    execFileSync('git', ['-C', d, 'add', '.'])
+    mkdirSync(join(d, 'bundle', 'gems'), { recursive: true })
+    for (let i = 0; i < 3000; i++) writeFileSync(join(d, 'bundle', 'gems', `g${i}.rb`), 'x')
+    writeFileSync(join(d, 'notes.txt'), 'x')
+    const list = await listFiles(d)
+    const files = list.filter((f) => !f.isDir).map((f) => f.path)
+    expect(files).toEqual(expect.arrayContaining(['app/a.rb', 'app/b.rb', 'config/routes.rb', 'db/schema.rb', 'lib/x.rb', 'notes.txt']))
+    expect(files.filter((p) => p.startsWith('bundle/gems/'))).toHaveLength(3000)
+    expect(list.find((f) => f.path === 'bundle/gems/g7.rb')?.status).toBe('added')
+    expect(list.find((f) => f.path === 'config/routes.rb')?.status).toBe('added')
+  })
+})
+
+describe('listFiles (a folder)', () => {
+  it('walks a level at a time, so a big first folder leaves room for the others', async () => {
+    const d = dir()
+    mkdirSync(join(d, 'app'))
+    for (let i = 0; i < 20; i++) writeFileSync(join(d, 'app', `f${i}.rb`), 'x')
+    mkdirSync(join(d, 'config'))
+    mkdirSync(join(d, 'db'))
+    writeFileSync(join(d, 'db', 'schema.rb'), 'x')
+    const was = treeLimit.files
+    treeLimit.files = 8
+    try {
+      const paths = (await listFiles(d)).map((f) => f.path)
+      expect(paths).toEqual(expect.arrayContaining(['app', 'config', 'db']))
+    } finally {
+      treeLimit.files = was
+    }
   })
 })

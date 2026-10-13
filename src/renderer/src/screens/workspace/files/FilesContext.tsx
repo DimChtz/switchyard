@@ -1,6 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '../../../store/AppStore'
-import { allDirPaths } from '../../../lib/fileTree'
+import { allDirPaths, applyPatch } from '../../../lib/fileTree'
 import { prepareForSave } from '../../../lib/editorPrefs'
 import { rememberFile } from '../../../lib/quickOpen'
 import { replaceMatches, searchRegex, type TextSearchOptions } from '@shared/textSearch'
@@ -144,6 +144,8 @@ export function FilesProvider({ task, root: rootPath, baseBranch, bases, childre
       if (hadError.current) setWatchKey((k) => k + 1)
       hadError.current = false
       setEntries(list)
+      // Opened ignored folders are listed again (see below).
+      setLazyKids(new Map())
       // The first time: every folder closed.
       if (!collapsedInit.current) {
         collapsedInit.current = true
@@ -160,6 +162,69 @@ export function FilesProvider({ task, root: rootPath, baseBranch, bases, childre
 
   // A different checkout or base lists again (other changes refresh through the file watcher).
   useEffect(refresh, [refresh])
+
+  // Folders git ignores whole (node_modules, tmp): what's in them is listed when they're opened.
+  const [lazyKids, setLazyKids] = useState<Map<string, FileEntry[]>>(new Map())
+  const lazyLoading = useRef(new Set<string>())
+  const allEntries = useMemo(() => (entries && lazyKids.size ? [...entries, ...[...lazyKids.values()].flat()] : entries), [entries, lazyKids])
+  useEffect(() => {
+    if (!allEntries) return
+    for (const e of allEntries) {
+      if (!e.lazy || collapsed.has(e.path) || lazyKids.has(e.path) || lazyLoading.current.has(e.path)) continue
+      lazyLoading.current.add(e.path)
+      window.api.fs
+        .listDir(rootPath, e.path)
+        .then(
+          (kids) => {
+            setLazyKids((m) => new Map(m).set(e.path, kids))
+            // (Its folders closed, as everything is at first.)
+            setCollapsed((prev) => new Set([...prev, ...kids.filter((k) => k.isDir).map((k) => k.path)]))
+          },
+          () => setLazyKids((m) => new Map(m).set(e.path, []))
+        )
+        .finally(() => lazyLoading.current.delete(e.path))
+    }
+  }, [allEntries, collapsed, lazyKids, rootPath, setCollapsed])
+
+  /**
+   * Files changed (an agent at work, a save): just those paths, looked at again
+   * and changed in the listing - not the whole checkout listed again. git's own
+   * changes (a commit, a checkout) list everything again.
+   */
+  const entriesRef = useRef(entries)
+  entriesRef.current = entries
+  const lazyRef = useRef(lazyKids)
+  lazyRef.current = lazyKids
+  const applyChanges = useCallback(
+    (paths: string[], git: boolean): void => {
+      const now = entriesRef.current
+      if (git || !now || paths.length > 150 || paths.includes('')) return refresh()
+      // In a folder git ignores whole: that folder listed again, if it's open.
+      const lazyDirs = now.filter((e) => e.lazy).map((e) => e.path)
+      const under = (p: string): string | undefined => lazyDirs.find((d) => p.startsWith(`${d}/`))
+      for (const d of new Set(paths.map(under).filter((d): d is string => !!d)))
+        if (lazyRef.current.has(d))
+          setLazyKids((m) => {
+            const next = new Map(m)
+            next.delete(d)
+            return next
+          })
+      const own = paths.filter((p) => !under(p))
+      if (!own.length) return
+      window.api.fs.patch(rootPath, own, baseBranch, bases).then(
+        (patch) => {
+          const current = entriesRef.current
+          const next = current && applyPatch(current, patch)
+          if (!next) return refresh()
+          setEntries(next)
+          setRefreshKey((k) => k + 1)
+        },
+        () => refresh()
+      )
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [refresh, rootPath, baseBranch, JSON.stringify(bases ?? null)]
+  )
 
   // Native paths for the system: file manager, terminals, copies.
   // (git may give the worktree's path with "/" on Windows; the system answers with "\".)
@@ -216,21 +281,23 @@ export function FilesProvider({ task, root: rootPath, baseBranch, bases, childre
   // Live: the agent's edits (and git's) show up - in the explorer, and in
   // open files that have no unsaved edits. A file you're editing that
   // changed on disk says so instead of being replaced.
-  const liveRef = useRef<{ paths: Set<string>; timer: ReturnType<typeof setTimeout> | null }>({ paths: new Set(), timer: null })
-  const latest = useRef({ fileCache, edits, refresh })
-  latest.current = { fileCache, edits, refresh }
+  const liveRef = useRef<{ paths: Set<string>; git: boolean; timer: ReturnType<typeof setTimeout> | null }>({ paths: new Set(), git: false, timer: null })
+  const latest = useRef({ fileCache, edits, refresh, applyChanges })
+  latest.current = { fileCache, edits, refresh, applyChanges }
   useEffect(
     () =>
       window.api.fs.watch(rootPath, ({ paths, git }) => {
         const live = liveRef.current
         for (const p of paths) live.paths.add(p)
-        if (git) live.paths.add('')
+        if (git) live.git = true
         live.timer ??= setTimeout(() => {
           live.timer = null
           const changed = [...live.paths]
+          const gitChanged = live.git
           live.paths.clear()
+          live.git = false
           const { fileCache: cache, edits: ed } = latest.current
-          latest.current.refresh()
+          latest.current.applyChanges(changed, gitChanged)
           for (const p of changed) {
             if (cache[p] === undefined) continue
             const m = metaRef.current[p]
@@ -309,7 +376,7 @@ export function FilesProvider({ task, root: rootPath, baseBranch, bases, childre
           return next
         })
         if (!quiet) dispatch({ type: 'TOAST', text: 'Saved.' })
-        refresh()
+        applyChanges([path], false)
       })
       .catch((err: unknown) => {
         // Someone (the agent) changed it since it was opened: not written over without asking.
@@ -443,7 +510,7 @@ export function FilesProvider({ task, root: rootPath, baseBranch, bases, childre
     abs,
     relOf,
     inRoot,
-    entries,
+    entries: allEntries,
     listError,
     refresh,
     refreshKey,

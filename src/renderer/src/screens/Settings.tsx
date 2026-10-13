@@ -649,6 +649,21 @@ function GlobalSettings({ section, scope, onScope }: { section: string; scope: P
           {tog('Trim trailing whitespace', 'On every save', 'editorTrimOnSave')}
           {tog('End files with a newline', 'On every save', 'editorFinalNewline')}
         </Group>
+        <Group title="Explorer" note="The task's files, in the side bar">
+          {tog('Compact folders', 'A folder holding only one folder shares its row - “app/models/concerns”', 'explorerCompact')}
+          {tog('Show ignored files', 'What git ignores, dimmed - folders such as node_modules or tmp list their files when opened', 'explorerShowIgnored')}
+          {tog('Follow the open file', 'The file in the editor is selected in the tree, its folders opened', 'explorerFollow')}
+          <Row k="explorerExclude" label="Hide" sub="One per line: a name anywhere (tmp, *.log) or a path from the top (public/assets/**)">
+            <UITextArea
+              mono
+              rows={3}
+              value={(pf.explorerExclude ?? []).join('\n')}
+              placeholder={'*.log\ntmp\npublic/assets/**'}
+              onChange={(e) => set({ explorerExclude: e.target.value ? e.target.value.split('\n') : [] })}
+              style={{ fontSize: 12 }}
+            />
+          </Row>
+        </Group>
       </>
     )
   }

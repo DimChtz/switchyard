@@ -434,6 +434,8 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.notesExportMany, (e, ids: string[]) => notesTransfer.exportMany(BrowserWindow.fromWebContents(e.sender), ids))
 
   ipcMain.handle(IPC.fsList, (_e, root: string, baseBranch?: string, bases?: Record<string, string>) => fsService.listFiles(root, baseBranch, bases))
+  ipcMain.handle(IPC.fsListDir, (_e, root: string, rel: string) => fsService.listDir(root, rel))
+  ipcMain.handle(IPC.fsPatch, (_e, root: string, paths: string[], baseBranch?: string, bases?: Record<string, string>) => fsService.patchFiles(root, paths, baseBranch, bases))
   ipcMain.handle(IPC.fsRead, (_e, path: string) => fsService.readFile(path))
   ipcMain.handle(IPC.fsWrite, async (_e, path: string, content: string) => {
     // A save in a task's worktree while its agent works: the agent hears about it (see coedit).

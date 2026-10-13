@@ -240,6 +240,8 @@ export const IPC = {
   notesChanged: 'notes:changed',
 
   fsList: 'fs:list',
+  fsListDir: 'fs:listDir',
+  fsPatch: 'fs:patch',
   fsRead: 'fs:read',
   fsWrite: 'fs:write',
   fsCreate: 'fs:create',

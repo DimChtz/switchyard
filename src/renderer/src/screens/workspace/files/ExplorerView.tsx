@@ -2,9 +2,10 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '../../../store/AppStore'
 import { useHover } from '../../../lib/useHover'
 import { fileIcon } from '../../../lib/fileLang'
-import { buildTree, allDirPaths, type TreeRow, type TreeItem } from '../../../lib/fileTree'
+import { buildTree, allDirPaths, excludeMatcher, type TreeRow, type TreeItem } from '../../../lib/fileTree'
+import { prefsFor } from '../../../lib/projectPrefs'
 import { FILE_DRAG_TYPE } from '../../../lib/dropPaths'
-import { Button, IconButton, Menu, confirm, type MenuItem } from '../../../components/ui'
+import { Button, IconButton, Menu, TextInput, confirm, type MenuItem } from '../../../components/ui'
 import { shortcut } from '../../../lib/shortcuts'
 import { errText } from '../../../lib/errors'
 import { isMac, keyLabel, revealLabel } from '../../../lib/keys'
@@ -14,6 +15,10 @@ import { PanelHeader, PanelIcon, type PanelChrome } from '../layout/PanelHeader'
 
 const parentOf = (rel: string): string => (rel.includes('/') ? rel.slice(0, rel.lastIndexOf('/')) : '')
 
+/** A row's height, and the tree's padding above the first. */
+const ROW_H = 24
+const PAD = 6
+
 // Cut or copied files and folders (absolute paths), kept across worktrees for Paste.
 let fileClipboard: { mode: 'copy' | 'cut'; items: { path: string; name: string }[] } | null = null
 
@@ -22,9 +27,16 @@ const DRAG_TYPE = FILE_DRAG_TYPE
 
 /** The Explorer side bar view: the task's folder as a tree (VS Code's explorer). */
 export function ExplorerView({ chrome, activePath }: { chrome: PanelChrome; activePath: string | null }): React.JSX.Element {
-  const { dispatch } = useAppStore()
+  const { state, dispatch } = useAppStore()
   const files = useFiles()
   const { task, entries, listError, collapsed, setCollapsed, abs, relOf, inRoot: inWorktree, refresh, openFile } = files
+  // Settings → File editor → Explorer (the project's own, if it sets them).
+  const pf = prefsFor(state, task.projectId)
+  const excluded = (pf.explorerExclude ?? []).join('\n')
+  const hide = useMemo(() => excludeMatcher(excluded.split('\n')), [excluded])
+  // The filter box (Ctrl/⌘+F in the tree): null while it's closed.
+  const [filter, setFilter] = useState<string | null>(null)
+  const filterRef = useRef<HTMLInputElement>(null)
   const [spinning, setSpinning] = useState(false)
   const [creating, setCreating] = useState<{ parentDir: string; isDir: boolean } | null>(null)
   const [createName, setCreateName] = useState('')
@@ -44,8 +56,45 @@ export function ExplorerView({ chrome, activePath }: { chrome: PanelChrome; acti
   const expandTimer = useRef<{ dir: string; timer: ReturnType<typeof setTimeout> } | null>(null)
   const treeRef = useRef<HTMLDivElement>(null)
 
-  const allItems: TreeItem[] = useMemo(() => (entries ?? []).map((f) => ({ path: f.path, status: f.status, isDir: f.isDir, ignored: f.ignored })), [entries])
-  const rows = useMemo(() => buildTree(allItems, collapsed), [allItems, collapsed])
+  const allItems: TreeItem[] = useMemo(
+    () =>
+      (entries ?? [])
+        .filter((f) => (pf.explorerShowIgnored || !f.ignored) && !hide?.(f.path))
+        .map((f) => ({ path: f.path, status: f.status, isDir: f.isDir, ignored: f.ignored, lazy: f.lazy })),
+    [entries, pf.explorerShowIgnored, hide]
+  )
+  const rows = useMemo(() => buildTree(allItems, collapsed, { compact: pf.explorerCompact, filter: filter ?? undefined }), [allItems, collapsed, pf.explorerCompact, filter])
+
+  // Only the rows on screen are drawn (a folder can hold thousands of files).
+  const [view, setView] = useState({ top: 0, height: 800 })
+  useEffect(() => {
+    const el = treeRef.current
+    if (!el) return
+    const ro = new ResizeObserver(() => setView({ top: el.scrollTop, height: el.clientHeight }))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  // The tree's lines: its rows, and the name field of a file or folder being made.
+  const lines = useMemo(() => {
+    const out: ({ kind: 'row'; r: TreeRow } | { kind: 'create'; depth: number })[] = []
+    if (creating?.parentDir === '') out.push({ kind: 'create', depth: 0 })
+    for (const r of rows) {
+      out.push({ kind: 'row', r })
+      if (creating && creating.parentDir === r.path) out.push({ kind: 'create', depth: r.depth + 1 })
+    }
+    return out
+  }, [rows, creating])
+  const first = Math.max(0, Math.floor((view.top - PAD) / ROW_H) - 12)
+  const last = Math.min(lines.length, Math.ceil((view.top + view.height) / ROW_H) + 12)
+
+  const openFilter = (): void => {
+    setFilter((f) => f ?? '')
+    setTimeout(() => filterRef.current?.select(), 0)
+  }
+  const closeFilter = (): void => {
+    setFilter(null)
+    treeRef.current?.focus()
+  }
 
   const toggleDir = (path: string): void => {
     setCollapsed((prev) => {
@@ -104,9 +153,24 @@ export function ExplorerView({ chrome, activePath }: { chrome: PanelChrome; acti
     if (files.revealReq) revealInTree(files.revealReq.path)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [files.revealReq?.n])
+  // (The selected row kept in view - it may not be drawn yet, so by where it is in the list.)
   useEffect(() => {
-    if (selected) treeRef.current?.querySelector(`[data-path="${CSS.escape(selected)}"]`)?.scrollIntoView({ block: 'nearest' })
+    const el = treeRef.current
+    const i = selected ? lines.findIndex((l) => l.kind === 'row' && l.r.path === selected) : -1
+    if (!el || i < 0) return
+    const top = PAD + i * ROW_H
+    if (top < el.scrollTop) el.scrollTop = top - PAD
+    else if (top + ROW_H > el.scrollTop + el.clientHeight) el.scrollTop = top + ROW_H - el.clientHeight + PAD
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected, rows])
+
+  // Settings → Follow the open file: the file in the editor, shown in the tree.
+  useEffect(() => {
+    if (!pf.explorerFollow || !activePath || filter !== null || !entries?.some((e) => e.path === activePath)) return
+    expandTo(parentOf(activePath))
+    setSelected(activePath)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activePath, pf.explorerFollow])
 
   const startCreate = (parentDir: string, isDir: boolean): void => {
     if (parentDir) setCollapsed((prev) => {
@@ -269,7 +333,7 @@ export function ExplorerView({ chrome, activePath }: { chrome: PanelChrome; acti
     setDropDir(dir)
     // Holding over a closed folder opens it.
     const row = rowAt(e.target)
-    if (row?.isDir && collapsed.has(row.path)) {
+    if (row?.isDir && !row.open) {
       if (expandTimer.current?.dir !== row.path) {
         if (expandTimer.current) clearTimeout(expandTimer.current.timer)
         const dirPath = row.path
@@ -392,12 +456,21 @@ export function ExplorerView({ chrome, activePath }: { chrome: PanelChrome; acti
     if (e.key === 'ArrowDown') move(rows[Math.min(rows.length - 1, i + 1)]?.path)
     else if (e.key === 'ArrowUp') move(rows[Math.max(0, i - 1)]?.path)
     else if (e.key === 'ArrowRight' && row?.isDir) {
-      if (collapsed.has(row.path)) toggleDir(row.path)
+      if (!row.open) toggleDir(row.path)
       else if (rows[i + 1]?.depth > row.depth) setSelected(rows[i + 1].path)
     } else if (e.key === 'ArrowLeft' && row) {
-      if (row.isDir && !collapsed.has(row.path)) toggleDir(row.path)
-      else if (parentOf(row.path)) setSelected(parentOf(row.path))
-    } else if (e.key === 'Enter' && row) {
+      if (row.isDir && row.open && filter === null) toggleDir(row.path)
+      else {
+        // (Its folder's row - with compact folders, the chain it's in.)
+        for (let k = i - 1; k >= 0; k--)
+          if (rows[k].depth < row.depth) {
+            setSelected(rows[k].path)
+            break
+          }
+      }
+    } else if (mod && !e.shiftKey && e.code === 'KeyF') openFilter()
+    else if (e.key === 'Escape' && filter !== null) closeFilter()
+    else if (e.key === 'Enter' && row) {
       if (row.isDir) toggleDir(row.path)
       else openFile(row.path)
     } else if (e.key === 'F2' && row) startRename(row)
@@ -443,14 +516,47 @@ export function ExplorerView({ chrome, activePath }: { chrome: PanelChrome; acti
           <path d="M2.4 7.8a4.7 4.7 0 0 0 8.6 1.9" />
           <path d="M11.2 12.2V9.5H8.5" />
         </PanelIcon>
+        <PanelIcon title={`Filter files by name (${keyLabel('⌘F')} in the tree)`} onClick={() => (filter === null ? openFilter() : closeFilter())}>
+          <path d="M1.8 2.5h10.4L8.2 7.3v3.9L5.8 12.3V7.3z" />
+        </PanelIcon>
         <PanelIcon title="Collapse all folders" onClick={collapseAll}>
           <rect x="1.5" y="1.5" width="11" height="11" rx="1.5" />
           <path d="M4.5 7h5" />
         </PanelIcon>
       </PanelHeader>
+      {filter !== null ? (
+        <div style={{ flex: 'none', padding: '6px 8px 2px', display: 'flex', alignItems: 'center', gap: 6 }}>
+          <TextInput
+            ref={filterRef}
+            size="sm"
+            autoFocus
+            value={filter}
+            placeholder="Filter by name"
+            onChange={(e) => setFilter(e.target.value)}
+            onKeyDown={(e) => {
+              e.stopPropagation()
+              if (e.key === 'Escape') {
+                e.preventDefault()
+                closeFilter()
+              } else if (e.key === 'ArrowDown' || e.key === 'Enter') {
+                // Into the results: the first file found.
+                e.preventDefault()
+                const hit = rows.find((r) => !r.isDir && r.match) ?? rows.find((r) => r.match) ?? rows[0]
+                if (hit) setSelected(hit.path)
+                if (e.key === 'Enter' && hit && !hit.isDir) openFile(hit.path)
+                treeRef.current?.focus()
+              }
+            }}
+            style={{ flex: 1, fontSize: 12.5 }}
+          />
+          <span style={{ font: '11px var(--font-mono)', color: 'var(--t4)', whiteSpace: 'nowrap' }}>{filter.trim() ? `${rows.filter((r) => r.match).length}` : ''}</span>
+        </div>
+      ) : null}
       <div
         ref={treeRef}
+        data-explorer-tree=""
         tabIndex={0}
+        onScroll={(e) => setView({ top: e.currentTarget.scrollTop, height: e.currentTarget.clientHeight })}
         onKeyDown={onTreeKey}
         onFocus={() => setTreeFocused(true)}
         onBlur={() => setTreeFocused(false)}
@@ -485,34 +591,38 @@ export function ExplorerView({ chrome, activePath }: { chrome: PanelChrome; acti
           <div style={{ padding: 12, color: 'var(--t4)', fontSize: 12.5 }}>Loading…</div>
         ) : (
           <>
-            {creating && creating.parentDir === '' ? (
-              <InlineEditRow depth={0} isDir={creating.isDir} value={createName} onChange={setCreateName} onSubmit={submitCreate} onCancel={() => setCreating(null)} />
+            {rows.length === 0 && !creating ? (
+              <div style={{ padding: 12, color: 'var(--t4)', fontSize: 12.5 }}>{filter?.trim() ? `Nothing named like “${filter.trim()}”.` : 'No files.'}</div>
             ) : null}
-            {rows.length === 0 && !creating ? <div style={{ padding: 12, color: 'var(--t4)', fontSize: 12.5 }}>No files.</div> : null}
-            {rows.map((r) =>
-              renaming && renaming.path === r.path ? (
-                <InlineEditRow key={r.path} depth={r.depth} isDir={r.isDir} value={renameValue} onChange={setRenameValue} onSubmit={submitRename} onCancel={() => setRenaming(null)} />
+            <div style={{ height: first * ROW_H }} />
+            {lines.slice(first, last).map((l) =>
+              l.kind === 'create' && creating ? (
+                <InlineEditRow key="+create" depth={l.depth} isDir={creating.isDir} value={createName} onChange={setCreateName} onSubmit={submitCreate} onCancel={() => setCreating(null)} />
+              ) : l.kind !== 'row' ? null : renaming && renaming.path === l.r.path ? (
+                <InlineEditRow key={l.r.path} depth={l.r.depth} isDir={l.r.isDir} value={renameValue} onChange={setRenameValue} onSubmit={submitRename} onCancel={() => setRenaming(null)} />
               ) : (
-                <React.Fragment key={r.path}>
-                  <TreeRowView
-                    row={r}
-                    tooltip={abs(r.path)}
-                    active={r.path === activePath}
-                    selected={picked.has(r.path)}
-                    lead={r.path === selected}
-                    dropTarget={!!dropDir && (r.path === dropDir || r.path.startsWith(`${dropDir}/`))}
+                <TreeRowView
+                    key={l.r.path}
+                    row={l.r}
+                    tooltip={abs(l.r.path)}
+                    active={l.r.path === activePath}
+                    selected={picked.has(l.r.path)}
+                    lead={l.r.path === selected}
+                    dropTarget={!!dropDir && (l.r.path === dropDir || l.r.path.startsWith(`${dropDir}/`))}
                     treeFocused={treeFocused}
-                    collapsed={collapsed.has(r.path)}
+                    collapsed={!l.r.open}
                     onClick={(e) => {
+                      const r = l.r
                       if (e.shiftKey) return extendTo(r.path)
                       if (e.metaKey || e.ctrlKey) return togglePick(r.path)
                       setSelected(r.path)
                       if (r.isDir) toggleDir(r.path)
                       else openFile(r.path)
                     }}
-                    onCreateFile={r.isDir ? () => startCreate(r.path, false) : undefined}
-                    onCreateFolder={r.isDir ? () => startCreate(r.path, true) : undefined}
+                    onCreateFile={l.r.isDir ? () => startCreate(l.r.path, false) : undefined}
+                    onCreateFolder={l.r.isDir ? () => startCreate(l.r.path, true) : undefined}
                     onContextMenu={(e) => {
+                      const r = l.r
                       e.preventDefault()
                       e.stopPropagation()
                       // On one of several selected rows, the menu is for all of them.
@@ -522,12 +632,9 @@ export function ExplorerView({ chrome, activePath }: { chrome: PanelChrome; acti
                       setMenu({ x: e.clientX, y: e.clientY, row: r, multi })
                     }}
                   />
-                  {creating && creating.parentDir === r.path ? (
-                    <InlineEditRow depth={r.depth + 1} isDir={creating.isDir} value={createName} onChange={setCreateName} onSubmit={submitCreate} onCancel={() => setCreating(null)} />
-                  ) : null}
-                </React.Fragment>
               )
             )}
+            <div style={{ height: (lines.length - last) * ROW_H }} />
           </>
         )}
       </div>
@@ -571,6 +678,16 @@ function TreeRowView({
   const fileFg = row.status === 'added' ? 'var(--c-green)' : row.status === 'modified' ? 'var(--c-code)' : row.status === 'deleted' ? 'var(--c-red)' : row.ignored ? 'var(--t4)' : 'var(--t2)'
   const statusChar = row.status === 'added' ? 'A' : row.status === 'modified' ? 'M' : row.status === 'deleted' ? 'D' : ''
   const dirColor = row.dirHasChanges ? 'var(--c-pin)' : 'var(--t-dim)'
+  // What the filter found, marked in the name.
+  const name = row.match ? (
+    <>
+      {row.name.slice(0, row.match[0])}
+      <b style={{ color: 'var(--c-blue)', fontWeight: 600 }}>{row.name.slice(row.match[0], row.match[1])}</b>
+      {row.name.slice(row.match[1])}
+    </>
+  ) : (
+    row.name
+  )
 
   return (
     <div
@@ -615,7 +732,7 @@ function TreeRowView({
           </svg>
         ) : null}
       </span>
-      <span style={{ width: 20, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: 5 }}>
+      <span style={{ width: 20, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', marginRight: 5, opacity: row.isDir && row.ignored ? 0.5 : 1 }}>
         {row.isDir ? (
           collapsed ? (
             <svg width="15" height="12" viewBox="0 0 15 12">
@@ -631,7 +748,7 @@ function TreeRowView({
           <span style={{ font: '700 8px/1 var(--font-mono)', color: icC, letterSpacing: '-0.02em', whiteSpace: 'nowrap' }}>{ic}</span>
         )}
       </span>
-      <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: row.isDir ? 'var(--t2)' : active ? 'var(--t1)' : fileFg }}>{row.name}</span>
+      <span style={{ flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', color: row.isDir ? (row.ignored ? 'var(--t4)' : 'var(--t2)') : active ? 'var(--t1)' : fileFg }}>{name}</span>
       {row.isDir && hover ? (
         <span style={{ display: 'flex', alignItems: 'center', gap: 2, marginRight: 2 }}>
           <IconButton
@@ -692,7 +809,7 @@ function InlineEditRow({
     ref.current?.select()
   }, [])
   return (
-    <div style={{ display: 'flex', alignItems: 'center', height: 26, padding: '0 6px 0 4px' }}>
+    <div style={{ display: 'flex', alignItems: 'center', height: ROW_H, padding: '0 6px 0 4px' }}>
       {Array.from({ length: depth }).map((_, i) => (
         <span key={i} style={{ width: 14, flex: 'none', alignSelf: 'stretch', display: 'flex', justifyContent: 'center' }}>
           <span style={{ width: 1, background: 'var(--bd-1)' }} />

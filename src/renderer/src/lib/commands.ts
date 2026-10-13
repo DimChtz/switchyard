@@ -318,6 +318,12 @@ export function useCommands(): { menus: MenuModel[]; run: (id: string) => void }
         case 'ws-notes':
           if (state.view === 'workspace' && state.taskId) showInWorkspace(state.taskId, id.slice(3) as 'terminal' | 'files' | 'preview' | 'changes' | 'notes')
           return
+        case 'ws-explorer-focus':
+          if (state.view !== 'workspace' || !state.taskId) return
+          showInWorkspace(state.taskId, 'files')
+          // (Keys go to the tree: arrows, type to jump, Ctrl/⌘+F to filter.)
+          setTimeout(() => document.querySelector<HTMLElement>('[data-explorer-tree]')?.focus(), 50)
+          return
         case 'ws-split-right':
         case 'ws-split-down':
           if (state.view === 'workspace' && task) splitFocused(task, id === 'ws-split-right' ? 'right' : 'bottom')

@@ -19,6 +19,13 @@ describe('matchSettings', () => {
   it('names before descriptions', () => {
     expect(matchSettings(all, 'font').map((s) => s.label)).toEqual(['Font size', 'Font size', 'Open on launch'])
   })
+  it('as the palette shows them ("Settings: …")', () => {
+    expect(matchSettings(all, 'Settings: play a').map((s) => s.label)).toEqual(['Play a sound'])
+  })
+  it('its exact name first', () => {
+    const rows = [e('File editor', 'Diffs', 'Hide whitespace changes'), e('File editor', 'Explorer', 'Hide')]
+    expect(matchSettings(rows, 'hide').map((s) => s.label)).toEqual(['Hide', 'Hide whitespace changes'])
+  })
   it('nothing for nothing', () => {
     expect(matchSettings(all, '  ')).toEqual([])
     expect(matchSettings(all, 'zzzz')).toEqual([])

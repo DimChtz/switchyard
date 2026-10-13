@@ -43,6 +43,7 @@ import type {
   OpenPr,
   FileDiff,
   FileEntry,
+  FilesPatch,
   CheckoutFiles,
   BrowseEntry,
   BrowsePlace,
@@ -518,6 +519,10 @@ const api = {
   fs: {
     /** A checkout's files with their git status; a task folder's, per repository (`bases`: each one's base branch). */
     list: (root: string, baseBranch?: string, bases?: Record<string, string>): Promise<FileEntry[]> => ipcRenderer.invoke(IPC.fsList, root, baseBranch, bases),
+    /** One folder git ignores whole, opened in the explorer. */
+    listDir: (root: string, rel: string): Promise<FileEntry[]> => ipcRenderer.invoke(IPC.fsListDir, root, rel),
+    /** What some paths are now (the explorer, kept up to date as files change). */
+    patch: (root: string, paths: string[], baseBranch?: string, bases?: Record<string, string>): Promise<FilesPatch> => ipcRenderer.invoke(IPC.fsPatch, root, paths, baseBranch, bases),
     read: (path: string): Promise<string> => ipcRenderer.invoke(IPC.fsRead, path),
     write: (path: string, content: string): Promise<void> => ipcRenderer.invoke(IPC.fsWrite, path, content),
     /** A file as the editor opens it (text with "\n", its real line ends, BOM, modified time; binary/large without text). */

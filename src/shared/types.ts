@@ -641,6 +641,16 @@ export interface FileEntry {
   status: 'added' | 'modified' | 'unchanged' | 'deleted'
   /** git ignores it (shown dimmed, like .env). */
   ignored?: boolean
+  /** A folder git ignores whole (node_modules, tmp): what's in it is listed when it's opened. */
+  lazy?: boolean
+}
+
+/** What some files are now (the explorer, kept up to date path by path). */
+export interface FilesPatch {
+  /** Still there (or deleted from git's point of view, still shown): as they are now. */
+  entries: FileEntry[]
+  /** Not there any more (with whatever was inside them). */
+  gone: string[]
 }
 
 export interface DiffLine {
@@ -851,6 +861,14 @@ export interface Prefs {
   editorAutoSave: 'off' | 'delay' | 'blur'
   /** Follow .editorconfig files (indentation, line endings, final newline, trimming) in the file editor. */
   editorConfig: boolean
+  /** The explorer: chains of single folders as one row ("app/models/concerns"). */
+  explorerCompact: boolean
+  /** The explorer: files and folders git ignores, dimmed (folders such as node_modules list their files when opened). */
+  explorerShowIgnored: boolean
+  /** The explorer: the file open in the editor is selected in the tree, its folders opened. */
+  explorerFollow: boolean
+  /** The explorer: hidden files and folders - names or globs ("*.log", "tmp", "public/assets/**"). */
+  explorerExclude: string[]
   /** Fetch every project's origin this often (minutes) to say when its base branch is behind; 0: never. */
   fetchMinutes: number
   /** After a fetch, fast-forward a base branch that's behind (only when that's all it needs and its checkout is clean). */
