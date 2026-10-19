@@ -22,13 +22,14 @@ export function setPluginAgents(defs: AgentDef[]): void {
   AGENTS.splice(BUILTIN_AGENTS, AGENTS.length - BUILTIN_AGENTS, ...defs.filter((d, i) => !AGENTS.slice(0, BUILTIN_AGENTS).some((a) => a.kind === d.kind) && defs.findIndex((x) => x.kind === d.kind) === i))
 }
 
-export const COLUMN_ORDER: BoardColumn[] = ['backlog', 'ready', 'progress', 'review', 'done']
+export const COLUMN_ORDER: BoardColumn[] = ['backlog', 'ready', 'progress', 'review', 'done', 'parked']
 export const COLUMN_LABEL: Record<BoardColumn, string> = {
   backlog: 'Backlog',
   ready: 'Ready',
   progress: 'In Progress',
   review: 'Review',
-  done: 'Done'
+  done: 'Done',
+  parked: 'Parked'
 }
 
 /** What .switchyard/settings.json (and settings.local.json) may set for a project. */

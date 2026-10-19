@@ -323,7 +323,7 @@ const TOOLS: Tool[] = [
     inputSchema: obj(),
     run: async (task) => {
       const touched = conflicts.report().touched ?? {}
-      const others = getTasks().filter((t) => t.id !== task.id && t.col !== 'done' && (t.agentKind || t.worktreePath))
+      const others = getTasks().filter((t) => t.id !== task.id && t.col !== 'done' && t.col !== 'parked' && (t.agentKind || t.worktreePath))
       if (!others.length) return text('No other task is being worked on.')
       return text(
         others

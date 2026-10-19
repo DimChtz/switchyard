@@ -53,6 +53,8 @@ export function send(from: string, toKey: string, text: string): TeamMessage {
   if (!to) throw new Error(`No task ${toKey} on the board.`)
   if (to.id === from) throw new Error('That is your own task.')
   if (to.col === 'done' || !to.agentKind) throw new Error(`${to.key} has no agent working on it.`)
+  // Parked: set aside - out of the other agents' sight (you can still write to it).
+  if (to.col === 'parked' && from !== 'user') throw new Error(`${to.key} is parked - set aside, nobody is working on it.`)
   const body = text.trim()
   if (!body) throw new Error('The message is empty.')
   const now = Date.now()
@@ -99,7 +101,7 @@ export function introduce(pairs: ConflictPair[]): void {
     if (!p.b || !p.conflicts.length) continue
     const a = tasks.find((t) => t.id === p.a)
     const b = tasks.find((t) => t.id === p.b)
-    if (!a?.agentKind || !b?.agentKind || a.col === 'done' || b.col === 'done') continue
+    if (!a?.agentKind || !b?.agentKind || a.col === 'done' || b.col === 'done' || a.col === 'parked' || b.col === 'parked') continue
     const key = [a.id, b.id].sort().join('|') + ':' + p.conflicts.join(',')
     if (introduced.has(key)) continue
     introduced.add(key)

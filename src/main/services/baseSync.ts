@@ -1,7 +1,7 @@
 import { BrowserWindow } from 'electron'
 import { statSync } from 'fs'
 import { isAbsolute, join } from 'path'
-import { gitAt, gitFailure, gitYes, refClash } from './gitEnv'
+import { gitAt, gitBusy, gitFailure, gitYes, refClash } from './gitEnv'
 import { listWorktrees } from './git'
 import { getPrefs, getProjects } from './store'
 import { log } from './log'
@@ -64,11 +64,14 @@ export async function statusOf(projectId: string): Promise<BaseStatus | null> {
 }
 
 /** Fetches origin for one project (or all) and says how their base branches stand. */
-export async function fetchNow(projectId?: string): Promise<BaseStatus[]> {
+export async function fetchNow(projectId?: string, background = false): Promise<BaseStatus[]> {
   const projects = getProjects().filter((p) => p.repoPath && (!projectId || p.id === projectId))
   await Promise.all(
     projects.map(async (p) => {
       if (!(await hasOrigin(p.repoPath))) return
+      // The timer's fetch waits while a git is at work there (an agent's rebase): next round.
+      const busy = background ? await gitBusy(p.repoPath) : null
+      if (busy) return log.info('base', `Not fetching ${p.name} now - git is busy (${busy})`)
       try {
         const fetch = (): Promise<unknown> => gitAt(p.repoPath, { network: true }).fetch(['origin', '--prune', '--progress'])
         await fetch().catch(async (err: unknown) => {
@@ -86,7 +89,7 @@ export async function fetchNow(projectId?: string): Promise<BaseStatus[]> {
         statuses.set(p.id, { ...(statuses.get(p.id) ?? { projectId: p.id, base: p.defaultBranch ?? 'main', hasRemote: true, behind: 0, ahead: 0, fetchedAt: 0, checkedOutAt: null }), error: msg })
       }
       await statusOf(p.id)
-      if (getPrefs().autoPullBase) await pull(p.id, true).catch(() => {})
+      if (getPrefs().autoPullBase && !(await gitBusy(p.repoPath))) await pull(p.id, true).catch(() => {})
     })
   )
   broadcast()
@@ -137,7 +140,7 @@ export function start(): void {
     const minutes = getPrefs().fetchMinutes
     if (!minutes) return
     timer = setTimeout(() => {
-      fetchNow()
+      fetchNow(undefined, true)
         .catch((err) => log.warn('base', 'Background fetch failed', err))
         .finally(schedule)
     }, minutes * 60_000)
@@ -145,7 +148,7 @@ export function start(): void {
   setTimeout(() => {
     Promise.all(getProjects().map((p) => statusOf(p.id)))
       .then(broadcast)
-      .then(() => (getPrefs().fetchMinutes ? fetchNow() : undefined))
+      .then(() => (getPrefs().fetchMinutes ? fetchNow(undefined, true) : undefined))
       .catch((err) => log.warn('base', 'First fetch failed', err))
       .finally(schedule)
   }, 20_000)

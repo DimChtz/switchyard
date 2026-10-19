@@ -7,6 +7,7 @@ import { shortcut } from '../lib/shortcuts'
 import type { Notice } from '@shared/types'
 
 const COLOR: Record<Notice['kind'], string> = {
+  error: 'var(--c-red)',
   waiting: 'var(--c-amber)',
   permission: 'var(--c-amber)',
   failed: 'var(--c-red)',
@@ -40,13 +41,20 @@ function ago(ts: number): string {
 export function NoticeBell(): React.JSX.Element {
   const notices = useNotices()
   const [open, setOpen] = useState(false)
+  const [errorsOnly, setErrorsOnly] = useState(false)
   const [hover, hoverProps] = useHover()
   const close = useCallback(() => setOpen(false), [])
   const unread = notices.filter((n) => !n.read).length
-  const needsYou = notices.some((n) => !n.read && (n.kind === 'failed' || n.kind === 'permission' || n.kind === 'waiting' || n.kind === 'tests-failed' || n.kind === 'agent-question'))
+  const needsYou = notices.some((n) => !n.read && (n.kind === 'failed' || n.kind === 'permission' || n.kind === 'waiting' || n.kind === 'tests-failed' || n.kind === 'agent-question' || n.kind === 'error'))
 
   useEffect(() => {
-    const on = (): void => setOpen((o) => !o)
+    const on = (e: Event): void => {
+      // ("All errors", from an error's details: opened on them.)
+      if ((e as CustomEvent<{ errors?: boolean } | null>).detail?.errors) {
+        setErrorsOnly(true)
+        setOpen(true)
+      } else setOpen((o) => !o)
+    }
     window.addEventListener('switchyard:notices', on)
     return () => window.removeEventListener('switchyard:notices', on)
   }, [])
@@ -67,14 +75,18 @@ export function NoticeBell(): React.JSX.Element {
           <span style={{ font: '600 10.5px/15px var(--font-mono)', padding: '0 5px', borderRadius: 3, color: 'var(--bg-chrome)', background: needsYou ? 'var(--c-amber)' : 'var(--c-blue)' }}>{unread}</span>
         ) : null}
       </span>
-      {open ? <NoticePanel onClose={close} /> : null}
+      {open ? <NoticePanel onClose={close} errorsOnly={errorsOnly} setErrorsOnly={setErrorsOnly} /> : null}
     </>
   )
 }
 
-function NoticePanel({ onClose }: { onClose: () => void }): React.JSX.Element {
+function NoticePanel({ onClose, errorsOnly, setErrorsOnly }: { onClose: () => void; errorsOnly: boolean; setErrorsOnly: (on: boolean) => void }): React.JSX.Element {
   const { state, dispatch } = useAppStore()
-  const notices = useNotices()
+  const all = useNotices()
+  const errorCount = all.filter((n) => n.kind === 'error').length
+  const notices = errorsOnly ? all.filter((n) => n.kind === 'error') : all
+  // An error opens to the whole of it (and its task's name, a click on that).
+  const [expanded, setExpanded] = useState<string | null>(null)
   const ref = useRef<HTMLDivElement>(null)
   // What was unread when it opened stays marked as new while it's open.
   const [fresh] = useState(() => new Set(notices.filter((n) => !n.read).map((n) => n.id)))
@@ -146,8 +158,26 @@ function NoticePanel({ onClose }: { onClose: () => void }): React.JSX.Element {
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderBottom: '1px solid var(--bd-2)' }}>
         <span style={{ font: '600 13px var(--font-ui)', color: 'var(--t1)', flex: 1 }}>Notifications</span>
+        {errorCount || errorsOnly ? (
+          <span style={{ display: 'flex', gap: 2, padding: 2, borderRadius: 5, border: '1px solid var(--bd-2)' }}>
+            {(
+              [
+                [false, 'All'],
+                [true, `Errors ${errorCount}`]
+              ] as const
+            ).map(([on, label]) => (
+              <span
+                key={label}
+                onClick={() => setErrorsOnly(on)}
+                style={{ padding: '1px 8px', borderRadius: 3, font: '11.5px var(--font-ui)', cursor: 'pointer', color: errorsOnly === on ? 'var(--t1)' : 'var(--t3)', background: errorsOnly === on ? 'var(--bg-hover)' : 'transparent' }}
+              >
+                {label}
+              </span>
+            ))}
+          </span>
+        ) : null}
         {notices.length ? (
-          <span onClick={clearNotices} style={{ font: '12px var(--font-ui)', color: 'var(--t3)', cursor: 'pointer' }}>
+          <span onClick={() => clearNotices(errorsOnly ? 'error' : undefined)} style={{ font: '12px var(--font-ui)', color: 'var(--t3)', cursor: 'pointer' }}>
             Clear all
           </span>
         ) : null}
@@ -155,7 +185,7 @@ function NoticePanel({ onClose }: { onClose: () => void }): React.JSX.Element {
       <div style={{ overflow: 'auto', padding: '4px 0 6px' }}>
         {!notices.length ? (
           <div style={{ padding: '22px 16px', font: '12.5px/1.5 var(--font-ui)', color: 'var(--t3)', textAlign: 'center' }}>
-            Nothing yet. When an agent needs you, fails or finishes - or tests run and branches merge - it shows up here.
+            {errorsOnly ? 'No errors. When something goes wrong - a push, a finish, a git command - the whole message is kept here.' : 'Nothing yet. When an agent needs you, fails or finishes - or tests run and branches merge - it shows up here.'}
           </div>
         ) : (
           groups
@@ -164,7 +194,7 @@ function NoticePanel({ onClose }: { onClose: () => void }): React.JSX.Element {
               <div key={label}>
                 <div style={{ padding: '8px 14px 4px', font: '500 10.5px var(--font-mono)', letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--t4)' }}>{label}</div>
                 {list.map((n) => (
-                  <NoticeRow key={n.id} n={n} fresh={fresh.has(n.id)} onClick={() => openTask(n)} />
+                  <NoticeRow key={n.id} n={n} fresh={fresh.has(n.id)} expanded={expanded === n.id} onClick={() => (n.kind === 'error' ? setExpanded((x) => (x === n.id ? null : n.id)) : openTask(n))} onOpenTask={() => openTask(n)} />
                 ))}
               </div>
             ))
@@ -174,8 +204,43 @@ function NoticePanel({ onClose }: { onClose: () => void }): React.JSX.Element {
   )
 }
 
-function NoticeRow({ n, fresh, onClick }: { n: Notice; fresh: boolean; onClick: () => void }): React.JSX.Element {
+function NoticeRow({ n, fresh, expanded, onClick, onOpenTask }: { n: Notice; fresh: boolean; expanded: boolean; onClick: () => void; onOpenTask: () => void }): React.JSX.Element {
   const [hover, hoverProps] = useHover()
+  const [copied, setCopied] = useState(false)
+  if (expanded && n.detail) {
+    // An error, all of it.
+    return (
+      <div {...hoverProps} style={{ display: 'flex', gap: 10, padding: '7px 14px', background: 'var(--bg-hover)' }}>
+        <span style={{ width: 7, height: 7, marginTop: 5, borderRadius: '50%', flex: 'none', background: COLOR[n.kind] }} />
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <pre onClick={onClick} style={{ margin: 0, font: '11.5px/1.5 var(--font-mono)', color: 'var(--t1)', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: 260, overflow: 'auto', userSelect: 'text', cursor: 'text' }}>
+            {n.detail}
+          </pre>
+          <div style={{ display: 'flex', gap: 14, font: '11.5px var(--font-ui)' }}>
+            <span
+              onClick={() => {
+                window.api.sys.copy(n.detail ?? n.text)
+                setCopied(true)
+              }}
+              style={{ color: 'var(--c-blue)', cursor: 'pointer' }}
+            >
+              {copied ? 'Copied' : 'Copy'}
+            </span>
+            {n.taskKey ? (
+              <span onClick={onOpenTask} style={{ color: 'var(--c-blue)', cursor: 'pointer' }}>
+                Open {n.taskKey}
+              </span>
+            ) : null}
+            <span onClick={onClick} style={{ color: 'var(--t3)', cursor: 'pointer' }}>
+              Less
+            </span>
+            <span style={{ flex: 1 }} />
+            <span style={{ font: '11px var(--font-mono)', color: 'var(--t4)' }}>{new Date(n.at).toLocaleString()}</span>
+          </div>
+        </div>
+      </div>
+    )
+  }
   return (
     <div onClick={onClick} {...hoverProps} style={{ display: 'flex', gap: 10, padding: '7px 14px', cursor: 'pointer', background: hover ? 'var(--bg-hover)' : 'transparent' }}>
       <span style={{ width: 7, height: 7, marginTop: 5, borderRadius: '50%', flex: 'none', background: COLOR[n.kind] }} />

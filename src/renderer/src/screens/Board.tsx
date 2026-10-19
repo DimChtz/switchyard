@@ -49,6 +49,11 @@ import { EmptyState } from '../components/EmptyState'
 import { prSummary } from '@shared/pr'
 import { baseFor, parentFinished, parentOf, waitsFor } from '@shared/stack'
 
+/** A column's narrowest (px): cards stay readable - the board scrolls sideways when the window is small. */
+const COLUMN_MIN = 210
+/** An empty Parked column: a strip to drop onto, not a whole column of the board. */
+const SLIM_COLUMN = 44
+
 function Card({ task, focused, cost }: { task: Task; focused: boolean; cost: number }): React.JSX.Element {
   const { state, dispatch } = useAppStore()
   const [hover, hoverProps] = useHover()
@@ -174,64 +179,70 @@ function Card({ task, focused, cost }: { task: Task; focused: boolean; cost: num
         flex: 'none'
       }}
     >
-      <div style={{ display: 'flex', gap: 8, alignItems: 'baseline' }}>
-        {renaming !== null ? (
-          <input
-            autoFocus
-            value={renaming}
-            onChange={(e) => setRenaming(e.target.value)}
-            onClick={(e) => e.stopPropagation()}
-            onFocus={(e) => e.currentTarget.select()}
-            onBlur={() => {
-              dispatch({ type: 'RENAME_TASK', taskId: task.id, title: renaming })
-              setRenaming(null)
-            }}
-            onKeyDown={(e) => {
-              e.stopPropagation()
-              if (e.key === 'Enter') e.currentTarget.blur()
-              if (e.key === 'Escape') setRenaming(null)
-            }}
-            style={{ flex: 1, minWidth: 0, font: '500 13px/1.35 var(--font-ui)', color: 'var(--t1)', background: 'var(--bg-panel-3)', border: '1px solid color-mix(in srgb, var(--c-blue) 60%, transparent)', borderRadius: 4, padding: '2px 5px', outline: 'none' }}
-          />
-        ) : (
-          <span style={{ font: "500 13px/1.35 var(--font-ui)", color: 'var(--t1)', flex: 1 }}>
-            {task.pinnedAt ? <PinMark onUnpin={() => dispatch({ type: 'PIN_TASK', taskId: task.id, pinned: false })} /> : null}
-            {task.title}
-          </span>
-        )}
-        {task.issue ? (
-          <span
-            onClick={(e) => {
-              e.stopPropagation()
-              window.api.sys.openExternal(task.issue!.url)
-            }}
-            title={`GitHub issue #${task.issue.number}`}
-            style={{ font: "11px var(--font-mono)", color: 'var(--c-blue)', cursor: 'pointer' }}
-          >
-            #{task.issue.number}
-          </span>
-        ) : null}
-        {show.pr && task.prDetails && task.pr?.state === 'OPEN' ? <PrChip task={task} /> : null}
-        {(show.age && !compact) || stale ? (
-          <span title={`In ${columnName(bp, task.col)} for ${since}${stale ? ` - stale (Settings → Board: after ${bp.boardStaleDays} day${bp.boardStaleDays === 1 ? '' : 's'})` : ''}`} style={{ font: '11px var(--font-mono)', color: stale ? 'var(--c-amber)' : 'var(--t4)', whiteSpace: 'nowrap' }}>
-            {stale ? '◷ ' : ''}
-            {since}
-          </span>
-        ) : null}
-        {show.cost && cost > 0 ? (
-          <span title="Agent spend on this task, at API prices (Usage)" style={{ font: '11px var(--font-mono)', color: 'var(--t3)' }}>
-            {formatCost(cost)}
-          </span>
-        ) : null}
-        {task.criteria?.length ? (
-          <span
-            title="Acceptance criteria verified"
-            style={{ font: '11px var(--font-mono)', color: criteriaDone(task).passed === task.criteria.length ? 'var(--c-green)' : criteriaDone(task).failed ? 'var(--c-red)' : 'var(--t3)' }}
-          >
-            ✓{criteriaDone(task).passed}/{task.criteria.length}
-          </span>
-        ) : null}
-        <span style={{ font: "11px var(--font-mono)", color: 'var(--t4)' }}>{task.key}</span>
+      {/* What it is (its key, issue, pull request) and how it stands, above its title - which gets the card's whole width. */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0 }}>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', minWidth: 0, height: 18 }}>
+          <span style={{ font: "11px var(--font-mono)", color: 'var(--t4)', whiteSpace: 'nowrap' }}>{task.key}</span>
+          {task.issue ? (
+            <span
+              onClick={(e) => {
+                e.stopPropagation()
+                window.api.sys.openExternal(task.issue!.url)
+              }}
+              title={`GitHub issue #${task.issue.number}`}
+              style={{ font: "11px var(--font-mono)", color: 'var(--c-blue)', cursor: 'pointer' }}
+            >
+              #{task.issue.number}
+            </span>
+          ) : null}
+          {show.pr && task.prDetails && task.pr?.state === 'OPEN' ? <PrChip task={task} /> : null}
+          <span style={{ flex: 1 }} />
+          {(show.age && !compact) || stale ? (
+            <span title={`In ${columnName(bp, task.col)} for ${since}${stale ? ` - stale (Settings → Board: after ${bp.boardStaleDays} day${bp.boardStaleDays === 1 ? '' : 's'})` : ''}`} style={{ font: '11px var(--font-mono)', color: stale ? 'var(--c-amber)' : 'var(--t4)', whiteSpace: 'nowrap' }}>
+              {stale ? '◷ ' : ''}
+              {since}
+            </span>
+          ) : null}
+          {show.cost && cost > 0 ? (
+            <span title="Agent spend on this task, at API prices (Usage)" style={{ font: '11px var(--font-mono)', color: 'var(--t3)' }}>
+              {formatCost(cost)}
+            </span>
+          ) : null}
+          {task.criteria?.length ? (
+            <span
+              title="Acceptance criteria verified"
+              style={{ font: '11px var(--font-mono)', color: criteriaDone(task).passed === task.criteria.length ? 'var(--c-green)' : criteriaDone(task).failed ? 'var(--c-red)' : 'var(--t3)' }}
+            >
+              ✓{criteriaDone(task).passed}/{task.criteria.length}
+            </span>
+          ) : null}
+        </div>
+        <div style={{ display: 'flex', minWidth: 0 }}>
+          {renaming !== null ? (
+            <input
+              autoFocus
+              value={renaming}
+              onChange={(e) => setRenaming(e.target.value)}
+              onClick={(e) => e.stopPropagation()}
+              onFocus={(e) => e.currentTarget.select()}
+              onBlur={() => {
+                dispatch({ type: 'RENAME_TASK', taskId: task.id, title: renaming })
+                setRenaming(null)
+              }}
+              onKeyDown={(e) => {
+                e.stopPropagation()
+                if (e.key === 'Enter') e.currentTarget.blur()
+                if (e.key === 'Escape') setRenaming(null)
+              }}
+              style={{ flex: 1, minWidth: 0, font: '500 13px/1.35 var(--font-ui)', color: 'var(--t1)', background: 'var(--bg-panel-3)', border: '1px solid color-mix(in srgb, var(--c-blue) 60%, transparent)', borderRadius: 4, padding: '2px 5px', outline: 'none' }}
+            />
+          ) : (
+            <span style={{ font: "500 13px/1.35 var(--font-ui)", color: 'var(--t1)', flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>
+              {task.pinnedAt ? <PinMark onUnpin={() => dispatch({ type: 'PIN_TASK', taskId: task.id, pinned: false })} /> : null}
+              {task.title}
+            </span>
+          )}
+        </div>
       </div>
       <PluginBadges taskId={task.id} />
       {parent && task.col !== 'done' ? <BuildsOn task={task} parent={parent} /> : null}
@@ -619,12 +630,15 @@ function ColumnCell({
   costs,
   head,
   adding,
-  lanes
+  lanes,
+  slim
 }: {
   col: BoardColumn
   tasks: Task[]
   costs: Map<string, number>
   head?: React.ReactNode
+  /** Empty Parked: a narrow strip that takes a dropped card. */
+  slim?: boolean
   /** The new-task input goes here. */
   adding?: boolean
   /** In a lane: no scrolling of its own (the board scrolls), and a floor to drop onto. */
@@ -713,7 +727,7 @@ function ColumnCell({
         boxShadow: dragOver ? 'inset 0 0 0 1px color-mix(in srgb, var(--c-blue) 40%, transparent)' : 'inset 0 0 0 1px transparent'
       }}
     >
-      {head}
+      {slim ? (head ? <SlimHead col={col} /> : null) : head}
       <div ref={listRef} style={{ display: 'flex', flexDirection: 'column', gap: 8, overflow: lanes ? 'visible' : 'auto', minHeight: 0, flex: 1 }}>
         {adding ? <AddTaskInput /> : null}
         {tasks.map((t) => (
@@ -725,6 +739,20 @@ function ColumnCell({
         {manual && dropAt === 'end' && tasks.length ? <DropLine /> : null}
       </div>
     </div>
+  )
+}
+
+/** An empty Parked column's name, written down its strip (drop a card on it to park it). */
+function SlimHead({ col }: { col: BoardColumn }): React.JSX.Element {
+  const { state } = useAppStore()
+  const bp = prefsFor(state, state.projectId)
+  return (
+    <span
+      title={`${columnName(bp, col)} - drop a card here to set it aside: its agent pauses, other tasks don't see it (a card's menu: Park)`}
+      style={{ writingMode: 'vertical-rl', alignSelf: 'center', padding: '6px 0', font: '500 12px var(--font-ui)', color: 'var(--t4)', whiteSpace: 'nowrap', userSelect: 'none' }}
+    >
+      {columnName(bp, col)}
+    </span>
   )
 }
 
@@ -1050,7 +1078,14 @@ export function Board(): React.JSX.Element | null {
     return col === 'done' && bp.doneShown > 0 ? [...list].sort((a, b) => inColumnSince(b) - inColumnSince(a)).slice(0, bp.doneShown) : list
   }
   const addCol: BoardColumn = cols.includes(bp.newTaskColumn) ? bp.newTaskColumn : cols.includes('backlog') ? 'backlog' : 'ready'
-  const grid: React.CSSProperties = { display: 'grid', gridTemplateColumns: `repeat(${cols.length},minmax(0,1fr))`, gap: 10 }
+  // Columns never narrower than a card can be read at: a small window scrolls the board sideways instead.
+  const slim = (col: BoardColumn): boolean => col === 'parked' && !byCol(all, 'parked').length
+  const grid: React.CSSProperties = {
+    display: 'grid',
+    gridTemplateColumns: cols.map((c) => (slim(c) ? `${SLIM_COLUMN}px` : `minmax(${COLUMN_MIN}px,1fr)`)).join(' '),
+    gap: 10,
+    minWidth: cols.reduce((n, c) => n + (slim(c) ? SLIM_COLUMN : COLUMN_MIN), 0) + (cols.length - 1) * 10
+  }
 
   return (
     <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
@@ -1108,24 +1143,25 @@ export function Board(): React.JSX.Element | null {
         </EmptyState>
       ) : null}
       {group === 'none' ? (
-        <div style={{ ...grid, flex: 1, minHeight: 0, padding: '14px 16px' }}>
-          {cols.map((col) => (
-            <ColumnCell
-              key={col}
-              col={col}
-              tasks={cards(shown, col)}
-              costs={costs}
-              adding={col === addCol && state.addingTask}
-              head={<ColumnHead col={col} all={byCol(all, col)} shown={byCol(shown, col)} filtering={filtering} />}
-            />
-          ))}
+        <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', overflowX: 'auto', overflowY: 'hidden' }}>
+          <div style={{ ...grid, flex: 1, minHeight: 0, padding: '14px 16px', boxSizing: 'border-box', minWidth: (grid.minWidth as number) + 32 }}>
+            {cols.map((col) => (
+              <ColumnCell
+                key={col}
+                col={col}
+                tasks={cards(shown, col)}
+                costs={costs}
+                adding={col === addCol && state.addingTask}
+                slim={slim(col)}
+                head={<ColumnHead col={col} all={byCol(all, col)} shown={byCol(shown, col)} filtering={filtering} />}
+              />
+            ))}
+          </div>
         </div>
       ) : (
         <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '0 16px 14px' }}>
           <div style={{ ...grid, position: 'sticky', top: 0, zIndex: 1, background: 'var(--bg-app)', padding: '14px 4px 6px' }}>
-            {cols.map((col) => (
-              <ColumnHead key={col} col={col} all={byCol(all, col)} shown={byCol(shown, col)} filtering={filtering} />
-            ))}
+            {cols.map((col) => (slim(col) ? <SlimHead key={col} col={col} /> : <ColumnHead key={col} col={col} all={byCol(all, col)} shown={byCol(shown, col)} filtering={filtering} />))}
           </div>
           {!lanes.length && filtering ? (
             <div style={{ padding: '28px 8px', font: '12.5px var(--font-ui)', color: 'var(--t4)', textAlign: 'center' }}>
@@ -1143,7 +1179,7 @@ export function Board(): React.JSX.Element | null {
                 {isFolded ? null : (
                   <div style={grid}>
                     {cols.map((col) => (
-                      <ColumnCell key={col} col={col} tasks={cards(lane.tasks, col)} costs={costs} adding={i === 0 && col === addCol && state.addingTask} lanes />
+                      <ColumnCell key={col} col={col} tasks={cards(lane.tasks, col)} costs={costs} adding={i === 0 && col === addCol && state.addingTask} lanes slim={slim(col)} />
                     ))}
                   </div>
                 )}

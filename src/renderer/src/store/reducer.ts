@@ -1,6 +1,7 @@
 import type { BoardColumn, Note, Prefs, Task } from '@shared/types'
 import { columnName, visibleColumns, wipLimit } from '../lib/boardPrefs'
 import { inProject } from '../lib/multiRepo'
+import { looksLikeError } from '../lib/errors'
 import { NO_FILTER, boardFilterOf, loadBoardPrefs } from '../lib/boardFilter'
 import type { Action, AppState, ToastState } from './types'
 import { AGENTS, COLUMN_ORDER, DEFAULT_PREFS, branchFor, firstMessage } from '@shared/constants'
@@ -78,9 +79,10 @@ function newTaskColumn(prefs: Prefs): 'backlog' | 'ready' {
   return shown.includes(prefs.newTaskColumn) ? prefs.newTaskColumn : shown.includes('backlog') ? 'backlog' : 'ready'
 }
 
-function withToast(state: AppState, text: string, tone: 'plain' | 'waiting' | 'done' = 'plain', action?: ToastState['action']): AppState {
+function withToast(state: AppState, text: string, tone?: ToastState['tone'], action?: ToastState['action']): AppState {
   toastSeq += 1
-  return { ...state, toast: { id: toastSeq, text, tone, action } }
+  // ("Could not push: …" and the like are errors without saying so: shown and kept as such.)
+  return { ...state, toast: { id: toastSeq, text, tone: tone ?? (looksLikeError(text) ? 'error' : 'plain'), action } }
 }
 
 /**
@@ -184,6 +186,10 @@ function reduce(state: AppState, action: Action): AppState {
       }
       if (movingBackward && next.st === 'working') {
         next = { ...next, st: 'paused' }
+      }
+      // Parked: set aside as it is - its agent paused (see AppStore), out of the queue.
+      if (action.col === 'parked') {
+        next = { ...next, queued: null, ...(next.st === 'working' ? { st: 'paused' as const } : {}) }
       }
 
       const tasks = mapTask(state, task.id, () => next)
@@ -665,7 +671,8 @@ function reduce(state: AppState, action: Action): AppState {
 
     case 'RESUME_TASK':
       return withToast(
-        { ...state, tasks: mapTask(state, action.taskId, (t) => ({ ...t, st: 'working', ask: null, askKind: null, sleeping: null })) },
+        // (A parked task taken up again is back In Progress.)
+        { ...state, tasks: mapTask(state, action.taskId, (t) => ({ ...t, st: 'working', ask: null, askKind: null, sleeping: null, ...(t.col === 'parked' ? { col: 'progress' as const, lastActivityAt: Date.now() } : {}) })) },
         'Agent resumed.'
       )
 

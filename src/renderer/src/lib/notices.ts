@@ -35,8 +35,8 @@ export function addNotice(n: Omit<Notice, 'id' | 'at' | 'read'>): void {
   notices = [{ ...n, id: `${at}-${Math.random().toString(36).slice(2, 8)}`, at, read: false }, ...notices].slice(0, MAX)
   emit()
   save()
-  // To the phone or chat too, when one is set (main picks the kinds, and whether you're away).
-  window.api.sys.push({ kind: n.kind, taskKey: n.taskKey, taskTitle: n.taskTitle, text: n.text, detail: n.detail ?? null })
+  // To the phone or chat too, when one is set (main picks the kinds, and whether you're away) - not the app's own errors.
+  if (n.kind !== 'error') window.api.sys.push({ kind: n.kind, taskKey: n.taskKey, taskTitle: n.taskTitle, text: n.text, detail: n.detail ?? null })
 }
 
 export function markRead(ids?: string[]): void {
@@ -47,8 +47,9 @@ export function markRead(ids?: string[]): void {
   save()
 }
 
-export function clearNotices(): void {
-  notices = []
+/** Clears them all - or those of one kind (the errors). */
+export function clearNotices(kind?: Notice['kind']): void {
+  notices = kind ? notices.filter((n) => n.kind !== kind) : []
   emit()
   save()
 }
@@ -66,4 +67,29 @@ export function useNotices(): Notice[] {
 /** Toggles the notification center (the bell, and its shortcut). */
 export function toggleNoticeCenter(): void {
   window.dispatchEvent(new CustomEvent('switchyard:notices'))
+}
+
+/** Opens the notification center on its errors. */
+export function showErrors(): void {
+  window.dispatchEvent(new CustomEvent('switchyard:notices', { detail: { errors: true } }))
+}
+
+/**
+ * Every error the app showed (a toast that went too fast, a finish that
+ * failed in the background) is kept in the notification center's Errors,
+ * whole. Its task, when the message names one ("Could not finish SYT-12: …").
+ */
+export function recordError(text: string, tasks: { id: string; key: string; title: string; projectId: string }[] = []): void {
+  const key = /\b([A-Z][A-Z0-9]*-\d+)\b/.exec(text)?.[1]
+  const task = key ? tasks.find((t) => t.key === key) : undefined
+  const first = text.split('\n')[0]
+  addNotice({
+    kind: 'error',
+    taskId: task?.id ?? '',
+    taskKey: task?.key ?? '',
+    taskTitle: task?.title ?? '',
+    projectId: task?.projectId ?? '',
+    text: first.length > 140 ? `${first.slice(0, 140)}…` : first,
+    detail: text
+  })
 }

@@ -182,18 +182,27 @@ export async function finishWithPr(task: Task, project: Project, dispatch: Dispa
     // (one still open, or not known, keeps its branch).
     for (const w of others)
       await window.api.git.closeWithPr(w.project.repoPath, w.path, task.branch, baseOf(task, w.project), task.repoPrs?.[w.project.id]?.state === 'MERGED', task.repoPrs?.[w.project.id]?.url)
-    await window.api.git.closeWithPr(project.repoPath, task.worktreePath, task.branch, baseOf(task, project), merged, task.pr.url)
-    if (task.taskDir) await window.api.git.removeTaskDir(task.taskDir)
+    const { leftFolder } = await window.api.git.closeWithPr(project.repoPath, task.worktreePath, task.branch, baseOf(task, project), merged, task.pr.url)
+    if (task.taskDir && !leftFolder) await window.api.git.removeTaskDir(task.taskDir)
     const n = task.pr.number ? `#${task.pr.number}` : ''
     dispatch({
       type: 'FINISH_TASK',
       taskId: task.id,
-      note: merged ? `PR ${n} merged · worktree pruned` : `PR ${n} open · worktree removed, branch kept`,
-      toast: merged ? `Finished - PR ${n} is merged.` : `Worktree removed - PR ${n} stays open.`
+      note: leftFolder
+        ? `PR ${n} ${merged ? 'merged' : 'open'} · git no longer knew the worktree - its folder is left at ${leftFolder}`
+        : merged
+          ? `PR ${n} merged · worktree pruned`
+          : `PR ${n} open · worktree removed, branch kept`,
+      toast: leftFolder
+        ? `Finished - but git no longer knew ${task.key}'s worktree, so its folder wasn't checked or deleted: ${leftFolder}. Delete it once you're sure nothing in it is needed.`
+        : merged
+          ? `Finished - PR ${n} is merged.`
+          : `Worktree removed - PR ${n} stays open.`
     })
     return true
   } catch (err) {
-    dispatch({ type: 'TOAST', text: `Could not finish ${task.key}: ${errText(err)}` })
+    // (Dropped on Done, a task whose PR is merged can still finish - keeping its worktree.)
+    dispatch({ type: 'TOAST', text: `Could not finish ${task.key}: ${errText(err)}${merged ? ' - drop it on Done to finish it and keep its worktree.' : ''}` })
     return false
   } finally {
     finishing.delete(task.id)

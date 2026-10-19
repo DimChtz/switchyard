@@ -115,7 +115,8 @@ export function scan(): Promise<ConflictReport> {
 async function doScan(): Promise<ConflictReport> {
   const projects = getProjects()
   const all = getTasks()
-  const tasks = all.filter((t) => t.worktreePath && t.branch && t.col !== 'done')
+  // (A parked task is set aside: no clash is said about it, to it or to others.)
+  const tasks = all.filter((t) => t.worktreePath && t.branch && t.col !== 'done' && t.col !== 'parked')
   const checkouts: Checkout[] = []
   for (const task of tasks) {
     for (const id of [task.projectId, ...(task.repos ?? []).filter((r) => r !== task.projectId)]) {

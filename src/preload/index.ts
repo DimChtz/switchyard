@@ -268,7 +268,7 @@ const api = {
     prDetails: (worktreePath: string, ref: string): Promise<PrDetails | null> => ipcRenderer.invoke(IPC.gitPrDetails, worktreePath, ref),
     unpushed: (worktreePath: string, branch: string, baseBranch: string): Promise<number> =>
       ipcRenderer.invoke(IPC.gitUnpushed, worktreePath, branch, baseBranch),
-    closeWithPr: (repoPath: string, worktreePath: string, branch: string, baseBranch: string, merged: boolean, prRef?: string): Promise<void> =>
+    closeWithPr: (repoPath: string, worktreePath: string, branch: string, baseBranch: string, merged: boolean, prRef?: string): Promise<{ leftFolder: string | null }> =>
       ipcRenderer.invoke(IPC.gitCloseWithPr, repoPath, worktreePath, branch, baseBranch, merged, prRef),
     /** A pull request opened for the branch elsewhere (its agent, github.com) since `since`; null without one. */
     findPr: (worktreePath: string, branch: string, since: number): Promise<PullRequest | null> => ipcRenderer.invoke(IPC.gitFindPr, worktreePath, branch, since),

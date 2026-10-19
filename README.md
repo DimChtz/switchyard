@@ -6,7 +6,7 @@ Track your projects on a board, start a task with an agent, and Switchyard creat
 
 ## Features
 
-- **Board per project:** Backlog, Ready, In Progress, Review and Done columns. Starting a task creates its worktree and launches the agent you pick. Settings → Board renames or hides columns, sets card limits, compact cards, stale markers, sort order and auto-archive - for every project, or one.
+- **Board per project:** Backlog, Ready, In Progress, Review and Done columns, and Parked for work set aside (its agent paused, its worktree kept, out of the other agents' sight). Columns keep a readable width - a small window scrolls the board sideways. Starting a task creates its worktree and launches the agent you pick. Settings → Board renames or hides columns, sets card limits, compact cards, stale markers, sort order and auto-archive - for every project, or one.
 - **Command line:** `switchyard new "Fix the login" --agent claude` from any terminal (Settings → General → Install command). In a project's folder the task goes on that project's board; `--start` starts it right away. `switchyard://new?title=…` links do the same.
 - **Tools for the agents (MCP):** previews, tests, conflicts, review comments, notes, the pull request's checks, and the task's terminals - an agent can read the dev server's output or run a command in a shell tab you see.
 - **Agents view:** every running agent across projects, with the ones waiting for you or failed first.
@@ -17,6 +17,7 @@ Track your projects on a board, start a task with an agent, and Switchyard creat
 - **Pull requests:** every open PR across your projects with its checks, review state and conflicts, linked to its task, and a Merge button (GitHub CLI).
 - **Processes:** everything the app's terminals started - agents, shells, dev servers, test runs - with the ports they listen on and their memory, what was left running after its terminal closed, and Stop.
 - **Voice input:** dictate into an agent's terminal, a message, a note or a comment (`Ctrl+Shift+Space` / `⇧⌘Space` - press to start and stop, or hold while you speak; or the mic in the status bar). Speech becomes text on your machine with Whisper (the model downloads once, then it works offline); the text goes in without pressing Enter - unless you end with "send". "New line" and "scratch that" work too, and the words show while you speak.
+- **Errors you can read:** an error toast stays while you point at it, opens in full (Details, Copy), and every error is kept in the notification center's Errors.
 - **Phone and chat notifications:** agents that need you, sent through ntfy, Slack, Discord or a webhook while you're away.
 - **Notes, Inbox, Summary, Usage, Team and Map views.**
 - **Keyboard cheat sheet** (`?`): the shortcuts that work where you are. **Command palette** (`Ctrl+K` / `⌘K`, the commands you ran lately first, and every setting by name - it opens on that row), **Go to file** (`Ctrl+P`), **recent files** in the task (`Ctrl+E`), **recent tasks** (`Ctrl+Tab`, as switching editor tabs), and rebindable shortcuts. Pinned tasks (right-click → Pin) stay at the top of the sidebar and of their board column.

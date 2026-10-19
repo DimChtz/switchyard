@@ -1,5 +1,5 @@
 import { BrowserWindow } from 'electron'
-import { gitAt } from './gitEnv'
+import { gitAt, gitBusy, retryOnLock } from './gitEnv'
 import { staleReason } from '@shared/constants'
 import { getPrefs, getProjects, getTasks } from './store'
 import { getWorktreeStatus, listWorktrees } from './git'
@@ -32,6 +32,8 @@ export async function pruneStale(now = false): Promise<string[]> {
   const pruned: string[] = []
   for (const project of getProjects()) {
     const base = project.defaultBranch ?? 'main'
+    // (Not beside a git at work there - an agent's rebase: next hour.)
+    if (!now && (await gitBusy(project.repoPath))) continue
     let worktrees: Awaited<ReturnType<typeof listWorktrees>>
     try {
       worktrees = (await listWorktrees(project.repoPath)).filter((w) => !w.isMain && !w.locked)
@@ -51,7 +53,7 @@ export async function pruneStale(now = false): Promise<string[]> {
         const linked = openBranches.has(`${project.id}|${w.branch}`)
         if (status.dirty > 0 || !staleReason({ linked, ...status }, prefs.staleDays, base)) continue
         const git = gitAt(project.repoPath)
-        await git.raw(['worktree', 'remove', w.path])
+        await retryOnLock(() => git.raw(['worktree', 'remove', w.path]))
         if (status.ahead === 0 && w.branch) await git.raw(['branch', '-d', w.branch]).catch(() => {})
         pruned.push(`${project.name}: ${w.branch || w.path}`)
         log.info('cleanup', `Pruned the stale worktree ${w.path}`)

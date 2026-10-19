@@ -221,7 +221,7 @@ function Shell(): React.JSX.Element {
         const vdir = { ArrowUp: -1, k: -1, K: -1, ArrowDown: 1, j: 1, J: 1 }[e.key]
         if (dir !== undefined) {
           const col = colOf(state.boardFocus)
-          const targetCol = COLUMN_ORDER[Math.min(4, Math.max(0, col + dir))]
+          const targetCol = COLUMN_ORDER[Math.min(COLUMN_ORDER.length - 1, Math.max(0, col + dir))]
           const first = tasks.find((t) => t.col === targetCol)
           if (first) dispatch({ type: 'SET_BOARD_FOCUS', id: first.id })
           return

@@ -61,6 +61,12 @@ export function taskMenuItems(
   ]
   const edits: MenuItem[] = [
     { label: task.pinnedAt ? 'Unpin' : 'Pin', onClick: () => dispatch({ type: 'PIN_TASK', taskId: task.id, pinned: !task.pinnedAt }) },
+    // Set aside (its agent paused, out of the other tasks' sight) - and back.
+    ...(task.col === 'parked'
+      ? [{ label: 'Unpark (back to In Progress)', onClick: () => dispatch({ type: 'MOVE_TASK', id: task.id, col: 'progress' }) }]
+      : task.col === 'progress' || task.col === 'review'
+        ? [{ label: 'Park', onClick: () => dispatch({ type: 'MOVE_TASK', id: task.id, col: 'parked' }) }]
+        : []),
     ...(opts.rename ? [{ label: 'Rename', onClick: opts.rename }] : []),
     ...(opts.editDesc ? [{ label: 'Edit description', onClick: opts.editDesc }] : []),
     // A next step that needs this one's changes: its branch starts from this one's (one in the project folder has none).

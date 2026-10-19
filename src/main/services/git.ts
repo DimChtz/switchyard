@@ -1,4 +1,4 @@
-import { gitAt, gitArgs, gitEnv, gitFailure, gitYes, newestBase } from './gitEnv'
+import { gitAt, gitArgs, gitEnv, gitFailure, gitYes, newestBase, oneAtATime, retryOnLock } from './gitEnv'
 import { basename, dirname, isAbsolute, join, relative } from 'path'
 import { constants as fsConstants, promises as fs } from 'fs'
 import { tmpdir } from 'os'
@@ -218,12 +218,15 @@ export async function addWorktree(
   baseRef = 'HEAD'
 ): Promise<void> {
   const git = gitAt(repoPath)
-  const branches = await git.branchLocal()
-  if (branches.all.includes(branch)) {
-    await git.raw(['worktree', 'add', worktreePath, branch])
-  } else {
-    await git.raw(['worktree', 'add', '-b', branch, worktreePath, baseRef])
-  }
+  // (One of Switchyard's changes to the repository at a time - tasks started together, a finish meanwhile.)
+  await oneAtATime(repoPath, async () => {
+    const branches = await git.branchLocal()
+    if (branches.all.includes(branch)) {
+      await git.raw(['worktree', 'add', worktreePath, branch])
+    } else {
+      await git.raw(['worktree', 'add', '-b', branch, worktreePath, baseRef])
+    }
+  })
   if (join(worktreePath).startsWith(join(repoPath, '.worktrees'))) {
     await ensureWorktreesIgnored(repoPath).catch((err) => log.warn('git', 'Could not add .worktrees/ to .git/info/exclude', err))
   }
@@ -1378,6 +1381,9 @@ async function notIn(git: ReturnType<typeof gitAt>, ref: string, head = 'HEAD'):
  */
 export async function closeCheck(worktreePath: string, branch: string, baseBranch: string, prRef?: string): Promise<string | null> {
   if (!(await isWorktree(worktreePath))) return null
+  // A folder git doesn't know as a checkout any more (an earlier finish got half way): git can't
+  // check it, and nothing removes it (see closeWithPr) - the work that matters is in the pull request.
+  if (await brokenWorktree(worktreePath)) return null
   const dirty = (await gitAt(worktreePath).status()).files.length
   if (dirty > 0) return `The worktree has ${dirty} uncommitted change${dirty > 1 ? 's' : ''} - commit and push them, or discard them, first.`
   const unpushed = await unpublishedCount(worktreePath, branch, baseBranch, prRef)
@@ -1390,11 +1396,30 @@ export async function closeCheck(worktreePath: string, branch: string, baseBranc
  * worktree (only when clean and everything is in the PR) and, once the PR
  * is merged, the local branch too.
  */
-export async function closeWithPr(repoPath: string, worktreePath: string, branch: string, baseBranch: string, merged: boolean, prRef?: string): Promise<void> {
-  const refused = await closeCheck(worktreePath, branch, baseBranch, prRef)
-  if (refused) throw new Error(refused)
-  await dropWorktree(repoPath, worktreePath)
-  if (merged && getPrefs(repoPath).deleteBranchOnFinish !== false) await gitAt(repoPath).raw(['branch', '-D', branch]).catch(() => {})
+export async function closeWithPr(repoPath: string, worktreePath: string, branch: string, baseBranch: string, merged: boolean, prRef?: string): Promise<{ leftFolder: string | null }> {
+  // One finish at a time per repository (pull requests merged together finish together).
+  return oneAtATime(repoPath, async () => {
+    const refused = await closeCheck(worktreePath, branch, baseBranch, prRef)
+    if (refused) throw new Error(refused)
+    // A folder git no longer knows is left as it is - whatever's in it wasn't checked, so it isn't deleted.
+    const leftFolder = (await isWorktree(worktreePath)) && (await brokenWorktree(worktreePath)) ? worktreePath : null
+    if (leftFolder) await retryOnLock(() => gitAt(repoPath).raw(['worktree', 'prune'])).catch(() => {})
+    else await dropWorktree(repoPath, worktreePath)
+    if (merged && getPrefs(repoPath).deleteBranchOnFinish !== false) await retryOnLock(() => gitAt(repoPath).raw(['branch', '-D', branch])).catch(() => {})
+    return { leftFolder }
+  })
+}
+
+/**
+ * A worktree folder git can't work in any more: its .git file is there, but
+ * the record it points to in the repository is gone (an earlier remove got
+ * half way, a prune ran meanwhile) - "not a git repository".
+ */
+export async function brokenWorktree(path: string): Promise<boolean> {
+  return gitYes(path, ['rev-parse', '--git-dir']).then(
+    (ok) => !ok,
+    (err: unknown) => /not a git repository/i.test(String((err as Error)?.message ?? err)) || (err as { code?: unknown }).code === 128
+  )
 }
 
 /** A folder that's a git checkout (a worktree has a .git file). */
@@ -1422,7 +1447,7 @@ async function dropWorktree(repoPath: string, worktreePath: string): Promise<voi
   }
   for (let i = 1; ; i++) {
     try {
-      if (await isWorktree(worktreePath)) await main.raw(['worktree', 'remove', worktreePath, '--force'])
+      if (await isWorktree(worktreePath)) await retryOnLock(() => main.raw(['worktree', 'remove', worktreePath, '--force']))
       break
     } catch (err) {
       if (!(await isWorktree(worktreePath))) break

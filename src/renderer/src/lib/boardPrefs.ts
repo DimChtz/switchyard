@@ -38,7 +38,7 @@ export function inColumnSince(t: Task): number {
 
 /** It hasn't moved in `days` (Done cards aren't stale - they're done). */
 export function isStale(t: Task, days: number, now = Date.now()): boolean {
-  return days > 0 && t.col !== 'done' && !t.archivedAt && now - inColumnSince(t) > days * DAY
+  return days > 0 && t.col !== 'done' && t.col !== 'parked' && !t.archivedAt && now - inColumnSince(t) > days * DAY
 }
 
 const NEEDS: Record<string, number> = { failed: 0, waiting: 1, working: 2 }

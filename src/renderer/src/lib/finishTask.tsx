@@ -6,6 +6,7 @@ import { errText } from './errors'
 import { baseOf } from './stack'
 import { checkoutsOf } from './multiRepo'
 import { finishGone, finishInPlace, finishWithPr, freshPr, mergeTask, taskDirty } from './taskActions'
+import { killTaskSessions } from './agentControl'
 
 type Dispatch = (action: Action) => void
 type Method = Prefs['prMergeMethod']
@@ -24,7 +25,7 @@ const METHOD_LABEL: Record<Method, string> = { squash: 'Squash', merge: 'Merge c
 export async function finishTask(task: Task, project: Project, prefs: Prefs, dispatch: Dispatch, projects: Project[] = [project]): Promise<boolean> {
   if (task.inPlace) return finishInPlace(task, dispatch)
   const pr = await freshPr(task, dispatch)
-  if (pr?.state === 'MERGED') return finishWithPr({ ...task, pr }, project, dispatch, projects)
+  if (pr?.state === 'MERGED') return finishMerged(task, pr, project, dispatch, projects)
   // Settings → Board: a task in Review waits for its pull request's approval.
   if (prefs.reviewNeedsApproval && task.col === 'review' && pr?.state === 'OPEN' && task.prDetails?.reviewDecision !== 'APPROVED') {
     dispatch({ type: 'TOAST', text: `${task.key} stays in Review until PR #${pr.number ?? ''} is approved (Settings → Board).` })
@@ -48,6 +49,34 @@ export async function finishTask(task: Task, project: Project, prefs: Prefs, dis
     return false
   }
   return mergeTask(task, project, prefs, dispatch, false, projects)
+}
+
+/**
+ * A merged pull request: the task closes out - unless its worktree holds work
+ * the pull request doesn't (uncommitted changes, commits never pushed). Then
+ * it's asked: finish and keep the worktree and branch as they are (nothing is
+ * deleted), or look at the changes first.
+ */
+async function finishMerged(task: Task, pr: Pr, project: Project, dispatch: Dispatch, projects: Project[]): Promise<boolean> {
+  const refused = task.worktreePath && task.branch ? await window.api.git.closeCheck(task.worktreePath, task.branch, baseOf(task, project), pr.url).catch(() => null) : null
+  if (!refused) return finishWithPr({ ...task, pr }, project, dispatch, projects)
+  const n = pr.number ? `#${pr.number}` : ''
+  const answer = await choose({
+    title: `PR ${n} is merged - but ${task.key}'s worktree has more`,
+    body: `${refused} Finish ${task.key} and keep its worktree and branch as they are (nothing is deleted - remove them from Worktrees later), or open its changes first.`,
+    confirmLabel: 'Finish, keep worktree',
+    altLabel: 'Open changes'
+  })
+  if (answer === 'alt') dispatch({ type: 'OPEN_TASK', taskId: task.id, tab: 'changes' })
+  if (answer !== 'confirm') return false
+  await killTaskSessions(task.id)
+  dispatch({
+    type: 'FINISH_TASK',
+    taskId: task.id,
+    note: `PR ${n} merged · worktree and branch kept (they had work the PR doesn't): ${task.worktreePath ?? ''}`,
+    toast: `${task.key} is done - its worktree is kept, with what wasn't in PR ${n}.`
+  })
+  return true
 }
 
 /** An open pull request: merge it on GitHub and finish, or finish and leave it open - asked. */

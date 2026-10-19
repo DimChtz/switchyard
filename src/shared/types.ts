@@ -4,7 +4,8 @@ export type AgentStatus = 'working' | 'waiting' | 'failed' | 'done' | 'paused' |
 
 export type ViewName = 'dashboard' | 'board' | 'agents' | 'worktrees' | 'workspace' | 'settings' | 'notes' | 'usage' | 'team' | 'inbox' | 'summary' | 'map' | 'prs' | 'processes'
 
-export type BoardColumn = 'backlog' | 'ready' | 'progress' | 'review' | 'done'
+/** The board's columns. Parked: set aside - kept as it is (worktree, branch), its agent paused, out of the other tasks' sight. */
+export type BoardColumn = 'backlog' | 'ready' | 'progress' | 'review' | 'done' | 'parked'
 
 export type BuiltinAgentKind = 'claude' | 'codex' | 'gemini' | 'aider' | 'opencode' | 'cursor' | 'copilot'
 /** A built-in agent, or one a plugin adds (its own kind). */
@@ -525,7 +526,7 @@ export interface ThemesState {
   dir: string
 }
 
-export type NoticeKind = 'waiting' | 'permission' | 'failed' | 'done' | 'tests-passed' | 'tests-failed' | 'finished' | 'pr-merged' | 'spend' | 'review-reply' | 'agent-question' | 'team' | 'limit' | 'pr' | 'update'
+export type NoticeKind = 'error' | 'waiting' | 'permission' | 'failed' | 'done' | 'tests-passed' | 'tests-failed' | 'finished' | 'pr-merged' | 'spend' | 'review-reply' | 'agent-question' | 'team' | 'limit' | 'pr' | 'update'
 
 /** A new version of Switchyard: downloaded and ready to install, or out (to download by hand - a Mac build that can't install it itself). */
 export interface UpdateState {

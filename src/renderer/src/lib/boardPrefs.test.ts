@@ -9,7 +9,7 @@ describe('board settings', () => {
   it('names and hides columns - In Progress always shows', () => {
     expect(columnName({ boardNames: { ready: 'Todo', done: '  ' } }, 'ready')).toBe('Todo')
     expect(columnName({ boardNames: { done: '  ' } }, 'done')).toBe('Done')
-    expect(visibleColumns({ boardHidden: ['backlog', 'progress', 'review'] })).toEqual(['ready', 'progress', 'done'])
+    expect(visibleColumns({ boardHidden: ['backlog', 'progress', 'review'] })).toEqual(['ready', 'progress', 'done', 'parked'])
   })
 
   it('reads limits and what cards show, partial settings included', () => {

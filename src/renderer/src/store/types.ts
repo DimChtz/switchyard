@@ -72,7 +72,7 @@ export interface FilePreviewState {
 export interface ToastState {
   id: number
   text: string
-  tone: 'plain' | 'waiting' | 'done'
+  tone: 'plain' | 'waiting' | 'done' | 'error'
   /** A button on it (Undo) - the toast stays up longer. */
   action?: ToastAction
 }

@@ -1,5 +1,5 @@
 import React, { createContext, useCallback, useContext, useEffect, useReducer, useRef, useState } from 'react'
-import { addNotice as recordNotice, loadNotices } from '../lib/notices'
+import { addNotice as recordNotice, loadNotices, recordError } from '../lib/notices'
 import { startUpdateWatch } from '../lib/updates'
 import type { Action, AppState } from './types'
 import { initialState, reducer } from './reducer'
@@ -39,6 +39,9 @@ interface Ctx {
 }
 
 const StoreContext = createContext<Ctx | null>(null)
+
+/** Tasks finishing because their pull requests merged: one after another (see below). */
+let autoFinish: Promise<unknown> = Promise.resolve()
 
 const RETRY_MESSAGE = 'The previous run exited with an error. Check what went wrong and continue.'
 
@@ -81,7 +84,7 @@ export function AppStoreProvider({ children }: { children: React.ReactNode }): R
   // effect without repeating it.
   const dispatch = useCallback((action: Action) => {
     const s = stateRef.current
-    const task = 'taskId' in action ? s.tasks.find((t) => t.id === action.taskId) : undefined
+    const task = 'taskId' in action ? s.tasks.find((t) => t.id === action.taskId) : action.type === 'MOVE_TASK' ? s.tasks.find((t) => t.id === action.id) : undefined
     const project = task ? s.projects.find((p) => p.id === task.projectId) : undefined
     const sessionId = task ? agentSessionId(task.id) : ''
 
@@ -158,8 +161,8 @@ ${u.ask}` : ''}`, task.id, actions)
       })
     }
 
-    if (task && action.type === 'PAUSE_TASK') {
-      // Esc interrupts the current turn in claude/codex/gemini.
+    if (task && (action.type === 'PAUSE_TASK' || (action.type === 'MOVE_TASK' && action.col === 'parked' && task.col !== 'parked' && task.st === 'working'))) {
+      // Esc interrupts the current turn in claude/codex/gemini (parking pauses it too).
       window.api.pty.write(sessionId, '\x1b')
     } else if (task && action.type === 'RESUME_TASK') {
       window.api.pty.exists(sessionId).then((running) => {
@@ -577,13 +580,10 @@ ${u.ask}` : ''}`, task.id, actions)
     return () => clearTimeout(t)
   }, [state.board])
 
+  // Every error shown is kept, whole, in the notification center's Errors (the toast goes; see Toast).
   useEffect(() => {
-    if (!state.toast) return
-    const id = state.toast.id
-    // (Long enough to reach for Undo.)
-    const t = setTimeout(() => dispatch({ type: 'DISMISS_TOAST', id }), state.toast.action ? 8000 : 3200)
-    return () => clearTimeout(t)
-  }, [state.toast, dispatch])
+    if (state.toast?.tone === 'error') recordError(state.toast.text, stateRef.current.tasks)
+  }, [state.toast])
 
   // An agent hit a usage limit: the task sleeps until it resets.
   useEffect(
@@ -632,7 +632,9 @@ ${u.ask}` : ''}`, task.id, actions)
         dispatch({ type: 'TOAST', text: `PR #${t.pr.number ?? ''} of ${t.key} is merged - it goes to Done once its agent stops (or finish it now).` })
         continue
       }
-      finishWithPr(t, project, dispatch, s.projects).catch(() => {})
+      // One after another: pull requests merged together used to finish side by side, and trip over each other's git.
+      // (Why one couldn't finish - work not in the PR, say - is kept in Notifications → Errors.)
+      autoFinish = autoFinish.then(() => finishWithPr(t, project, dispatch, stateRef.current.projects).catch(() => false))
     }
   }, [state.tasks, dispatch])
 

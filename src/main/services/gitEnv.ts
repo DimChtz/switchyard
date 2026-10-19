@@ -1,4 +1,7 @@
 import { execFile } from 'child_process'
+import { existsSync, statSync } from 'fs'
+import { readdir } from 'fs/promises'
+import { isAbsolute, join } from 'path'
 import { simpleGit, type SimpleGit } from 'simple-git'
 
 /**
@@ -19,10 +22,20 @@ import { simpleGit, type SimpleGit } from 'simple-git'
  *   file vanished from it.
  * - color.ui=false, log.showSignature=false: no color codes or signature
  *   lines mixed into output that gets parsed.
+ *
+ * And so Switchyard never gets in the way of git run by you or an agent
+ * ("Another git process seems to be running in this repository"):
+ * - GIT_OPTIONAL_LOCKS=0: `git status` - run all the time, for the explorer,
+ *   the Changes tab, the board - otherwise takes .git/index.lock to save its
+ *   refreshed index, and a rebase or commit starting at that moment fails.
+ *   (As VS Code does.) Terminals don't get it: there git works as usual.
+ * - gc.auto=0, maintenance.auto=false: a commit or fetch of Switchyard's
+ *   doesn't start git's housekeeping in the background, which holds locks
+ *   (packed-refs, the index) for a long while. Yours still runs it.
  */
-export const GIT_ENV: Record<string, string> = { GIT_TERMINAL_PROMPT: '0' }
+export const GIT_ENV: Record<string, string> = { GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0' }
 
-export const GIT_CONFIG = ['core.quotepath=off', 'diff.noprefix=false', 'diff.mnemonicPrefix=false', 'color.ui=false', 'log.showSignature=false']
+export const GIT_CONFIG = ['core.quotepath=off', 'diff.noprefix=false', 'diff.mnemonicPrefix=false', 'color.ui=false', 'log.showSignature=false', 'gc.auto=0', 'maintenance.auto=false']
 
 /** Commands that talk to a remote (fetch, push, clone) give up after this long without progress. */
 export const NETWORK_TIMEOUT_MS = 90_000
@@ -120,4 +133,76 @@ export function gitYes(cwd: string, args: string[]): Promise<boolean> {
       reject(err)
     })
   })
+}
+
+/** A git failure because another git held a lock (index.lock, a ref's lock) - worth trying again in a moment. */
+export function isLockError(err: unknown): boolean {
+  return /\.lock'?:? File exists|Unable to create '[^']*\.lock'|cannot lock ref|Another git process seems to be running|could not lock config file|unable to write new index file|index\.lock/i.test(String((err as Error)?.message ?? err))
+}
+
+/**
+ * Runs a git change, trying again (up to ~6 s) while another git - an
+ * agent's rebase, your commit - holds a lock it needs, instead of failing on it.
+ */
+export async function retryOnLock<T>(run: () => Promise<T>, tries = 6): Promise<T> {
+  for (let i = 1; ; i++) {
+    try {
+      return await run()
+    } catch (err) {
+      if (i >= tries || !isLockError(err)) throw err
+      await new Promise((r) => setTimeout(r, 250 * i))
+    }
+  }
+}
+
+const repoQueues = new Map<string, Promise<unknown>>()
+
+/**
+ * Switchyard's own changes to one repository, one at a time: several tasks
+ * finishing at once (their pull requests merged together) would otherwise
+ * remove worktrees and delete branches side by side and trip over git's locks.
+ */
+export function oneAtATime<T>(repoPath: string, run: () => Promise<T>): Promise<T> {
+  const key = repoPath.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+  const before = repoQueues.get(key) ?? Promise.resolve()
+  const next = before.catch(() => {}).then(run)
+  const tail = next.catch(() => {})
+  repoQueues.set(key, tail)
+  tail.then(() => {
+    if (repoQueues.get(key) === tail) repoQueues.delete(key)
+  })
+  return next
+}
+
+// What a git in the middle of something leaves in the repository's git folder (or a worktree's).
+const BUSY_MARKS = ['index.lock', 'HEAD.lock', 'packed-refs.lock', 'config.lock', 'rebase-merge', 'rebase-apply', 'MERGE_HEAD', 'CHERRY_PICK_HEAD', 'REVERT_HEAD', 'gc.pid']
+
+/**
+ * Whether some git is at work in the repository - a rebase or merge under
+ * way in any of its worktrees, a lock held: what it is, or null. Switchyard's
+ * background chores (fetching, pulling the base, pruning) wait for the next
+ * round rather than start beside it.
+ */
+export async function gitBusy(repoPath: string): Promise<string | null> {
+  let common: string
+  try {
+    const out = (await gitAt(repoPath).revparse(['--git-common-dir'])).trim()
+    common = isAbsolute(out) ? out : join(repoPath, out)
+  } catch {
+    return null
+  }
+  const dirs = [common]
+  try {
+    for (const w of await readdir(join(common, 'worktrees'))) dirs.push(join(common, 'worktrees', w))
+  } catch {
+    // no other worktrees
+  }
+  // (Only what's fresh: a lock left by a crash, or a rebase paused for days, isn't a git at work.)
+  const now = Date.now()
+  for (const d of dirs)
+    for (const m of BUSY_MARKS) {
+      const at = join(d, m)
+      if (existsSync(at) && now - statSync(at).mtimeMs < 5 * 60_000) return `${m} in ${d}`
+    }
+  return null
 }

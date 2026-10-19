@@ -157,3 +157,24 @@ describe('board settings', () => {
     expect(reducer(s, { type: 'COMMIT_ADD_TASK' }).tasks[0].col).toBe('ready')
   })
 })
+
+describe('parking a task', () => {
+  const working = (): Task => task(1, { col: 'progress', agentKind: 'claude', st: 'working', worktreePath: '/w', branch: 'b', startedAt: 1, queued: null })
+  it('sets it aside with its agent paused, and Resume takes it back In Progress', () => {
+    let s = reducer(start([working()]), { type: 'MOVE_TASK', id: 'P-1', col: 'parked' })
+    expect(s.tasks[0]).toMatchObject({ col: 'parked', st: 'paused', worktreePath: '/w', branch: 'b' })
+    s = reducer(s, { type: 'RESUME_TASK', taskId: 'P-1' })
+    expect(s.tasks[0]).toMatchObject({ col: 'progress', st: 'working' })
+  })
+  it('takes it out of the queue', () => {
+    const queued = task(2, { col: 'ready', queued: { agentKind: 'claude', branch: 'x', message: '', at: 1 } })
+    expect(reducer(start([queued]), { type: 'MOVE_TASK', id: 'P-2', col: 'parked' }).tasks[0]).toMatchObject({ col: 'parked', queued: null })
+  })
+})
+
+describe('toasts', () => {
+  it('an error reads as one, said so or not', () => {
+    expect(reducer(initialState(), { type: 'TOAST', text: 'Could not finish P-1: fatal: not a git repository' }).toast?.tone).toBe('error')
+    expect(reducer(initialState(), { type: 'TOAST', text: 'Saved.' }).toast?.tone).toBe('plain')
+  })
+})
