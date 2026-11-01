@@ -444,6 +444,8 @@ export interface CliRequest {
   agent: string | null
   /** Start it straight away (in the background). */
   start: boolean
+  /** Quick capture: the window doesn't come to the front, or change what it shows. */
+  quiet?: boolean
   /** The project named, or the one the command ran in; null: the one open in the window. */
   projectId: string | null
 }
@@ -862,6 +864,8 @@ export interface Prefs {
   editorAutoSave: 'off' | 'delay' | 'blur'
   /** Follow .editorconfig files (indentation, line endings, final newline, trimming) in the file editor. */
   editorConfig: boolean
+  /** Quick capture's global shortcut (an Electron accelerator, "Control+Alt+Space"); empty: off. */
+  quickCaptureKey: string
   /** Format on save: the file's formatter runs when it's saved (Ctrl+S - not the every-second auto save). */
   editorFormatOnSave: boolean
   /** Your formatters, "patterns: command" lines ("*.rb: bundle exec rubocop -a {file}"); none: the repository's own. */
@@ -1176,3 +1180,26 @@ export type MenuCommand =
   | 'nav-agents'
   | 'nav-worktrees'
   | 'next-blocked'
+
+/** Quick capture: what's on the clipboard, offered to attach (an image as a data: URL, or text). */
+export interface CaptureClip {
+  image: string | null
+  text: string | null
+}
+
+/** The quick capture box, opened: the clipboard, the projects to put the task in, and the one last used. */
+export interface CaptureShow {
+  clip: CaptureClip
+  projects: { id: string; name: string }[]
+  projectId: string | null
+}
+
+/** A task from the quick capture box (`image`/`text`: the clipboard's, when attached; `start`: started straight away). */
+export interface CaptureSubmit {
+  title: string
+  desc: string
+  projectId: string | null
+  image: string | null
+  text: string | null
+  start: boolean
+}

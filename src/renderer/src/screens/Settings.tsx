@@ -932,6 +932,11 @@ function GlobalSettings({ section, scope, onScope }: { section: string; scope: P
           </div>
         </Row>
       </Group>
+      <Group title="Quick capture" note="A small box over whatever app you're in: what's on your mind becomes a task - Enter adds it, Shift+Enter adds and starts it. The clipboard's screenshot or text can go along">
+        <Row k="quickCaptureKey" label="Shortcut" sub="Works anywhere, Switchyard in front or not">
+          <QuickCaptureKey value={pf.quickCaptureKey ?? ''} onChange={(v) => set({ quickCaptureKey: v })} />
+        </Row>
+      </Group>
       <Group title="Quitting">{tog('Confirm before quitting while agents run', 'Quitting stops every running agent', 'confirmQuit')}</Group>
       <Group title="Command line" note={'switchyard new "Fix the login" [--agent claude] [--start] [--project api] [--desc "…"] - in a project’s folder it goes on that project’s board. Links: switchyard://new?title=…&agent=…&start=1'}>
         <Row label="The switchyard command" sub="Puts a small launcher on your PATH (as VS Code's code command): new tasks from any terminal, or from scripts">
@@ -1307,6 +1312,35 @@ function ProjectSettings({ project: p }: { project: Project }): React.JSX.Elemen
         </Row>
       </Group>
     </>
+  )
+}
+
+/** Quick capture's shortcut: a few that rarely clash, or your own (an Electron accelerator), or off - and whether the system let Switchyard have it. */
+function QuickCaptureKey({ value, onChange }: { value: string; onChange: (v: string) => void }): React.JSX.Element {
+  const [status, setStatus] = useState<{ key: string; ok: boolean } | null>(null)
+  useEffect(() => {
+    // (Registered in the main process as the setting changes: asked a moment later.)
+    const t = setTimeout(() => window.api.capture.status().then(setStatus).catch(() => {}), 300)
+    return () => clearTimeout(t)
+  }, [value])
+  const shown = (k: string): string => (isMac ? k.replace(/CommandOrControl|Command/g, '⌘').replace(/Control/g, '⌃').replace(/Alt/g, '⌥').replace(/Shift/g, '⇧').replace(/\+/g, '') : k.replace(/CommandOrControl/g, 'Ctrl').replace(/Control/g, 'Ctrl').replace(/\+/g, '+'))
+  const presets = ['Control+Alt+Space', 'CommandOrControl+Alt+N', 'CommandOrControl+Shift+Alt+T']
+  const custom = !!value && !presets.includes(value)
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+        <Seg value={custom ? 'custom' : value} options={[['', 'Off'], ...presets.map((p): [string, string] => [p, shown(p)]), ['custom', 'Other…']]} onChange={(v) => onChange(v === 'custom' ? value || 'Control+Shift+Space' : v)} />
+      </div>
+      {custom ? <TextField value={value} placeholder="Control+Alt+Space" onChange={onChange} /> : null}
+      <span style={{ font: `11px ${MONO}`, color: value && status && status.key === value && !status.ok ? 'var(--c-red)' : 'var(--t4)', display: 'flex', gap: 10 }}>
+        {!value ? 'Off' : status && status.key === value ? (status.ok ? `${shown(value)} opens it` : `${shown(value)} is taken by another app (or isn't a shortcut) - pick another`) : '…'}
+        {value ? (
+          <span onClick={() => window.api.capture.open()} style={{ color: 'var(--c-blue)', cursor: 'pointer' }}>
+            Try it
+          </span>
+        ) : null}
+      </span>
+    </div>
   )
 }
 

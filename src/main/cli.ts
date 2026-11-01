@@ -1,4 +1,5 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { mainWindow } from './services/windows'
+import { app, ipcMain } from 'electron'
 import { promises as fs } from 'fs'
 import { homedir } from 'os'
 import { delimiter, join } from 'path'
@@ -82,10 +83,13 @@ function projectFor(named: string, cwd: string): string | null {
 export function deliver(req: CliRequest | null): void {
   if (!req) return
   log.info('cli', `New task from the command line: ${req.title}${req.agent ? ` (${req.agent})` : ''}`)
-  const w = BrowserWindow.getAllWindows().find((x) => !x.isDestroyed())
+  const w = mainWindow()
   if (w && !w.webContents.isLoading() && ready) {
-    if (w.isMinimized()) w.restore()
-    w.focus()
+    // (Quick capture's stay out of the way: the window isn't brought up.)
+    if (!req.quiet) {
+      if (w.isMinimized()) w.restore()
+      w.focus()
+    }
     w.webContents.send(IPC.cliRequest, req)
   } else pending.push(req)
 }

@@ -54,6 +54,8 @@ export function keyCommands(mac: boolean): KeyCommand[] {
     { id: 'new-task', title: 'New task', category: 'File', key: 'c', when: 'board' },
     { id: 'new-project', title: 'New project…', category: 'File', key: `${mod}+shift+n` },
     { id: 'outside-work', title: 'Bring in outside work…', category: 'File' },
+    // (A global shortcut opens it too, from any app - Settings → General → Quick capture.)
+    { id: 'quick-capture', title: 'Quick capture…', category: 'File' },
     { id: 'new-note', title: 'New note', category: 'File', key: `${mod}+alt+n` },
     { id: 'open-project', title: 'Open project…', category: 'File', key: `${mod}+o`, when: notInTerminal },
     { id: 'project-settings', title: 'Project settings', category: 'File', key: `${mod}+;` },

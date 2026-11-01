@@ -1,9 +1,10 @@
+import { mainWindow } from './windows'
 import { exec, execFile, spawn } from 'child_process'
 import { promisify } from 'util'
 import { existsSync } from 'fs'
 import { join, normalize } from 'path'
 import { homedir } from 'os'
-import { BrowserWindow, Notification, clipboard, shell } from 'electron'
+import { Notification, clipboard, shell } from 'electron'
 import { getPrefs } from './store'
 import type { EditorOption, NotifyAction, ShellOption } from '@shared/types'
 import { IPC } from '@shared/ipc'
@@ -158,7 +159,7 @@ export function notify(title: string, body: string, taskId: string | null, actio
   n.on('action', (details) => {
     forget()
     const a = buttons[details.actionIndex]
-    const win = BrowserWindow.getAllWindows()[0]
+    const win = mainWindow()
     if (a && win && taskId) win.webContents.send(IPC.appNotifyAction, taskId, a.id)
   })
   shown.add(n)
@@ -169,7 +170,7 @@ export function notify(title: string, body: string, taskId: string | null, actio
   setTimeout(forget, 24 * 60 * 60 * 1000)
   n.on('click', () => {
     forget()
-    const win = BrowserWindow.getAllWindows()[0]
+    const win = mainWindow()
     if (!win) return
     if (win.isMinimized()) win.restore()
     win.show()

@@ -42,6 +42,7 @@ export const PROJECT_SETTING_KEYS: ProjectSettingKey[] = ['prefix', 'defaultBran
 export const APP_PREF_KEYS: (keyof Prefs)[] = [
   'voiceModel',
   'voiceLanguage',
+  'quickCaptureKey',
   'voiceCommands',
   'voiceLive',
   'defaultAgent',
@@ -164,6 +165,7 @@ export const DEFAULT_PREFS: Prefs = {
   editorFinalNewline: false,
   editorAutoSave: 'off',
   editorConfig: true,
+  quickCaptureKey: 'Control+Alt+Space',
   editorFormatOnSave: false,
   editorFormatters: [],
   autoParkDays: 0,

@@ -1,3 +1,5 @@
+import { mainWindow, setMainWindow } from './services/windows'
+import { closeCaptureWith, registerCapture } from './services/capture'
 import { app, dialog, screen, session, shell, BrowserWindow, type WebContents } from 'electron'
 import { join } from 'path'
 import { electronApp, is } from '@electron-toolkit/utils'
@@ -36,7 +38,7 @@ if (!app.requestSingleInstanceLock({ argv: process.argv, cwd: process.cwd() })) 
     const sent = data as { argv?: unknown; cwd?: unknown } | undefined
     const own = Array.isArray(sent?.argv) && sent.argv.every((a) => typeof a === 'string') ? (sent.argv as string[]) : argv
     deliver(parseArgs(own, typeof sent?.cwd === 'string' ? sent.cwd : workingDirectory))
-    const win = BrowserWindow.getAllWindows()[0]
+    const win = mainWindow()
     if (!win) return
     if (win.isMinimized()) win.restore()
     win.focus()
@@ -100,6 +102,9 @@ function createWindow(): BrowserWindow {
       webviewTag: true
     }
   })
+
+  setMainWindow(mainWindow)
+  closeCaptureWith(mainWindow)
 
   // Quitting stops every agent - check first (a setting in General).
   let confirmedClose = false
@@ -243,6 +248,8 @@ function start(): void {
     buildMenu()
     registerIpcHandlers()
     registerCli()
+    // Quick capture: its global shortcut, and the box it opens.
+    registerCapture()
     // Started as `switchyard new …` (or by a link): the window takes it once it's up.
     if (!SMOKE) deliver(parseArgs(process.argv, process.cwd()))
     // Before the window: its agents list includes the plugins' ones.

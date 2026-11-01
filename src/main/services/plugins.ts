@@ -1,3 +1,4 @@
+import { mainWindow } from './windows'
 import { app, BrowserWindow, clipboard, net, shell, utilityProcess, type UtilityProcess } from 'electron'
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'fs'
 import { basename, join, resolve, sep } from 'path'
@@ -506,7 +507,7 @@ const opened: string[] = []
 export function openedWith(path: string): void {
   try {
     const p = previewFile(path)
-    const win = BrowserWindow.getAllWindows()[0]
+    const win = mainWindow()
     if (win && !win.webContents.isLoading()) win.webContents.send(IPC.pluginsInstallRequest, p)
     else opened.push(p.token)
   } catch (err) {

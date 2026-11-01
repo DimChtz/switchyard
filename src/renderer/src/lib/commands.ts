@@ -64,6 +64,7 @@ export function useCommands(): { menus: MenuModel[]; run: (id: string) => void }
         label: 'File',
         items: [
           { id: 'new-task', label: 'New task', key: k('new-task'), enabled: !!project },
+          { id: 'quick-capture', label: 'Quick capture…', enabled: state.projects.length > 0 },
           { id: 'new-project', label: 'New project…', key: k('new-project') },
           { id: 'outside-work', label: 'Bring in outside work…', key: k('outside-work'), enabled: !!project },
           { id: 'open-scratch', label: 'Open scratchpad', enabled: !!project?.repoPath },
@@ -207,6 +208,9 @@ export function useCommands(): { menus: MenuModel[]; run: (id: string) => void }
           return toggleKeyboardHelp()
         case 'keyboard-shortcuts':
           return dispatch({ type: 'OPEN_SETTINGS', section: 'keys' })
+        case 'quick-capture':
+          // (Its global shortcut: Settings → General → Quick capture.)
+          return void window.api.capture.open()
         case 'open-keybindings-json':
           window.api.keybindings.openFile().catch((err: unknown) => dispatch({ type: 'TOAST', text: errText(err) }))
           return

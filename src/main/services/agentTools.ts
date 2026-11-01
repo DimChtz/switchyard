@@ -1,3 +1,4 @@
+import { mainWindow } from './windows'
 import { app, BrowserWindow, ipcMain } from 'electron'
 import { promises as fs } from 'fs'
 import * as team from './team'
@@ -44,7 +45,7 @@ let seq = 0
 const waiting = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>()
 
 function window(): BrowserWindow | null {
-  return BrowserWindow.getAllWindows().find((w) => !w.isDestroyed()) ?? null
+  return mainWindow()
 }
 
 /** Asks the window to do something; resolves with what it says. */

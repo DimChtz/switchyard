@@ -43,6 +43,9 @@ import type {
   OpenPr,
   FileDiff,
   FileEntry,
+  CaptureClip,
+  CaptureShow,
+  CaptureSubmit,
   FilesPatch,
   CheckoutFiles,
   BrowseEntry,
@@ -114,6 +117,24 @@ const api = {
     openDir: (): Promise<void> => ipcRenderer.invoke(IPC.logOpenDir)
   },
   /** App updates (the installed app, with a release channel). */
+  /** Quick capture: the small box a global shortcut opens over any app (see main's capture.ts). */
+  capture: {
+    /** Opens it - with what's on the clipboard, or `clip`. */
+    open: (clip?: CaptureClip): Promise<void> => ipcRenderer.invoke(IPC.captureOpen, clip),
+    hide: (): Promise<void> => ipcRenderer.invoke(IPC.captureHide),
+    /** What it shows now (asked once the page is up). */
+    current: (): Promise<CaptureShow | null> => ipcRenderer.invoke(IPC.captureCurrent),
+    /** Its height, to fit what it shows. */
+    resize: (height: number): Promise<void> => ipcRenderer.invoke(IPC.captureResize, height),
+    /** The shortcut, and whether the system let Switchyard have it. */
+    status: (): Promise<{ key: string; ok: boolean }> => ipcRenderer.invoke(IPC.captureStatus),
+    submit: (s: CaptureSubmit): Promise<void> => ipcRenderer.invoke(IPC.captureSubmit, s),
+    onShow: (cb: (s: CaptureShow) => void): (() => void) => {
+      const handler = (_e: Electron.IpcRendererEvent, s: CaptureShow): void => cb(s)
+      ipcRenderer.on(IPC.captureShow, handler)
+      return () => ipcRenderer.removeListener(IPC.captureShow, handler)
+    }
+  },
   /** `switchyard new …` from a terminal, and switchyard:// links. */
   cli: {
     /** What came in before the window listened (once). */

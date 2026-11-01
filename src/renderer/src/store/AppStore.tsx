@@ -281,7 +281,9 @@ ${u.ask}` : ''}`, task.id, actions)
       const starting = req.start || !!req.agent
       const col = starting ? 'ready' : prefsFor(s, project.id).newTaskColumn
       dispatch({ type: 'ADD_TASK', task: { id: key, key, projectId: project.id, title: req.title.slice(0, 200), desc: req.desc.slice(0, 8000), col, agentKind: null, st: null, worktreeId: null, worktreePath: null, branch: null, ask: null, doneNote: null, firstMessage: null, createdAt: now, startedAt: null, lastActivityAt: now } })
-      dispatch({ type: 'NAV', view: 'board', projectId: project.id })
+      // (From quick capture: the window stays where it is - a notification says it's on the board.)
+      if (!req.quiet) dispatch({ type: 'NAV', view: 'board', projectId: project.id })
+      else window.api.sys.notify(req.start ? `Starting ${key}` : `${key} added to ${project.name}`, req.title, key)
       const agent = req.agent ? AGENTS.find((a) => a.kind === req.agent?.toLowerCase() || a.name.toLowerCase() === req.agent?.toLowerCase()) : undefined
       if (req.agent && !agent) rawDispatch({ type: 'TOAST', text: `No agent “${req.agent}” - ${AGENTS.map((a) => a.kind).join(', ')}.` })
       if (!starting) return rawDispatch({ type: 'TOAST', text: `${key} added to ${project.name}: ${req.title}`, tone: 'done' })
