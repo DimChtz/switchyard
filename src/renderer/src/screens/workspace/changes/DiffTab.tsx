@@ -11,6 +11,7 @@ import { gapsOf, highlightLines, hunkLabel, pairLines, segmentsOf, splitRows, wo
 import { useAppStore } from '../../../store/AppStore'
 import type { DiffLine, FileDiff, Prefs, ReviewComment } from '@shared/types'
 import { useChanges } from './ChangesContext'
+import { TextWithImages, imageInput } from '../../../lib/textImages'
 import { useFilesMaybe } from '../files/FilesContext'
 import './diff.css'
 
@@ -437,7 +438,7 @@ export function DiffTab({ path, gid }: { path: string; gid: string }): React.JSX
     return (
       <>
         {lineComments.map(({ c, outdated }) => (
-          <CommentBox key={c.id} c={c} agent={agent} outdated={outdated} onDelete={() => ch.removeComment(c.id)} onPatch={(p) => ch.patchComment(c.id, p)} onReply={(t) => ch.replyTo(c, t)} indent />
+          <CommentBox key={c.id} c={c} agent={agent} outdated={outdated} onDelete={() => ch.removeComment(c.id)} onPatch={(p) => ch.patchComment(c.id, p)} onReply={(t) => ch.replyTo(c, t)} onError={(text) => dispatch({ type: 'TOAST', text })} indent />
         ))}
         {sel && sel.to === i && file ? (
           <div style={{ margin: '6px 16px 8px 112px', maxWidth: 640, display: 'flex', flexDirection: 'column', border: '1px solid color-mix(in srgb, var(--c-blue) 50%, transparent)', borderRadius: 6, background: 'var(--bg-panel)', font: '13px var(--font-ui)' }}>
@@ -445,6 +446,7 @@ export function DiffTab({ path, gid }: { path: string; gid: string }): React.JSX
               autoFocus
               value={commentText}
               onChange={(e) => setCommentText(e.target.value)}
+              {...imageInput(commentText, setCommentText, (text) => dispatch({ type: 'TOAST', text }))}
               onKeyDown={(e) => {
                 e.stopPropagation()
                 if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
@@ -454,7 +456,8 @@ export function DiffTab({ path, gid }: { path: string; gid: string }): React.JSX
                 if (e.key === 'Escape') setSel(null)
               }}
               rows={3}
-              placeholder={`Comment on ${sel.to > sel.from ? `lines ${file.lines[sel.from]?.newLine ?? file.lines[sel.from]?.oldLine}-${file.lines[sel.to]?.newLine ?? file.lines[sel.to]?.oldLine}` : `line ${l.newLine ?? l.oldLine}`} for ${agent}`}
+              // (A screenshot pastes in too - "this looks wrong".)
+              placeholder={`Paste a screenshot, or comment on ${sel.to > sel.from ? `lines ${file.lines[sel.from]?.newLine ?? file.lines[sel.from]?.oldLine}-${file.lines[sel.to]?.newLine ?? file.lines[sel.to]?.oldLine}` : `line ${l.newLine ?? l.oldLine}`} for ${agent}`}
               style={{ minHeight: 64, resize: 'vertical', background: 'transparent', border: 'none', outline: 'none', color: 'var(--t1)', font: '13px/1.45 var(--font-ui)', padding: '10px 12px' }}
             />
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '8px 10px', borderTop: '1px solid var(--bd-2)' }}>
@@ -617,7 +620,7 @@ export function DiffTab({ path, gid }: { path: string; gid: string }): React.JSX
               <div style={{ margin: '0 16px 8px', display: 'flex', flexDirection: 'column', gap: 4, font: '13px var(--font-ui)' }}>
                 <div style={{ font: '11px var(--font-mono)', color: 'var(--t4)' }}>Comments on lines no longer in this diff</div>
                 {orphaned.map((c) => (
-                  <CommentBox key={c.id} c={c} agent={agent} outdated onDelete={() => ch.removeComment(c.id)} onPatch={(p) => ch.patchComment(c.id, p)} onReply={(t) => ch.replyTo(c, t)} />
+                  <CommentBox key={c.id} c={c} agent={agent} outdated onDelete={() => ch.removeComment(c.id)} onPatch={(p) => ch.patchComment(c.id, p)} onReply={(t) => ch.replyTo(c, t)} onError={(text) => dispatch({ type: 'TOAST', text })} />
                 ))}
               </div>
             ) : null}
@@ -772,6 +775,7 @@ function CommentBox({
   onDelete,
   onPatch,
   onReply,
+  onError,
   indent
 }: {
   c: ReviewComment
@@ -780,6 +784,8 @@ function CommentBox({
   onDelete: () => void
   onPatch: (patch: Partial<ReviewComment>) => void
   onReply: (text: string) => void
+  /** Why an image couldn't go in. */
+  onError: (msg: string) => void
   indent?: boolean
 }): React.JSX.Element {
   const [hover, hoverProps] = useHover()
@@ -844,6 +850,7 @@ function CommentBox({
               autoFocus
               value={editing}
               onChange={(e) => setEditing(e.target.value)}
+              {...imageInput(editing, (v) => setEditing(v), onError)}
               onKeyDown={(e) => {
                 e.stopPropagation()
                 if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && editing.trim()) {
@@ -875,7 +882,9 @@ function CommentBox({
             </div>
           </div>
         ) : (
-          <div style={{ font: '13px/1.45 var(--font-ui)', color: 'var(--t1)', whiteSpace: 'pre-wrap' }}>{c.text}</div>
+          <div style={{ font: '13px/1.45 var(--font-ui)', color: 'var(--t1)', whiteSpace: 'pre-wrap' }}>
+            <TextWithImages text={c.text} />
+          </div>
         )}
       </div>
       {c.thread?.length ? (
@@ -886,7 +895,9 @@ function CommentBox({
                 {r.from === 'agent' ? <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--c-green)' }} /> : null}
                 {r.from === 'agent' ? agent : 'you'} · {timeAgo(r.at)} ago
               </span>
-              <span style={{ font: '13px/1.45 var(--font-ui)', color: r.from === 'agent' ? 'var(--t2)' : 'var(--t3)', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>{r.text}</span>
+              <span style={{ font: '13px/1.45 var(--font-ui)', color: r.from === 'agent' ? 'var(--t2)' : 'var(--t3)', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+                <TextWithImages text={r.text} />
+              </span>
             </div>
           ))}
         </div>
@@ -897,6 +908,7 @@ function CommentBox({
             autoFocus
             value={reply}
             onChange={(e) => setReply(e.target.value)}
+            {...imageInput(reply, (v) => setReply(v), onError)}
             onKeyDown={(e) => {
               e.stopPropagation()
               if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {

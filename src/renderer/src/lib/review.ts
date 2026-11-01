@@ -1,5 +1,6 @@
 import type { ReviewComment } from '@shared/types'
 import { REPLY_ASK } from '@shared/reviewReplies'
+import { withImagesNote } from './textImages'
 
 /** By file, then line: the order a review lists its comments in. */
 export function inOrder(comments: ReviewComment[]): ReviewComment[] {
@@ -20,19 +21,21 @@ export function nextRefs(taskComments: ReviewComment[], count: number): number[]
 export function reviewMessage(comments: ReviewComment[], summary: string): string {
   const parts = inOrder(comments).map((c, i) => `[${c.ref ?? i + 1}] ${where(c)}${quote(c)}: ${flat(c.text)}`)
   const note = flat(summary)
-  if (!parts.length) return note ? `Code review: ${note}` : ''
+  // (Images in the comments or the note: listed at the end, for the agent to open.)
+  const texts = [...comments.map((c) => c.text), summary]
+  if (!parts.length) return note ? withImagesNote(`Code review: ${note}`, texts) : ''
   const head = `Code review - ${parts.length} comment${parts.length === 1 ? '' : 's'}${note ? `. Overall: ${note.replace(/[.\s]+$/, '')}` : ''}. Address each one:`
-  return `${head} ${parts.join(' ')} ${REPLY_ASK}`
+  return withImagesNote(`${head} ${parts.join(' ')} ${REPLY_ASK}`, texts)
 }
 
 /** One comment sent on its own. */
 export function commentMessage(c: ReviewComment): string {
-  return `Review comment [${c.ref}] on ${where(c)}${quote(c)}: ${flat(c.text)} ${REPLY_ASK}`
+  return withImagesNote(`Review comment [${c.ref}] on ${where(c)}${quote(c)}: ${flat(c.text)} ${REPLY_ASK}`, [c.text])
 }
 
 /** A follow-up in a comment's thread. */
 export function followUpMessage(c: ReviewComment, text: string): string {
-  return `About review comment [${c.ref}] on ${where(c)}: ${flat(text)} Answer on a line starting with [${c.ref}].`
+  return withImagesNote(`About review comment [${c.ref}] on ${where(c)}: ${flat(text)} Answer on a line starting with [${c.ref}].`, [text])
 }
 
 /** "src/a.ts line 12", "src/a.ts lines 12-14", "src/a.ts (removed line 8)". */

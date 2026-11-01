@@ -10,6 +10,7 @@ import { Button, Menu, Segmented, TextInput, type MenuItem } from '../../../comp
 import { useAppStore } from '../../../store/AppStore'
 import { startTabDrag, setDrag, wsOpen } from '../../../lib/wsStore'
 import type { FileDiff, StashEntry } from '@shared/types'
+import { imageInput } from '../../../lib/textImages'
 import { useChanges } from './ChangesContext'
 import { PanelHeader, PanelIcon, type PanelChrome } from '../layout/PanelHeader'
 
@@ -196,6 +197,7 @@ export function ChangesView({ chrome, activeDiff, activeConflict, root }: { chro
             <textarea
               value={ch.summary}
               onChange={(e) => ch.setSummary(e.target.value)}
+              {...imageInput(ch.summary, ch.setSummary, (text) => dispatch({ type: 'TOAST', text }))}
               onKeyDown={(e) => {
                 e.stopPropagation()
                 if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') ch.sendReview()

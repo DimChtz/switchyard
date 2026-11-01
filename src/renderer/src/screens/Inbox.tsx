@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { imageInput, withImagesNote } from '../lib/textImages'
 import { useAppStore } from '../store/AppStore'
 import { useHover } from '../lib/useHover'
 import { agentShort } from '../lib/derive'
@@ -82,7 +83,7 @@ export function Inbox(): React.JSX.Element {
       window.api.store.updateComments([{ id: c.id, patch: { awaiting: true, thread: [...(c.thread ?? []), { from: 'you', text: reply.trim(), at: Date.now() }] } }]).then(refreshComments)
       send(followUpMessage({ ...c, ref }, reply.trim()))
     } else {
-      send(reply.trim())
+      send(withImagesNote(reply.trim()))
       if (item.notice) markRead([item.notice.id])
     }
     setReply('')
@@ -230,6 +231,7 @@ export function Inbox(): React.JSX.Element {
                     ref={replyRef}
                     value={reply}
                     onChange={(e) => setReply(e.target.value)}
+                    {...imageInput(reply, setReply, (text) => dispatch({ type: 'TOAST', text }))}
                     onKeyDown={(e) => {
                       e.stopPropagation()
                       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
