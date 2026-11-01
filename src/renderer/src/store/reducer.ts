@@ -187,7 +187,8 @@ function reduce(state: AppState, action: Action): AppState {
       if (movingBackward && next.st === 'working') {
         next = { ...next, st: 'paused' }
       }
-      // Parked: set aside as it is - its agent paused (see AppStore), out of the queue.
+      // Parked: set aside as it is - its agent paused (see AppStore), out of the queue. (Never the scratchpad.)
+      if (action.col === 'parked' && task.scratch) return state
       if (action.col === 'parked') {
         next = { ...next, queued: null, ...(next.st === 'working' ? { st: 'paused' as const } : {}) }
       }

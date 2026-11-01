@@ -526,6 +526,10 @@ const api = {
     list: (root: string, baseBranch?: string, bases?: Record<string, string>): Promise<FileEntry[]> => ipcRenderer.invoke(IPC.fsList, root, baseBranch, bases),
     /** One folder git ignores whole, opened in the explorer. */
     listDir: (root: string, rel: string): Promise<FileEntry[]> => ipcRenderer.invoke(IPC.fsListDir, root, rel),
+    /** Format on save: the file's formatter run on it (`lines`: your rules; none - the repository's own). */
+    format: (file: string, lines: string[]): Promise<{ ran: boolean; name: string | null }> => ipcRenderer.invoke(IPC.fsFormat, file, lines),
+    /** The formatters that apply where a file is: yours, or the ones its repository has. */
+    formatters: (file: string, lines: string[]): Promise<{ root: string; rules: { patterns: string[]; cmd: string; name?: string }[]; detected: boolean }> => ipcRenderer.invoke(IPC.fsFormatters, file, lines),
     /** What some paths are now (the explorer, kept up to date as files change). */
     patch: (root: string, paths: string[], baseBranch?: string, bases?: Record<string, string>): Promise<FilesPatch> => ipcRenderer.invoke(IPC.fsPatch, root, paths, baseBranch, bases),
     read: (path: string): Promise<string> => ipcRenderer.invoke(IPC.fsRead, path),

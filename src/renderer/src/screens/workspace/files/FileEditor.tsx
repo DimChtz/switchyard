@@ -7,7 +7,7 @@ import { languageFor } from '../../../lib/fileLang'
 import { agentShort } from '../../../lib/derive'
 import { Button, Menu, TipNote, TipRows, TipTitle, Tooltip, type MenuItem } from '../../../components/ui'
 import { errText } from '../../../lib/errors'
-import { keyLabel, revealLabel } from '../../../lib/keys'
+import { isMac, keyLabel, revealLabel } from '../../../lib/keys'
 import { useAppStore } from '../../../store/AppStore'
 import { wsOpen } from '../../../lib/wsStore'
 import { useFiles } from './FilesContext'
@@ -208,6 +208,8 @@ export function FileEditor({ path, visible }: { path: string; visible: boolean }
       }
     ]
     if (dirty) items.push({ label: 'Save', shortcut: keyLabel('⌘S'), separatorBefore: true, onClick: () => f.save(path) })
+    // Saved, then its formatter run on it (the repository's own, or yours - Settings → File editor).
+    items.push({ label: 'Format Document', shortcut: isMac ? '⇧⌥F' : 'Shift+Alt+F', separatorBefore: !dirty, onClick: () => f.save(path, true, false, 'now') })
     items.push({ label: 'Copy Path', separatorBefore: true, onClick: () => window.api.sys.copy(f.abs(path)) })
     items.push({ label: 'Copy Relative Path', onClick: () => window.api.sys.copy(path) })
     // Its link on origin's website (GitHub, GitLab, Bitbucket), with the selected lines - as VS Code's.
@@ -328,6 +330,10 @@ export function FileEditor({ path, visible }: { path: string; visible: boolean }
           if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
             e.preventDefault()
             f.save(path)
+          } else if (e.shiftKey && e.altKey && !e.metaKey && !e.ctrlKey && e.code === 'KeyF') {
+            // Format Document, as VS Code's key.
+            e.preventDefault()
+            f.save(path, true, false, 'now')
           }
         }}
         onContextMenu={(e) => {

@@ -244,6 +244,8 @@ export const IPC = {
 
   fsList: 'fs:list',
   fsListDir: 'fs:listDir',
+  fsFormat: 'fs:format',
+  fsFormatters: 'fs:formatters',
   fsPatch: 'fs:patch',
   fsRead: 'fs:read',
   fsWrite: 'fs:write',

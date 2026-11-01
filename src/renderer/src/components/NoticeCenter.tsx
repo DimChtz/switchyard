@@ -8,6 +8,7 @@ import type { Notice } from '@shared/types'
 
 const COLOR: Record<Notice['kind'], string> = {
   error: 'var(--c-red)',
+  parked: 'var(--t3)',
   waiting: 'var(--c-amber)',
   permission: 'var(--c-amber)',
   failed: 'var(--c-red)',
@@ -117,6 +118,11 @@ function NoticePanel({ onClose, errorsOnly, setErrorsOnly }: { onClose: () => vo
       if (update && n.text.includes(update.version)) actOnUpdate(update)
       else dispatch({ type: 'TOAST', text: 'That update is installed, or a newer one replaced it.' })
       return
+    }
+    // The weekly look at what's parked: the board, Parked on it.
+    if (n.kind === 'parked' && !n.taskId) {
+      dispatch({ type: 'NAV', view: 'board', projectId: n.projectId })
+      return onClose()
     }
     if (n.kind === 'spend' || n.kind === 'team') {
       dispatch({ type: 'NAV', view: n.kind === 'spend' ? 'usage' : 'team' })

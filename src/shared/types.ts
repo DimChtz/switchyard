@@ -526,7 +526,7 @@ export interface ThemesState {
   dir: string
 }
 
-export type NoticeKind = 'error' | 'waiting' | 'permission' | 'failed' | 'done' | 'tests-passed' | 'tests-failed' | 'finished' | 'pr-merged' | 'spend' | 'review-reply' | 'agent-question' | 'team' | 'limit' | 'pr' | 'update'
+export type NoticeKind = 'error' | 'parked' | 'waiting' | 'permission' | 'failed' | 'done' | 'tests-passed' | 'tests-failed' | 'finished' | 'pr-merged' | 'spend' | 'review-reply' | 'agent-question' | 'team' | 'limit' | 'pr' | 'update'
 
 /** A new version of Switchyard: downloaded and ready to install, or out (to download by hand - a Mac build that can't install it itself). */
 export interface UpdateState {
@@ -862,6 +862,12 @@ export interface Prefs {
   editorAutoSave: 'off' | 'delay' | 'blur'
   /** Follow .editorconfig files (indentation, line endings, final newline, trimming) in the file editor. */
   editorConfig: boolean
+  /** Format on save: the file's formatter runs when it's saved (Ctrl+S - not the every-second auto save). */
+  editorFormatOnSave: boolean
+  /** Your formatters, "patterns: command" lines ("*.rb: bundle exec rubocop -a {file}"); none: the repository's own. */
+  editorFormatters: string[]
+  /** Tasks In Progress or in Review untouched this many days are parked (0: never) - not pinned ones, not one whose agent works. */
+  autoParkDays: number
   /** The file editor: who last changed the cursor's line, after it (as VS Code). */
   editorInlineBlame: boolean
   /** The explorer: chains of single folders as one row ("app/models/concerns"). */

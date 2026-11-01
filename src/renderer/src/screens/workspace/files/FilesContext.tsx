@@ -67,7 +67,8 @@ export interface FilesApi {
   isDirty: (path: string) => boolean
   disk: Record<string, DiskState>
   resolveDisk: (path: string, take: 'disk' | 'mine') => void
-  save: (path: string, quiet?: boolean, force?: boolean) => void
+  /** `format`: 'now' runs its formatter whatever Format on save says (Format Document). */
+  save: (path: string, quiet?: boolean, force?: boolean, format?: 'auto' | 'now') => void
   scheduleAutoSave: (path: string) => void
   /** A file's editor settings: Settings, with its .editorconfig on top. */
   prefsOf: (path: string) => Prefs
@@ -350,7 +351,38 @@ export function FilesProvider({ task, root: rootPath, baseBranch, bases, childre
   )
 
   // Settings → File editor: trim / final newline on save, auto save.
-  const save = (path: string, quiet = false, force = false): void => {
+  /**
+   * Its formatter run on the saved file (Format on save, or Format Document),
+   * and what it made loaded - unless it was edited meanwhile. Whether it ran.
+   */
+  const formatSaved = async (path: string, saved: string, announce: boolean): Promise<boolean> => {
+    const lines = prefsOf(path).editorFormatters ?? []
+    try {
+      const r = await window.api.fs.format(`${rootPath}/${path}`, lines)
+      if (!r.ran) {
+        if (announce) dispatch({ type: 'TOAST', text: `No formatter for ${path.split('/').pop()} - set one in Settings → File editor → Formatters.` })
+        return false
+      }
+      const doc = await window.api.fs.readDoc(`${rootPath}/${path}`)
+      const { text: formatted, ...rest } = doc
+      metaRef.current[path] = rest
+      setFileCache((c) => ({ ...c, [path]: formatted }))
+      // (Typed into since it was saved: those edits stay, over the formatted file.)
+      setEdits((e) => {
+        if (e[path] !== undefined && e[path] !== saved) return e
+        const next = { ...e }
+        delete next[path]
+        return next
+      })
+      if (announce || formatted !== saved) dispatch({ type: 'TOAST', text: `Saved - formatted with ${r.name ?? 'its formatter'}.`, tone: 'done' })
+      return true
+    } catch (err) {
+      dispatch({ type: 'TOAST', text: `Saved, but not formatted: ${errText(err)}` })
+      return false
+    }
+  }
+
+  const save = (path: string, quiet = false, force = false, format: 'auto' | 'now' = 'auto'): void => {
     const current = edits[path] ?? fileCache[path]
     const m = metaRef.current[path]
     if (current === undefined || (m && m.kind !== 'text')) return
@@ -375,8 +407,14 @@ export function FilesProvider({ task, root: rootPath, baseBranch, bases, childre
           delete next[path]
           return next
         })
-        if (!quiet) dispatch({ type: 'TOAST', text: 'Saved.' })
-        applyChanges([path], false)
+        // Format on save: on a save of yours (and when leaving the editor saves), not the every-second auto save.
+        const p = prefsOf(path)
+        const formatting = format === 'now' || (p.editorFormatOnSave && (!quiet || p.editorAutoSave === 'blur'))
+        if (formatting) void formatSaved(path, text, format === 'now').then(() => applyChanges([path], false))
+        else {
+          if (!quiet) dispatch({ type: 'TOAST', text: 'Saved.' })
+          applyChanges([path], false)
+        }
       })
       .catch((err: unknown) => {
         // Someone (the agent) changed it since it was opened: not written over without asking.

@@ -281,7 +281,7 @@ function validProject(data: Record<string, unknown>): Partial<Project> {
  * starts - so they wait until you trust them (VS Code's Workspace Trust,
  * for these). Trust is for these exact values: a change asks again.
  */
-export const TRUST_KEYS = ['setupCmd', 'testCmd', 'devCmd', 'commands', 'env', 'agentArgs', 'editPerm', 'shellPerm', 'allowlist', 'shell', 'editor'] as const
+export const TRUST_KEYS = ['setupCmd', 'testCmd', 'devCmd', 'commands', 'env', 'agentArgs', 'editPerm', 'shellPerm', 'allowlist', 'shell', 'editor', 'editorFormatters'] as const
 
 /** A fingerprint of what's being trusted. */
 export function trustHash(values: Record<string, unknown>): string {

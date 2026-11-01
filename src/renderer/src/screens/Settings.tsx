@@ -650,6 +650,20 @@ function GlobalSettings({ section, scope, onScope }: { section: string; scope: P
           {tog('Trim trailing whitespace', 'On every save', 'editorTrimOnSave')}
           {tog('End files with a newline', 'On every save', 'editorFinalNewline')}
         </Group>
+        <Group title="Formatting" note="Shift+Alt+F (Format Document) formats a file any time">
+          {tog('Format on save', "The file's formatter runs when you save it (not the every-second auto save) - the repository's own, unless you set yours below", 'editorFormatOnSave')}
+          <Row k="editorFormatters" label="Formatters" sub="One per line: patterns, then the command - {file} is the file's path from the repository's top. Empty: each repository's own">
+            <UITextArea
+              mono
+              rows={3}
+              value={(pf.editorFormatters ?? []).join('\n')}
+              placeholder={'*.rb, Gemfile: bundle exec rubocop -a {file}\n*.{ts,tsx,css}: npx prettier --write {file}'}
+              onChange={(e) => set({ editorFormatters: e.target.value ? e.target.value.split('\n') : [] })}
+              style={{ fontSize: 12 }}
+            />
+            <DetectedFormatters project={scope} mine={(pf.editorFormatters ?? []).some((l) => l.trim() && !l.trim().startsWith('#'))} />
+          </Row>
+        </Group>
         <Group title="Explorer" note="The task's files, in the side bar">
           {tog('Compact folders', 'A folder holding only one folder shares its row - “app/models/concerns”', 'explorerCompact')}
           {tog('Show ignored files', 'What git ignores, dimmed - folders such as node_modules or tmp list their files when opened', 'explorerShowIgnored')}
@@ -683,6 +697,9 @@ function GlobalSettings({ section, scope, onScope }: { section: string; scope: P
           </Row>
           <Row k="wipBlock" label="Over a limit" sub="When a column is full: only say so, or refuse the move (and starting a task, for In Progress)">
             <Seg value={pf.wipBlock ? 'block' : 'warn'} options={[['warn', 'Warn'], ['block', 'Refuse']]} onChange={(v) => set({ wipBlock: v === 'block' })} />
+          </Row>
+          <Row k="autoParkDays" label="Park tasks untouched for" sub="In Progress or in Review with nothing happening: set aside in Parked (worktree kept, agent paused). Not pinned tasks, nor one whose agent works. Once a week the bell lists what's parked">
+            <Seg value={String(pf.autoParkDays ?? 0)} options={[0, 7, 14, 30].map((n): [string, string] => [String(n), n ? `${n} days` : 'Never'])} onChange={(v) => set({ autoParkDays: Number(v) })} />
           </Row>
           <Row k="autoArchiveDays" label="Archive done tasks after" sub="They leave Done for the archive (searchable, and they can come back)">
             <Seg value={String(pf.autoArchiveDays)} options={[0, 3, 7, 14, 30].map((n): [string, string] => [String(n), days(n)])} onChange={(v) => set({ autoArchiveDays: Number(v) })} />
@@ -1281,6 +1298,34 @@ function ProjectSettings({ project: p }: { project: Project }): React.JSX.Elemen
   )
 }
 
+/** Under the formatters: what's used where none are set - a project's own, found in its repository. */
+function DetectedFormatters({ project, mine }: { project: Project | null; mine: boolean }): React.JSX.Element {
+  const [found, setFound] = useState<{ name?: string; patterns: string[]; cmd: string }[] | null>(null)
+  useEffect(() => {
+    setFound(null)
+    if (!project?.repoPath) return
+    window.api.fs
+      .formatters(`${project.repoPath}/.switchyard-probe`, [])
+      .then((r) => setFound(r.rules))
+      .catch(() => setFound([]))
+  }, [project?.repoPath])
+  const note = { font: `11.5px/1.5 ${MONO}`, color: 'var(--t4)' } as const
+  if (mine) return <span style={note}>Yours are used{project ? ` in ${project.name}` : ''}.</span>
+  if (!project) return <span style={note}>Each repository's own: Biome or Prettier, RuboCop, gofmt, Ruff or Black, rustfmt, mix format - found from its files.</span>
+  if (!found) return <span style={note}>Looking in {project.name}…</span>
+  if (!found.length) return <span style={note}>{project.name} has no formatter Switchyard knows - set one above.</span>
+  return (
+    <span style={{ ...note, display: 'flex', flexDirection: 'column', gap: 2 }}>
+      <span>Found in {project.name}:</span>
+      {found.map((r) => (
+        <span key={r.cmd} title={`${r.patterns.join(', ')}: ${r.cmd}`} style={{ color: 'var(--t3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {r.name} · {r.patterns.join(', ')}
+        </span>
+      ))}
+    </span>
+  )
+}
+
 /* ---------- building blocks (design: settings rows) ---------- */
 
 function Head({
@@ -1448,6 +1493,7 @@ const NOTICE_GROUPS: [string, string, NoticeKind[]][] = [
   ['Ready for review', 'An agent is done with the task', ['done']],
   ['Tests', 'A test run passed or failed', ['tests-passed', 'tests-failed']],
   ['Merged and finished', 'A task was finished or its pull request merged', ['finished', 'pr-merged']],
+  ['Parked', 'A task untouched for a while was parked (Settings → Board), and the weekly look at what is parked', ['parked']],
   ['Pull requests', 'Checks failed or a reviewer asked for changes (GitHub CLI)', ['pr']],
   ['Review answers', 'An agent answered your review comments (Claude Code)', ['review-reply']],
   ['Agent questions', 'An agent asked you something through Switchyard (ask_user)', ['agent-question']],

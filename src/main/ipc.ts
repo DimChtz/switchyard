@@ -2,6 +2,7 @@ import { app, ipcMain, dialog, shell, BrowserWindow } from 'electron'
 import { mkdir, readFile, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { IPC } from '@shared/ipc'
+import * as format from './services/format'
 import * as store from './services/store'
 import * as git from './services/git'
 import { pushNotice, type PushNotice } from './services/push'
@@ -438,6 +439,8 @@ export function registerIpcHandlers(): void {
 
   ipcMain.handle(IPC.fsList, (_e, root: string, baseBranch?: string, bases?: Record<string, string>) => fsService.listFiles(root, baseBranch, bases))
   ipcMain.handle(IPC.fsListDir, (_e, root: string, rel: string) => fsService.listDir(root, rel))
+  ipcMain.handle(IPC.fsFormat, (_e, file: string, lines: string[]) => format.formatFile(file, lines))
+  ipcMain.handle(IPC.fsFormatters, (_e, file: string, lines: string[]) => format.formattersFor(file, lines))
   ipcMain.handle(IPC.fsPatch, (_e, root: string, paths: string[], baseBranch?: string, bases?: Record<string, string>) => fsService.patchFiles(root, paths, baseBranch, bases))
   ipcMain.handle(IPC.fsRead, (_e, path: string) => fsService.readFile(path))
   ipcMain.handle(IPC.fsWrite, async (_e, path: string, content: string) => {

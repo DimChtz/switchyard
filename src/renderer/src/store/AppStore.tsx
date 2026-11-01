@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useReducer, useRef, useState } from 'react'
 import { addNotice as recordNotice, loadNotices, recordError } from '../lib/notices'
+import { dueForPark, summaryDue } from '../lib/autoPark'
 import { startUpdateWatch } from '../lib/updates'
 import type { Action, AppState } from './types'
 import { initialState, reducer } from './reducer'
@@ -637,6 +638,54 @@ ${u.ask}` : ''}`, task.id, actions)
       autoFinish = autoFinish.then(() => finishWithPr(t, project, dispatch, stateRef.current.projects).catch(() => false))
     }
   }, [state.tasks, dispatch])
+
+  // Settings → Board, auto-park: tasks untouched for the days set go to Parked (shortly after start,
+  // then hourly) - said in the notification center; and once a week, what's parked, to look over.
+  useEffect(() => {
+    const run = (): void => {
+      const s = stateRef.current
+      if (!hydratedRef.current) return
+      const due = dueForPark(s.tasks, (projectId) => prefsFor(s, projectId).autoParkDays)
+      for (const t of due) {
+        const days = prefsFor(s, t.projectId).autoParkDays
+        dispatch({ type: 'MOVE_TASK', id: t.id, col: 'parked' })
+        if (s.prefs.noticeKinds.includes('parked') && !s.prefs.mutedProjects.includes(t.projectId))
+          recordNotice({ kind: 'parked', taskId: t.id, taskKey: t.key, taskTitle: t.title, projectId: t.projectId, text: `Parked - untouched for ${days} days`, detail: 'Its worktree and branch are kept. Resume its agent, or Unpark it from its menu, to take it up again.' })
+      }
+      const parked = stateRef.current.tasks.filter((t) => t.col === 'parked' && !t.archivedAt)
+      let last = 0
+      try {
+        last = Number(localStorage.getItem('sy.parkedSummaryAt')) || 0
+      } catch {
+        // (no storage: said again next time)
+      }
+      if (summaryDue(parked.length, last) && s.prefs.noticeKinds.includes('parked')) {
+        try {
+          localStorage.setItem('sy.parkedSummaryAt', String(Date.now()))
+        } catch {
+          // ignore
+        }
+        // On first use there's no "last time": the first look is a week from now.
+        if (!last) return
+        const list = parked.slice(0, 12).map((t) => `${t.key} · ${t.title}`)
+        recordNotice({
+          kind: 'parked',
+          taskId: '',
+          taskKey: '',
+          taskTitle: '',
+          projectId: parked[0].projectId,
+          text: `${parked.length} parked task${parked.length > 1 ? 's' : ''} - still want ${parked.length > 1 ? 'them' : 'it'}?`,
+          detail: `${list.join('\n')}${parked.length > list.length ? `\n…and ${parked.length - list.length} more` : ''}\n\nTake one up again, or finish or delete what you won't do.`
+        })
+      }
+    }
+    const first = setTimeout(run, 15_000)
+    const every = setInterval(run, 60 * 60 * 1000)
+    return () => {
+      clearTimeout(first)
+      clearInterval(every)
+    }
+  }, [dispatch])
 
   // The activity log (the daily summary): moves to Review, failures, finishes.
   const before = useRef<Task[] | null>(null)
