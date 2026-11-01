@@ -1,6 +1,6 @@
 import { app, BrowserWindow, shell } from 'electron'
 import { promises as fs, watch, type FSWatcher } from 'fs'
-import { basename, isAbsolute, join } from 'path'
+import { basename, isAbsolute, join, relative } from 'path'
 import { getPrefs } from './store'
 import { expandPath } from './repos'
 import type { Note, NoteDraft } from '@shared/types'
@@ -161,21 +161,59 @@ export async function remove(id: string): Promise<void> {
 const IMAGE_TYPES: Record<string, string> = { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', svg: 'image/svg+xml', bmp: 'image/bmp', avif: 'image/avif' }
 
 /**
- * An image a note shows (![alt](path)), as a data: URL - a path on disk, or
- * one relative to the notes folder. Null when it isn't a readable image
- * (or is over 15 MB).
+ * The file an image reference names: a path on disk (%-encoded or a file:
+ * link), or one relative to the notes folder. Null for a web address or what
+ * isn't an image.
  */
-export async function imageData(ref: string): Promise<string | null> {
+export function imageFile(ref: string): string | null {
   let p = ref.trim().replace(/^<|>$/g, '')
   try {
     p = decodeURIComponent(p)
   } catch {
     // not %-encoded
   }
-  p = p.replace(/^file:\/\/\/?/i, '')
-  const type = IMAGE_TYPES[p.split('.').pop()?.toLowerCase() ?? '']
-  if (!type || /^[a-z][\w+.-]*:\/\//i.test(p)) return null
-  const file = isAbsolute(p) ? p : join(notesDir(), p)
+  if (/^[a-z][\w+.-]*:\/\//i.test(p) && !/^file:/i.test(p)) return null
+  p = p.replace(/^file:\/\//i, '')
+  // (file:///C:/x → C:/x on Windows; file:///Users/x stays /Users/x.)
+  if (/^\/[a-z]:[\\/]/i.test(p)) p = p.slice(1)
+  if (!IMAGE_TYPES[p.split('.').pop()?.toLowerCase() ?? '']) return null
+  return isAbsolute(p) ? p : join(notesDir(), p)
+}
+
+/**
+ * Images Switchyard keeps itself - the data folder's attachments (pasted for
+ * agents, in task descriptions and comments) and the notes folder's: the ones
+ * an annotation may be saved over. Where an image is, and whether it's one of them.
+ */
+export function imageInfo(ref: string): { path: string | null; editable: boolean } {
+  const file = imageFile(ref)
+  if (!file) return { path: null, editable: false }
+  const inside = (dir: string): boolean => {
+    const rel = relative(dir, file)
+    return !!rel && !rel.startsWith('..') && !isAbsolute(rel)
+  }
+  return { path: file, editable: inside(join(app.getPath('userData'), 'attachments')) || inside(join(notesDir(), 'attachments')) }
+}
+
+/** An annotated image, saved over the one it was made from (only one Switchyard keeps - see imageInfo). */
+export async function saveImage(ref: string, dataUrl: string): Promise<void> {
+  const { path, editable } = imageInfo(ref)
+  if (!path || !editable) throw new Error('Only images Switchyard keeps (pasted, attached) can be annotated in place.')
+  const m = /^data:image\/png;base64,(.+)$/s.exec(dataUrl)
+  if (!m) throw new Error('Not an image.')
+  // (Kept in its own format's name: an annotated .jpg is written as PNG data, which every viewer reads.)
+  await fs.writeFile(path, Buffer.from(m[1], 'base64'))
+}
+
+/**
+ * An image a note shows (![alt](path)), as a data: URL - a path on disk, or
+ * one relative to the notes folder. Null when it isn't a readable image
+ * (or is over 15 MB).
+ */
+export async function imageData(ref: string): Promise<string | null> {
+  const file = imageFile(ref)
+  const type = file ? IMAGE_TYPES[file.split('.').pop()?.toLowerCase() ?? ''] : undefined
+  if (!file || !type) return null
   try {
     const st = await fs.stat(file)
     if (!st.isFile() || st.size > 15 * 1024 * 1024) return null

@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react'
+import { annotateImage, onImageChanged, viewImage } from './imageViewer'
 
 /**
  * Images in a message to an agent (a review comment, a reply): pasted or
@@ -45,7 +46,7 @@ async function keep(files: File[]): Promise<string[]> {
 export function imageInput(
   value: string,
   set: (v: string) => void,
-  onError: (msg: string) => void
+  say: (text: string, action?: { label: string; run: () => void }) => void
 ): Pick<React.TextareaHTMLAttributes<HTMLTextAreaElement>, 'onPaste' | 'onDrop' | 'onDragOver'> {
   const add = async (files: File[], el: HTMLTextAreaElement): Promise<void> => {
     const at = el.selectionStart ?? value.length
@@ -56,12 +57,14 @@ export function imageInput(
       const before = value.slice(0, at)
       const ins = `${before && !/\s$/.test(before) ? ' ' : ''}${paths.map((p) => `[image: ${p}]`).join(' ')} `
       set(before + ins + value.slice(to))
+      // (Draw on it before it goes - an arrow, a box, a blur over a secret.)
+      if (paths.length === 1) say('Image added.', { label: 'Annotate', run: () => annotateImage(paths[0]) })
       setTimeout(() => {
         el.focus()
         el.setSelectionRange(at + ins.length, at + ins.length)
       }, 0)
     } catch (err) {
-      onError(`Could not add the image: ${err instanceof Error ? err.message : String(err)}`)
+      say(`Could not add the image: ${err instanceof Error ? err.message : String(err)}`)
     }
   }
   const images = (list: FileList): File[] => [...list].filter((f) => f.type.startsWith('image/') || IMAGE_FILE.test(f.name))
@@ -104,6 +107,8 @@ export function TextWithImages({ text, style }: { text: string; style?: React.CS
 
 function Thumb({ path }: { path: string }): React.JSX.Element {
   const [src, setSrc] = useState<string | null>(null)
+  const [version, setVersion] = useState(0)
+  useEffect(() => onImageChanged((ref) => ref === path && setVersion((v) => v + 1)), [path])
   useEffect(() => {
     let live = true
     window.api.notes
@@ -113,11 +118,11 @@ function Thumb({ path }: { path: string }): React.JSX.Element {
     return () => {
       live = false
     }
-  }, [path])
+  }, [path, version])
   return (
     <span
-      onClick={() => window.api.sys.reveal(path).catch(() => {})}
-      title={`${path}\nClick to open it`}
+      onClick={() => viewImage(path)}
+      title={`${path}\nClick to see it full size, or annotate it`}
       style={{ width: 96, height: 64, borderRadius: 4, border: '1px solid var(--bd-3)', background: 'var(--bg-input)', overflow: 'hidden', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', font: '11px var(--font-mono)', color: 'var(--t4)' }}
     >
       {src ? <img src={src} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : 'image'}

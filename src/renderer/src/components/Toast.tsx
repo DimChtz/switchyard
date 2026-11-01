@@ -51,7 +51,8 @@ export function Toast(): React.JSX.Element | null {
             fontSize: 12.5,
             color: 'var(--t1)',
             boxShadow: '0 8px 24px color-mix(in srgb, var(--sh) 40%, transparent)',
-            zIndex: 50
+            // (Over sheets and dialogs - its Undo or Annotate can be clicked with one open - and over the image viewer.)
+            zIndex: 200
           }}
         >
           <span style={{ width: 7, height: 7, flex: 'none', borderRadius: '50%', background: TONE_COLOR[toast.tone] ?? TONE_COLOR.plain }} />

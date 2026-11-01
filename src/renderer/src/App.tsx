@@ -4,6 +4,7 @@ import { AppStoreProvider, useAppStore } from './store/AppStore'
 import { TitleBar } from './components/TitleBar'
 import { Sidebar } from './components/Sidebar'
 import { StatusBar } from './components/StatusBar'
+import { ImageViewer } from './components/ImageViewer'
 import { Toast } from './components/Toast'
 import { CommandPalette } from './components/CommandPalette'
 import { FilePreview } from './components/FilePreview'
@@ -294,6 +295,7 @@ function Shell(): React.JSX.Element {
       <ConfirmHost />
       <TextContextMenu />
       <Toast />
+      <ImageViewer />
       <TooltipHost />
     </div>
   )

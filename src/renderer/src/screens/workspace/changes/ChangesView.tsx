@@ -197,7 +197,7 @@ export function ChangesView({ chrome, activeDiff, activeConflict, root }: { chro
             <textarea
               value={ch.summary}
               onChange={(e) => ch.setSummary(e.target.value)}
-              {...imageInput(ch.summary, ch.setSummary, (text) => dispatch({ type: 'TOAST', text }))}
+              {...imageInput(ch.summary, ch.setSummary, (text, action) => dispatch({ type: 'TOAST', text, action }))}
               onKeyDown={(e) => {
                 e.stopPropagation()
                 if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') ch.sendReview()

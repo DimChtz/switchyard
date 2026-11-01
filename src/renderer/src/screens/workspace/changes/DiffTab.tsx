@@ -438,7 +438,7 @@ export function DiffTab({ path, gid }: { path: string; gid: string }): React.JSX
     return (
       <>
         {lineComments.map(({ c, outdated }) => (
-          <CommentBox key={c.id} c={c} agent={agent} outdated={outdated} onDelete={() => ch.removeComment(c.id)} onPatch={(p) => ch.patchComment(c.id, p)} onReply={(t) => ch.replyTo(c, t)} onError={(text) => dispatch({ type: 'TOAST', text })} indent />
+          <CommentBox key={c.id} c={c} agent={agent} outdated={outdated} onDelete={() => ch.removeComment(c.id)} onPatch={(p) => ch.patchComment(c.id, p)} onReply={(t) => ch.replyTo(c, t)} onError={(text, action) => dispatch({ type: 'TOAST', text, action })} indent />
         ))}
         {sel && sel.to === i && file ? (
           <div style={{ margin: '6px 16px 8px 112px', maxWidth: 640, display: 'flex', flexDirection: 'column', border: '1px solid color-mix(in srgb, var(--c-blue) 50%, transparent)', borderRadius: 6, background: 'var(--bg-panel)', font: '13px var(--font-ui)' }}>
@@ -446,7 +446,7 @@ export function DiffTab({ path, gid }: { path: string; gid: string }): React.JSX
               autoFocus
               value={commentText}
               onChange={(e) => setCommentText(e.target.value)}
-              {...imageInput(commentText, setCommentText, (text) => dispatch({ type: 'TOAST', text }))}
+              {...imageInput(commentText, setCommentText, (text, action) => dispatch({ type: 'TOAST', text, action }))}
               onKeyDown={(e) => {
                 e.stopPropagation()
                 if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
@@ -620,7 +620,7 @@ export function DiffTab({ path, gid }: { path: string; gid: string }): React.JSX
               <div style={{ margin: '0 16px 8px', display: 'flex', flexDirection: 'column', gap: 4, font: '13px var(--font-ui)' }}>
                 <div style={{ font: '11px var(--font-mono)', color: 'var(--t4)' }}>Comments on lines no longer in this diff</div>
                 {orphaned.map((c) => (
-                  <CommentBox key={c.id} c={c} agent={agent} outdated onDelete={() => ch.removeComment(c.id)} onPatch={(p) => ch.patchComment(c.id, p)} onReply={(t) => ch.replyTo(c, t)} onError={(text) => dispatch({ type: 'TOAST', text })} />
+                  <CommentBox key={c.id} c={c} agent={agent} outdated onDelete={() => ch.removeComment(c.id)} onPatch={(p) => ch.patchComment(c.id, p)} onReply={(t) => ch.replyTo(c, t)} onError={(text, action) => dispatch({ type: 'TOAST', text, action })} />
                 ))}
               </div>
             ) : null}
@@ -784,8 +784,8 @@ function CommentBox({
   onDelete: () => void
   onPatch: (patch: Partial<ReviewComment>) => void
   onReply: (text: string) => void
-  /** Why an image couldn't go in. */
-  onError: (msg: string) => void
+  /** An image going in: said (and Annotate offered), or why it couldn't. */
+  onError: (msg: string, action?: { label: string; run: () => void }) => void
   indent?: boolean
 }): React.JSX.Element {
   const [hover, hoverProps] = useHover()

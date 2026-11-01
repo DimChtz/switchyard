@@ -9,6 +9,7 @@ import { keyLabel } from '../../lib/keys'
 import { useHover } from '../../lib/useHover'
 import { Menu, type MenuAnchor, type MenuItem } from '../ui'
 import { ImageIcon } from '../ImageIcon'
+import { annotateImage } from '../../lib/imageViewer'
 import { refreshLive, type LiveLinks } from './livePreview'
 import { applyEdit, liveEditing, liveReading } from './liveSetup'
 import { indent, prefixLines, wrapWith, type MdEdit } from '../../lib/mdEdit'
@@ -152,6 +153,11 @@ export function NoteEditor({
       const refs: string[] = []
       for (const s of sources) refs.push(`![${s.name.replace(/\.[^.]+$/, '').replace(/[[\]]/g, '')}](${encodeURI(await window.api.notes.addImage(s))})`)
       const md = refs.join('\n')
+      // (One image: drawn on before anything else, if you like.)
+      if (sources.length === 1) {
+        const ref = /\]\(([^)]+)\)/.exec(refs[0])?.[1]
+        if (ref) dispatch({ type: 'TOAST', text: 'Image added.', action: { label: 'Annotate', run: () => annotateImage(decodeURI(ref)) } })
+      }
       // (On a line of its own, the cursor on the next - so it shows as the picture at once.)
       edit((v, a, b) => {
         const before = a > 0 && v[a - 1] !== '\n' ? '\n' : ''

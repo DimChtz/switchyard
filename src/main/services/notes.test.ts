@@ -13,7 +13,7 @@ vi.mock('electron', () => ({
 vi.mock('./store', () => ({ getPrefs: () => ({ notesDir: dirs.notes }) }))
 vi.mock('./repos', () => ({ expandPath: (p: string) => p }))
 
-import { addImage, imageData, list, remove, save, titleOf } from './notes'
+import { addImage, imageData, imageFile, imageInfo, list, remove, save, saveImage, titleOf } from './notes'
 
 const root = mkdtempSync(join(tmpdir(), 'switchyard-notes-'))
 afterAll(() => rmSync(root, { recursive: true, force: true }))
@@ -103,5 +103,24 @@ describe('addImage', () => {
     writeFileSync(src, 'x')
     await expect(addImage({ path: src })).rejects.toThrow(/Only images/)
     await expect(addImage({ dataUrl: 'data:text/plain;base64,eA==' })).rejects.toThrow()
+  })
+})
+
+describe('images, viewed and annotated', () => {
+  const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+  it('finds the file a reference names - encoded, file: links (macOS ones too), relative to the notes folder', () => {
+    expect(imageFile('/Users/me/My%20Shot.png')).toBe('/Users/me/My Shot.png')
+    expect(imageFile('file:///Users/me/a.png')).toBe('/Users/me/a.png')
+    expect(imageFile('https://x.io/a.png')).toBeNull()
+    expect(imageFile('notes.txt')).toBeNull()
+    expect(imageFile('attachments/a.png')).toBe(join(dirs.notes, 'attachments', 'a.png'))
+  })
+  it("saves an annotation over its own images only", async () => {
+    const ref = await addImage({ dataUrl: PNG })
+    expect(imageInfo(ref).editable).toBe(true)
+    await saveImage(ref, PNG)
+    expect(await imageData(ref)).toBe(PNG)
+    expect(imageInfo(join(root, 'elsewhere.png')).editable).toBe(false)
+    await expect(saveImage(join(root, 'elsewhere.png'), PNG)).rejects.toThrow(/Only images Switchyard keeps/)
   })
 })

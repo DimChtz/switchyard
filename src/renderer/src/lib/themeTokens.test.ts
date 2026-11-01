@@ -8,7 +8,8 @@ import { THEME_TOKENS } from '@shared/themes'
 const ROOT = join(__dirname, '..')
 // Language badges keep their brand colors in every theme.
 // Colors drawn into the previewed page and its screenshot (not the app's), and languages' own colors.
-const ALLOWED = new Set(['lib/fileLang.ts', 'lib/elementPicker.ts', 'screens/workspace/PointAndFix.tsx'])
+// (And the annotator's, painted into the picture it saves.)
+const ALLOWED = new Set(['lib/fileLang.ts', 'lib/elementPicker.ts', 'screens/workspace/PointAndFix.tsx', 'lib/annotationColors.ts'])
 const OTHER_VARS = new Set(['font-ui', 'font-mono'])
 
 function sources(dir: string): string[] {

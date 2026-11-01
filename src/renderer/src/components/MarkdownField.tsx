@@ -10,6 +10,7 @@ import { refreshLive, type LiveLinks } from './notes/livePreview'
 import { applyEdit, liveEditing, liveReading } from './notes/liveSetup'
 import { HoverBox } from './notes/NoteEditor'
 import { ImageIcon } from './ImageIcon'
+import { annotateImage } from '../lib/imageViewer'
 
 const MONO = 'var(--font-mono)'
 
@@ -145,6 +146,7 @@ export function MarkdownField({
       for (const s of sources) refs.push(await onImage(s))
       edit.current(imagesEdit(sources, refs))
       viewRef.current?.focus()
+      if (refs.length === 1) dispatch({ type: 'TOAST', text: 'Image added.', action: { label: 'Annotate', run: () => annotateImage(refs[0]) } })
     } catch (err) {
       dispatch({ type: 'TOAST', text: `Could not add the image: ${err instanceof Error ? err.message : String(err)}` })
     } finally {

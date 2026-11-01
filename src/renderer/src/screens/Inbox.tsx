@@ -231,7 +231,7 @@ export function Inbox(): React.JSX.Element {
                     ref={replyRef}
                     value={reply}
                     onChange={(e) => setReply(e.target.value)}
-                    {...imageInput(reply, setReply, (text) => dispatch({ type: 'TOAST', text }))}
+                    {...imageInput(reply, setReply, (text, action) => dispatch({ type: 'TOAST', text, action }))}
                     onKeyDown={(e) => {
                       e.stopPropagation()
                       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {

@@ -117,6 +117,12 @@ const api = {
     openDir: (): Promise<void> => ipcRenderer.invoke(IPC.logOpenDir)
   },
   /** App updates (the installed app, with a release channel). */
+  /** Images shown full size and annotated (the viewer): where one is, and saving an annotation over it. */
+  images: {
+    /** Where an image reference (a path, or one in the notes folder) is, and whether an annotation may be saved over it. */
+    info: (ref: string): Promise<{ path: string | null; editable: boolean }> => ipcRenderer.invoke(IPC.imagesInfo, ref),
+    save: (ref: string, dataUrl: string): Promise<void> => ipcRenderer.invoke(IPC.imagesSave, ref, dataUrl)
+  },
   /** Quick capture: the small box a global shortcut opens over any app (see main's capture.ts). */
   capture: {
     /** Opens it - with what's on the clipboard, or `clip`. */

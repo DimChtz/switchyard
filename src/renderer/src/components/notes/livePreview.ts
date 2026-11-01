@@ -1,4 +1,5 @@
 import { syntaxHighlighting, HighlightStyle, syntaxTree } from '@codemirror/language'
+import { onImageChanged, viewImage } from '../../lib/imageViewer'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
 import { tags } from '@lezer/highlight'
 import { StateEffect, StateField, type EditorState, type Extension, type Range, type Transaction } from '@codemirror/state'
@@ -236,9 +237,19 @@ class CopyOnly extends WidgetType {
 /** An image read from disk and decoded - its size known, so its line is measured right when drawn. */
 type Loaded = { src: string; w: number; h: number } | null
 const images = new Map<string, Loaded | 'loading'>()
+// The editors that show images: drawn again when one is annotated.
+const showing = new Set<EditorView>()
+onImageChanged(() => {
+  images.clear()
+  for (const v of showing) {
+    if (!v.dom.isConnected) showing.delete(v)
+    else v.dispatch({ effects: refreshLive.of(null) })
+  }
+})
 
 /** The image, if it's ready; otherwise starts reading it and redraws the editor when it is. */
 function loadImage(url: string, view: EditorView): Loaded | 'loading' {
+  showing.add(view)
   const got = images.get(url)
   if (got !== undefined) return got
   images.set(url, 'loading')
@@ -300,7 +311,17 @@ class ImageWidget extends WidgetType {
     img.height = this.image.h
     img.src = this.image.src
     img.alt = this.alt
-    img.title = this.alt || this.url
+    img.title = `${this.alt || this.url} - click to see it full size, or annotate it`
+    img.style.cursor = 'zoom-in'
+    img.onmousedown = (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+    }
+    img.onclick = (e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      viewImage(this.url)
+    }
     box.append(img)
     return box
   }

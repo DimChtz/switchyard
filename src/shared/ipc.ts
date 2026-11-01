@@ -244,6 +244,8 @@ export const IPC = {
   themesOpenDir: 'themes:openDir',
   notesImage: 'notes:image',
   notesAddImage: 'notes:addImage',
+  imagesInfo: 'images:info',
+  imagesSave: 'images:save',
   notesImportPick: 'notes:importPick',
   notesImportPaths: 'notes:importPaths',
   notesExportOne: 'notes:exportOne',

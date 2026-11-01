@@ -433,6 +433,8 @@ export function registerIpcHandlers(): void {
   })
   ipcMain.handle(IPC.notesImage, (_e, ref: string) => notes.imageData(ref))
   ipcMain.handle(IPC.notesAddImage, (_e, from: { dataUrl?: string; path?: string }) => notes.addImage(from))
+  ipcMain.handle(IPC.imagesInfo, (_e, ref: string) => notes.imageInfo(String(ref)))
+  ipcMain.handle(IPC.imagesSave, (_e, ref: string, dataUrl: string) => notes.saveImage(String(ref), String(dataUrl)))
   ipcMain.handle(IPC.notesImportPick, (e, kind: 'files' | 'folder', link?: NoteLink) => notesTransfer.importPicked(BrowserWindow.fromWebContents(e.sender), kind, link))
   ipcMain.handle(IPC.notesImportPaths, (_e, paths: string[], link?: NoteLink) => notesTransfer.importPaths(paths, link))
   ipcMain.handle(IPC.notesExportOne, (e, body: string) => notesTransfer.exportOne(BrowserWindow.fromWebContents(e.sender), body))
