@@ -164,6 +164,7 @@ export const DEFAULT_PREFS: Prefs = {
   editorFinalNewline: false,
   editorAutoSave: 'off',
   editorConfig: true,
+  editorInlineBlame: true,
   explorerCompact: true,
   explorerShowIgnored: true,
   explorerFollow: true,

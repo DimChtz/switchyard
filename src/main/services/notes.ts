@@ -1,6 +1,6 @@
 import { app, BrowserWindow, shell } from 'electron'
 import { promises as fs, watch, type FSWatcher } from 'fs'
-import { isAbsolute, join } from 'path'
+import { basename, isAbsolute, join } from 'path'
 import { getPrefs } from './store'
 import { expandPath } from './repos'
 import type { Note, NoteDraft } from '@shared/types'
@@ -182,6 +182,49 @@ export async function imageData(ref: string): Promise<string | null> {
     return `data:${type};base64,${(await fs.readFile(file)).toString('base64')}`
   } catch {
     return null
+  }
+}
+
+/**
+ * An image put into a note - pasted (a screenshot: its data), dropped or
+ * picked (a file: copied) - kept in the notes folder's attachments folder,
+ * so it travels with the notes (an export, a sync). Its path from the notes
+ * folder ("attachments/pasted-2026-11-01-0954.png"), for the note to show.
+ */
+export async function addImage(from: { dataUrl?: string; path?: string }): Promise<string> {
+  const dir = join(notesDir(), 'attachments')
+  await fs.mkdir(dir, { recursive: true })
+  let data: Buffer
+  let name: string
+  if (from.path) {
+    const ext = from.path.split('.').pop()?.toLowerCase() ?? ''
+    if (!IMAGE_TYPES[ext]) throw new Error('Only images go into a note (png, jpg, gif, webp, svg).')
+    const st = await fs.stat(from.path)
+    if (st.size > 15 * 1024 * 1024) throw new Error('That image is over 15 MB.')
+    data = await fs.readFile(from.path)
+    name = basename(from.path)
+  } else {
+    const m = /^data:image\/([\w+.-]+);base64,(.+)$/s.exec(from.dataUrl ?? '')
+    if (!m) throw new Error('That isn’t an image.')
+    data = Buffer.from(m[2], 'base64')
+    if (data.length > 15 * 1024 * 1024) throw new Error('That image is over 15 MB.')
+    const ext = m[1] === 'jpeg' ? 'jpg' : m[1] === 'svg+xml' ? 'svg' : m[1]
+    const d = new Date()
+    const two = (n: number): string => String(n).padStart(2, '0')
+    name = `pasted-${d.getFullYear()}-${two(d.getMonth() + 1)}-${two(d.getDate())}-${two(d.getHours())}${two(d.getMinutes())}${two(d.getSeconds())}.${ext}`
+  }
+  // (A name of its own: "shot.png", then "shot-2.png" - nothing already there is replaced.)
+  const safe = name.replace(/[\\/:*?"<>|#%\s]+/g, '-').replace(/^-+|-+$/g, '') || 'image.png'
+  const dot = safe.lastIndexOf('.')
+  const [stem, ext] = dot > 0 ? [safe.slice(0, dot), safe.slice(dot)] : [safe, '']
+  for (let i = 1; ; i++) {
+    const file = i === 1 ? safe : `${stem}-${i}${ext}`
+    try {
+      await fs.writeFile(join(dir, file), data, { flag: 'wx' })
+      return `attachments/${file}`
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== 'EEXIST' || i > 500) throw err
+    }
   }
 }
 

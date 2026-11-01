@@ -619,6 +619,7 @@ function GlobalSettings({ section, scope, onScope }: { section: string; scope: P
           {tog('Highlight current line', '', 'editorActiveLine')}
           {tog('Highlight matching brackets', '', 'editorBracketMatching')}
           {tog('Show whitespace', 'Dots for spaces, arrows for tabs', 'editorWhitespace')}
+          {tog('Blame on the current line', 'Who last changed the line the cursor is on, and when - after it, as VS Code shows it. Point at it for the commit (the Blame button shows every line)', 'editorInlineBlame')}
         </Group>
         <Group title="Diffs">
           <Row k="changesScope" label="Changes shows" sub="What a task's Changes lists when it opens - switch it there any time">

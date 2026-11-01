@@ -862,6 +862,8 @@ export interface Prefs {
   editorAutoSave: 'off' | 'delay' | 'blur'
   /** Follow .editorconfig files (indentation, line endings, final newline, trimming) in the file editor. */
   editorConfig: boolean
+  /** The file editor: who last changed the cursor's line, after it (as VS Code). */
+  editorInlineBlame: boolean
   /** The explorer: chains of single folders as one row ("app/models/concerns"). */
   explorerCompact: boolean
   /** The explorer: files and folders git ignores, dimmed (folders such as node_modules list their files when opened). */
@@ -1080,7 +1082,8 @@ export interface FileCommit {
 
 /** Who last changed each line of a file. */
 export interface Blame {
-  commits: Record<string, { author: string; at: number; subject: string }>
+  /** By commit: who made it (`you`: your git email), when, and its subject. */
+  commits: Record<string, { author: string; at: number; subject: string; you?: boolean }>
   /** Per line (the first is line 1): its commit's id - all zeros when not committed yet. */
   lines: string[]
 }

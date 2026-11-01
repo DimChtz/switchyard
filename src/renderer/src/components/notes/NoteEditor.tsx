@@ -143,6 +143,64 @@ export function NoteEditor({
       x.setSelectionRange(a, b)
     }, 0)
   }
+  // Images: pasted (a screenshot), dropped or picked - kept in the notes folder's attachments, shown in place.
+  const pickRef = useRef<HTMLInputElement>(null)
+  const insertImages = async (sources: { dataUrl?: string; path?: string; name: string }[]): Promise<void> => {
+    if (!sources.length) return
+    try {
+      const refs: string[] = []
+      for (const s of sources) refs.push(`![${s.name.replace(/\.[^.]+$/, '').replace(/[[\]]/g, '')}](${encodeURI(await window.api.notes.addImage(s))})`)
+      const md = refs.join('\n')
+      // (On a line of its own, the cursor on the next - so it shows as the picture at once.)
+      edit((v, a, b) => {
+        const before = a > 0 && v[a - 1] !== '\n' ? '\n' : ''
+        const after = v[b] === '\n' ? '' : '\n'
+        const ins = `${before}${md}${after}`
+        const at = a + before.length + md.length + 1
+        return [v.slice(0, a) + ins + v.slice(b), at, at]
+      })
+    } catch (err) {
+      dispatch({ type: 'TOAST', text: `Could not add the image: ${errText(err)}` })
+    }
+  }
+  const imageFiles = (files: FileList | File[]): File[] => [...files].filter((f) => f.type.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg|bmp|avif)$/i.test(f.name))
+  const fromFiles = async (files: File[]): Promise<void> =>
+    insertImages(
+      await Promise.all(
+        files.map(async (f) => {
+          // A file on disk is copied; a screenshot (no file) is saved from its data.
+          const path = window.api.fs.pathForFile(f)
+          if (path) return { path, name: f.name }
+          const dataUrl = await new Promise<string>((ok, no) => {
+            const r = new FileReader()
+            r.onload = () => ok(String(r.result))
+            r.onerror = () => no(r.error)
+            r.readAsDataURL(f)
+          })
+          return { dataUrl, name: f.name || 'pasted' }
+        })
+      )
+    )
+  const onPasteImages = (e: React.ClipboardEvent): void => {
+    const files = imageFiles(e.clipboardData.files)
+    if (!files.length || mode === 'preview') return
+    e.preventDefault()
+    e.stopPropagation()
+    void fromFiles(files)
+  }
+  const onDropImages = (e: React.DragEvent): void => {
+    const files = imageFiles(e.dataTransfer.files)
+    if (!files.length || mode === 'preview') return
+    e.preventDefault()
+    e.stopPropagation()
+    // (Where it was dropped, in the live editor.)
+    const view = viewRef.current
+    if (live && view) {
+      const at = view.posAtCoords({ x: e.clientX, y: e.clientY })
+      if (at != null) view.dispatch({ selection: { anchor: at } })
+    }
+    void fromFiles(files)
+  }
   const wrap = (l: string, r: string, placeholder: string): void => edit(wrapWith(l, r, placeholder))
   const linePrefix = (pre: string): void => edit(prefixLines(pre))
   const tools: [string, string, string, () => void][] = [
@@ -153,7 +211,8 @@ export function NoteEditor({
     ['•', 'Bulleted list', '600 15px var(--font-ui)', () => linePrefix('- ')],
     ['[ ]', 'Checklist', `500 11px ${MONO}`, () => linePrefix('- [ ] ')],
     ['“', 'Quote', '600 16px var(--font-ui)', () => linePrefix('> ')],
-    ['[[ ]]', 'Link another note', `500 11px ${MONO}`, () => wrap('[[', ']]', 'Note title')]
+    ['[[ ]]', 'Link another note', `500 11px ${MONO}`, () => wrap('[[', ']]', 'Note title')],
+    ['▣', 'Image - or paste a screenshot, or drop image files in', '500 14px var(--font-ui)', () => pickRef.current?.click()]
   ]
   const onTextKey = (e: React.KeyboardEvent<HTMLTextAreaElement>): void => {
     const mod = e.metaKey || e.ctrlKey
@@ -339,11 +398,30 @@ export function NoteEditor({
               {l}
             </HoverBox>
           ))}
+          <input
+            ref={pickRef}
+            type="file"
+            accept="image/*"
+            multiple
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const files = imageFiles(e.target.files ?? [])
+              e.target.value = ''
+              void fromFiles(files)
+            }}
+          />
           <span style={{ flex: 1 }} />
-          <span style={{ font: `11px ${MONO}`, color: 'var(--t5)', whiteSpace: 'nowrap' }}>↵ continues lists · [[ ]] links notes</span>
+          <span style={{ font: `11px ${MONO}`, color: 'var(--t5)', whiteSpace: 'nowrap' }}>↵ continues lists · [[ ]] links notes · paste images</span>
         </div>
       ) : null}
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', borderTop: '1px solid var(--bg-hover)' }}>
+      <div
+        onPasteCapture={onPasteImages}
+        onDragOverCapture={(e) => {
+          if (e.dataTransfer.types.includes('Files') && mode !== 'preview') e.preventDefault()
+        }}
+        onDropCapture={onDropImages}
+        style={{ flex: 1, minHeight: 0, display: 'flex', borderTop: '1px solid var(--bg-hover)' }}
+      >
         {live ? (
           <div
             onMouseDown={(e) => {

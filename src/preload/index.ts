@@ -239,6 +239,9 @@ const api = {
     stashDrop: (worktreePath: string, ref: string): Promise<void> => ipcRenderer.invoke(IPC.gitStashDrop, worktreePath, ref),
     fileHistory: (worktreePath: string, path: string): Promise<FileCommit[]> => ipcRenderer.invoke(IPC.gitFileHistory, worktreePath, path),
     blame: (worktreePath: string, path: string): Promise<Blame> => ipcRenderer.invoke(IPC.gitBlame, worktreePath, path),
+    /** A file's link on origin's website (at the branch, or the commit for a permalink), and why it might not open yet. */
+    remoteFileUrl: (repoPath: string, rel: string, opts: { permalink: boolean; lines?: [number, number] | null }): Promise<{ url: string; warning: string | null }> => ipcRenderer.invoke(IPC.gitRemoteFileUrl, repoPath, rel, opts),
+    remoteCommitUrl: (repoPath: string, sha: string): Promise<string | null> => ipcRenderer.invoke(IPC.gitRemoteCommitUrl, repoPath, sha),
     /** A file as the last commit has it - null when it isn't in that commit or isn't text. */
     headText: (worktreePath: string, path: string): Promise<string | null> => ipcRenderer.invoke(IPC.gitHeadText, worktreePath, path),
     syncState: (worktreePath: string): Promise<SyncState | null> => ipcRenderer.invoke(IPC.gitSyncState, worktreePath),
@@ -501,6 +504,8 @@ const api = {
     dir: (): Promise<string> => ipcRenderer.invoke(IPC.notesDir),
     /** An image a note shows (a path, or relative to the notes folder) as a data: URL; null if it can't be read. */
     image: (ref: string): Promise<string | null> => ipcRenderer.invoke(IPC.notesImage, ref),
+    /** An image put into a note (a screenshot's data, or a file), kept in the notes folder's attachments; its path from there. */
+    addImage: (from: { dataUrl?: string; path?: string }): Promise<string> => ipcRenderer.invoke(IPC.notesAddImage, from),
     /** Asks for Markdown files or a folder (an Obsidian vault, a Notion export) and imports them; null when cancelled. */
     importPick: (kind: 'files' | 'folder', link?: { projectId: string | null; taskId: string | null }): Promise<NoteImportResult | null> =>
       ipcRenderer.invoke(IPC.notesImportPick, kind, link),

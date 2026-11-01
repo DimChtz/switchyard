@@ -1,5 +1,5 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, unlinkSync } from 'fs'
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, unlinkSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
 import { join } from 'path'
 
@@ -13,7 +13,7 @@ vi.mock('electron', () => ({
 vi.mock('./store', () => ({ getPrefs: () => ({ notesDir: dirs.notes }) }))
 vi.mock('./repos', () => ({ expandPath: (p: string) => p }))
 
-import { list, remove, save, titleOf } from './notes'
+import { addImage, imageData, list, remove, save, titleOf } from './notes'
 
 const root = mkdtempSync(join(tmpdir(), 'switchyard-notes-'))
 afterAll(() => rmSync(root, { recursive: true, force: true }))
@@ -81,5 +81,27 @@ describe('remove', () => {
     await remove('note')
     expect(existsSync(join(dirs.notes, 'renamed.md'))).toBe(false)
     await expect(remove('nothing-here')).resolves.toBeUndefined()
+  })
+})
+
+describe('addImage', () => {
+  const PNG = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+  it('keeps a pasted screenshot in the attachments folder, for the note to show', async () => {
+    const ref = await addImage({ dataUrl: PNG })
+    expect(ref).toMatch(/^attachments\/pasted-\d{4}-\d\d-\d\d-\d{6}\.png$/)
+    expect(await imageData(ref)).toBe(PNG)
+  })
+  it('copies a file in under a name of its own - nothing is replaced', async () => {
+    const src = join(root, 'my shot.png')
+    writeFileSync(src, Buffer.from(PNG.split(',')[1], 'base64'))
+    expect(await addImage({ path: src })).toBe('attachments/my-shot.png')
+    expect(await addImage({ path: src })).toBe('attachments/my-shot-2.png')
+    expect(readdirSync(join(dirs.notes, 'attachments')).sort()).toEqual(['my-shot-2.png', 'my-shot.png'])
+  })
+  it('only images', async () => {
+    const src = join(root, 'notes.txt')
+    writeFileSync(src, 'x')
+    await expect(addImage({ path: src })).rejects.toThrow(/Only images/)
+    await expect(addImage({ dataUrl: 'data:text/plain;base64,eA==' })).rejects.toThrow()
   })
 })

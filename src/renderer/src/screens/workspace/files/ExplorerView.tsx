@@ -11,6 +11,7 @@ import { errText } from '../../../lib/errors'
 import { isMac, keyLabel, revealLabel } from '../../../lib/keys'
 import { addShell, setDrag, startTabDrag, wsOpen } from '../../../lib/wsStore'
 import { useFiles } from './FilesContext'
+import { useChangesMaybe } from '../changes/ChangesContext'
 import { PanelHeader, PanelIcon, type PanelChrome } from '../layout/PanelHeader'
 
 const parentOf = (rel: string): string => (rel.includes('/') ? rel.slice(0, rel.lastIndexOf('/')) : '')
@@ -220,6 +221,19 @@ export function ExplorerView({ chrome, activePath }: { chrome: PanelChrome; acti
   }
 
   const toastErr = (err: unknown): void => dispatch({ type: 'TOAST', text: errText(err) })
+  const changes = useChangesMaybe()
+  /** Copies a file's (or folder's) link on origin's website - at its branch, or the commit for a permalink. */
+  const copyRemote = (path: string, permalink: boolean): void => {
+    const repo = changes?.repoOf(path)
+    if (!repo) return
+    window.api.git
+      .remoteFileUrl(repo.path, repo.rel, { permalink })
+      .then(({ url, warning }) => {
+        window.api.sys.copy(url)
+        dispatch({ type: 'TOAST', text: warning ? `Copied the link - ${warning}` : `Copied ${url}`, tone: warning ? 'waiting' : 'done' })
+      })
+      .catch(toastErr)
+  }
   const openInTerminal = (dir: string): void => void addShell(task.id, { cwd: abs(dir), taskRoot: abs('') })
   const showChanges = (path: string): void => wsOpen(task.id, `diff:${path}`)
 
@@ -429,6 +443,13 @@ export function ExplorerView({ chrome, activePath }: { chrome: PanelChrome; acti
       { label: 'Duplicate', onClick: () => duplicate(row) },
       { label: 'Copy Path', shortcut: keyLabel('⇧⌥C'), separatorBefore: true, onClick: () => window.api.sys.copy(abs(row.path)) },
       { label: 'Copy Relative Path', onClick: () => window.api.sys.copy(row.path) },
+      // Its link on origin's website, as VS Code's.
+      ...(changes?.repoOf(row.path)
+        ? [
+            { label: 'Copy Remote URL', onClick: () => copyRemote(row.path, false) },
+            { label: 'Copy Permalink', onClick: () => copyRemote(row.path, true) }
+          ]
+        : []),
       { label: 'Rename…', shortcut: 'F2', separatorBefore: true, onClick: () => startRename(row) },
       { label: 'Delete', shortcut: isMac ? '⌘⌫' : 'Delete', danger: true, onClick: () => deleteRows([row]) }
     ]

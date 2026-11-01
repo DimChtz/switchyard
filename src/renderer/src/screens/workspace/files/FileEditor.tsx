@@ -13,6 +13,7 @@ import { wsOpen } from '../../../lib/wsStore'
 import { useFiles } from './FilesContext'
 import { useChangesMaybe } from '../changes/ChangesContext'
 import { blameGutter } from '../../../lib/blameGutter'
+import { inlineBlame, setInlineBlame, type InlineBlameActions } from '../../../lib/inlineBlame'
 import { taskOfCommit } from '../../../lib/commitTask'
 import { changeGutter, setChangeBase } from '../../../lib/changeGutter'
 import { rememberFile } from '../../../lib/quickOpen'
@@ -41,8 +42,10 @@ export function FileEditor({ path, visible }: { path: string; visible: boolean }
   }
   const [blame, setBlame] = useState<Blame | null>(null)
   const savedAt = f.meta(path)?.mtime
+  // Settings → File editor: blame on the cursor's line, as VS Code has it (the gutter is the Blame button).
+  const inline = f.prefsOf(path).editorInlineBlame
   useEffect(() => {
-    if (!blameOn || !repo) return setBlame(null)
+    if ((!blameOn && !inline) || !repo) return setBlame(null)
     let live = true
     window.api.git
       .blame(repo.path, repo.rel)
@@ -52,10 +55,27 @@ export function FileEditor({ path, visible }: { path: string; visible: boolean }
       live = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [blameOn, repo?.path, repo?.rel, savedAt, changes?.commits.length])
+  }, [blameOn, inline, repo?.path, repo?.rel, savedAt, changes?.commits.length])
+  // The inline blame: what its card does goes through a ref (the extension is made once).
+  const blameActions = useRef<InlineBlameActions>(null as unknown as InlineBlameActions)
+  blameActions.current = {
+    taskOf: (subject) => taskOfCommit(subject, state.tasks)?.key ?? null,
+    open: (sha) => changes?.showCommit(sha, path, blame?.commits[sha]?.subject),
+    webUrl: (sha) => (repo ? window.api.git.remoteCommitUrl(repo.path, sha) : Promise.resolve(null))
+  }
+  const inlineExt = useMemo(
+    () => (inline ? inlineBlame({ taskOf: (s) => blameActions.current.taskOf(s), open: (sha) => blameActions.current.open(sha), webUrl: (sha) => blameActions.current.webUrl(sha) }) : null),
+    [inline]
+  )
+  // Given to the editor once its text is the file as saved (blame is of that); edits after are followed.
+  const dirtyNow = f.isDirty(path)
+  useEffect(() => {
+    viewRef.current?.dispatch({ effects: setInlineBlame.of(blame && !dirtyNow ? blame : null) })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [blame, inlineExt])
   const blameExt = useMemo(
     () =>
-      blame
+      blame && blameOn
         ? blameGutter(
             blame,
             (subject) => taskOfCommit(subject, state.tasks)?.key ?? null,
@@ -63,7 +83,7 @@ export function FileEditor({ path, visible }: { path: string; visible: boolean }
           )
         : null,
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [blame, state.tasks]
+    [blame, blameOn, state.tasks]
   )
   const waited = useRef(0)
   // Change markers: the file as the last commit has it, compared with the editor's text as it changes.
@@ -190,6 +210,26 @@ export function FileEditor({ path, visible }: { path: string; visible: boolean }
     if (dirty) items.push({ label: 'Save', shortcut: keyLabel('⌘S'), separatorBefore: true, onClick: () => f.save(path) })
     items.push({ label: 'Copy Path', separatorBefore: true, onClick: () => window.api.sys.copy(f.abs(path)) })
     items.push({ label: 'Copy Relative Path', onClick: () => window.api.sys.copy(path) })
+    // Its link on origin's website (GitHub, GitLab, Bitbucket), with the selected lines - as VS Code's.
+    if (repo) {
+      const lines = ((): [number, number] | null => {
+        if (!view || !sel) return null
+        const a = view.state.doc.lineAt(sel.from).number
+        const b = view.state.doc.lineAt(sel.empty ? sel.from : Math.max(sel.from, sel.to - 1)).number
+        return [a, b]
+      })()
+      const copyLink = (permalink: boolean): void => {
+        window.api.git
+          .remoteFileUrl(repo.path, repo.rel, { permalink, lines })
+          .then(({ url, warning }) => {
+            window.api.sys.copy(url)
+            dispatch({ type: 'TOAST', text: warning ? `Copied the link - ${warning}` : `Copied ${url}`, tone: warning ? 'waiting' : 'done' })
+          })
+          .catch(toastErr)
+      }
+      items.push({ label: 'Copy Remote URL', onClick: () => copyLink(false) })
+      items.push({ label: 'Copy Permalink', onClick: () => copyLink(true) })
+    }
     items.push({ label: 'Reveal in Explorer View', separatorBefore: true, onClick: () => f.reveal(path) })
     items.push({ label: revealLabel, onClick: () => window.api.sys.showItem(f.abs(path)).catch(toastErr) })
     items.push({ label: 'Open in Editor', onClick: () => window.api.sys.openInEditor(f.abs(path)).catch(toastErr) })
@@ -312,7 +352,7 @@ export function FileEditor({ path, visible }: { path: string; visible: boolean }
             // The editor scrolls itself (both bars always in view), not the box around it.
             style={{ height: '100%' }}
             theme={codeTheme}
-            extensions={[...languageFor(path), changeGutter, ...extensions, ...(blameExt ? [blameExt] : [])]}
+            extensions={[...languageFor(path), changeGutter, ...extensions, ...(blameExt ? [blameExt] : []), ...(inlineExt ? [inlineExt] : [])]}
             onChange={(value) => {
               f.setEdit(path, value)
               f.scheduleAutoSave(path)
@@ -323,6 +363,7 @@ export function FileEditor({ path, visible }: { path: string; visible: boolean }
             onCreateEditor={(view) => {
               viewRef.current = view
               if (headRef.current !== null) view.dispatch({ effects: setChangeBase.of(headRef.current) })
+              if (blame && inlineExt && !f.isDirty(path)) view.dispatch({ effects: setInlineBlame.of(blame) })
             }}
             basicSetup={editorBasicSetup(prefs)}
           />

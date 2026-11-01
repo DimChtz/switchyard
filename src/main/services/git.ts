@@ -8,6 +8,7 @@ import { getPrefs } from './store'
 import { log } from './log'
 import { expandPath } from './repos'
 import { OPEN_PR_FIELDS, toOpenPr, toPrDetails } from '@shared/pr'
+import { commitUrl, fileUrl, repoWeb } from '@shared/remoteUrl'
 import { samePath } from './paths'
 import type { PrDetails } from '@shared/types'
 import type { BranchInfo, BranchResult, Blame, DepShare, OpenPr, StashEntry, FileCommit, FileDiff, DiffLine, DiffOptions, DiffScope, DiffStat, SyncState, GitWorktreeInfo, Issue, PullRequest, RemoteInfo, RepoInfo, WorktreeStatus } from '@shared/types'
@@ -917,7 +918,14 @@ export async function headText(worktreePath: string, path: string): Promise<stri
 }
 
 export async function blame(worktreePath: string, path: string): Promise<Blame> {
-  const { stdout } = await execFileP('git', gitArgs(['blame', '--porcelain', '--', path]), { cwd: worktreePath, windowsHide: true, env: gitEnv(), maxBuffer: 64 * 1024 * 1024 })
+  const [{ stdout }, me] = await Promise.all([
+    execFileP('git', gitArgs(['blame', '--porcelain', '--', path]), { cwd: worktreePath, windowsHide: true, env: gitEnv(), maxBuffer: 64 * 1024 * 1024 }),
+    // (Your own commits read "You", as VS Code has them.)
+    gitAt(worktreePath)
+      .raw(['config', 'user.email'])
+      .then((e) => e.trim().toLowerCase())
+      .catch(() => '')
+  ])
   const commits: Blame['commits'] = {}
   const lines: string[] = []
   let cur = ''
@@ -935,6 +943,7 @@ export async function blame(worktreePath: string, path: string): Promise<Blame> 
     const c = commits[cur]
     if (!c) continue
     if (row.startsWith('author ')) c.author = row.slice(7)
+    else if (row.startsWith('author-mail ')) c.you = !!me && row.slice(12).replace(/[<>]/g, '').trim().toLowerCase() === me
     else if (row.startsWith('author-time ')) c.at = Number(row.slice(12)) * 1000
     else if (row.startsWith('summary ')) c.subject = row.slice(8)
   }
@@ -1079,6 +1088,46 @@ export async function getDiffStat(worktreePath: string, baseBranch: string): Pro
 // ── Push & pull requests ────────────────────────────────────────────
 
 const execFileP = promisify(execFile)
+
+/**
+ * A file's link on origin's website (Copy Remote URL / Copy Permalink): at the
+ * branch, or - a permalink - at the commit checked out, its lines marked. With
+ * what would make it not open as expected: not pushed yet, or the file changed
+ * since the last commit (the link shows the committed version).
+ */
+export async function remoteFileUrl(repoPath: string, rel: string, opts: { permalink: boolean; lines?: [number, number] | null }): Promise<{ url: string; warning: string | null }> {
+  const origin = await originFetchUrl(repoPath)
+  const web = origin ? repoWeb(origin) : null
+  if (!web) throw new Error(origin ? `origin (${origin}) isn't a website to link to.` : 'This repository has no origin remote to link to.')
+  const git = gitAt(repoPath)
+  const sha = (await git.revparse(['HEAD'])).trim()
+  const branch = (await git.raw(['rev-parse', '--abbrev-ref', 'HEAD']).catch(() => 'HEAD')).trim()
+  const ref = opts.permalink || branch === 'HEAD' ? sha : branch
+  let warning: string | null = null
+  if (opts.permalink || branch === 'HEAD') {
+    const onOrigin = (await git.raw(['branch', '-r', '--contains', sha]).catch(() => '')).trim()
+    if (!onOrigin) warning = "This commit isn't on origin yet - the link works once it's pushed."
+  } else if (!(await gitYes(repoPath, ['rev-parse', '--verify', '--quiet', `refs/remotes/origin/${branch}`]).catch(() => false))) {
+    warning = `${branch} isn't on origin yet - the link works once it's pushed.`
+  }
+  if (!warning && (await git.status(['--', `:(literal)${rel}`]).catch(() => null))?.files.length)
+    warning = 'The file has changes not committed yet - the link shows it as last committed.'
+  return { url: fileUrl(web, ref, rel, opts.lines), warning }
+}
+
+/** A commit's page on origin's website; null when origin isn't one. */
+export async function remoteCommitUrl(repoPath: string, sha: string): Promise<string | null> {
+  const origin = await originFetchUrl(repoPath)
+  const web = origin ? repoWeb(origin) : null
+  return web ? commitUrl(web, sha) : null
+}
+
+/** Where origin is read from (its web page is that - a separate push address is often a mirror or an ssh alias). */
+async function originFetchUrl(repoPath: string): Promise<string | null> {
+  const remotes = await gitAt(repoPath).getRemotes(true).catch(() => [])
+  const o = remotes.find((r) => r.name === 'origin')
+  return o?.refs.fetch || o?.refs.push || null
+}
 
 /** The origin remote, and its web page when it's on GitHub. */
 export async function remoteInfo(repoPath: string): Promise<RemoteInfo | null> {
