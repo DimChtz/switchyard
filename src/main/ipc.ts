@@ -14,6 +14,7 @@ import * as ports from './services/ports'
 import * as fsService from './services/fs'
 import * as menu from './menu'
 import * as cleanup from './services/cleanup'
+import * as disk from './services/diskUsage'
 import * as repos from './services/repos'
 import * as system from './services/system'
 import * as hooks from './services/hooks'
@@ -271,6 +272,11 @@ export function registerIpcHandlers(): void {
   ipcMain.handle(IPC.gitListBranches, (_e, repoPath: string, baseBranch: string) => git.listBranches(repoPath, baseBranch))
   ipcMain.handle(IPC.gitBranchLeft, (_e, repoPath: string, branch: string, baseBranch: string) => git.branchLeft(repoPath, branch, baseBranch))
   ipcMain.handle(IPC.worktreesPruneNow, () => cleanup.pruneStale(true))
+  ipcMain.handle(IPC.diskMeasure, (_e, path: string, fresh?: boolean) => disk.measureWorktree(path, fresh))
+  ipcMain.handle(IPC.diskLeftovers, () => disk.leftoverFolders())
+  ipcMain.handle(IPC.diskDeleteLeftover, (_e, path: string) => disk.deleteLeftover(path))
+  ipcMain.handle(IPC.diskClearGenerated, (_e, path: string, rels: string[]) => disk.clearGenerated(path, rels))
+  ipcMain.handle(IPC.diskFree, () => disk.diskFree())
   cleanup.startCleanup()
 
   ipcMain.handle(IPC.ptySpawn, (e, opts: PtySpawnOptions) => ptyService.spawn(e.sender, opts))

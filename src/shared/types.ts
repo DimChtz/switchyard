@@ -800,6 +800,8 @@ export interface Prefs {
   staleDays: number
   /** Remove stale worktrees on their own (never ones with uncommitted changes). */
   autoPrune: boolean
+  /** Warn when a drive with projects on it has less free than this (GB); 0: never. */
+  lowDiskGb: number
   /** Where notes are kept. Empty: "Switchyard Notes" in Documents. */
   notesDir: string
   /** Command of the external editor. Empty: the first one found. */

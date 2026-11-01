@@ -211,7 +211,7 @@ export async function patchFiles(root: string, paths: string[], baseBranch?: str
 }
 
 /** Which of the paths git ignores. */
-function ignoredOf(repo: string, rels: string[]): Promise<Set<string>> {
+export function ignoredOf(repo: string, rels: string[]): Promise<Set<string>> {
   return new Promise((done) => {
     const child = execFile('git', gitArgs(['check-ignore', '-z', '--stdin']), { cwd: repo, env: gitEnv(), maxBuffer: 16 * 1024 * 1024, windowsHide: true }, (_err, stdout) =>
       // (Exit 1 is "none of them".)

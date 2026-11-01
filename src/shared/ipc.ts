@@ -110,6 +110,12 @@ export const IPC = {
   baseChanged: 'base:changed',
   worktreesPruned: 'worktrees:pruned',
   worktreesPruneNow: 'worktrees:pruneNow',
+  diskMeasure: 'disk:measure',
+  diskLeftovers: 'disk:leftovers',
+  diskDeleteLeftover: 'disk:deleteLeftover',
+  diskClearGenerated: 'disk:clearGenerated',
+  diskFree: 'disk:free',
+  diskLow: 'disk:low',
 
   ptySpawn: 'pty:spawn',
   ptyExists: 'pty:exists',

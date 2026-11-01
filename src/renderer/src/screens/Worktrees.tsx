@@ -15,6 +15,100 @@ import type { Action } from '../store/types'
 import type { Project, Task } from '@shared/types'
 import { prefsFor } from '../lib/projectPrefs'
 import { isMulti, reposOf, taskRoot } from '../lib/multiRepo'
+import { useLeftovers, useWorktreeSizes } from '../lib/diskUsage'
+import { projectEnv, runCommandSession, setupSessionId } from '../lib/agentControl'
+import { SPACE_LABEL, formatBytes, generatedBytes, idleForClearing, type LeftoverFolder, type SpaceKind, type WorktreeSize } from '@shared/diskSpace'
+
+const GRID = '2.3fr 1.5fr 1.2fr 0.8fr 0.9fr 0.7fr 0.6fr'
+const KIND_COLOR: Record<SpaceKind | 'code', string> = { code: 'var(--t4)', deps: 'var(--c-amber)', build: 'var(--c-blue)', cache: 'var(--c-green)' }
+
+function sizeTitle(s: WorktreeSize): string {
+  return [`Code ${formatBytes(s.code)}`, ...(['deps', 'build', 'cache'] as const).filter((k) => s[k]).map((k) => `${SPACE_LABEL[k]} ${formatBytes(s[k])}`)].join(' · ')
+}
+
+/** The generated folders' names, shortest form: node_modules (3), dist. */
+function folderNames(s: WorktreeSize, max = 4): string {
+  const counts = new Map<string, number>()
+  for (const g of s.generated) {
+    const name = g.rel.split('/').pop() ?? g.rel
+    counts.set(name, (counts.get(name) ?? 0) + 1)
+  }
+  const names = [...counts].map(([n, c]) => (c > 1 ? `${n} (${c})` : n))
+  return names.length > max ? `${names.slice(0, max).join(', ')} +${names.length - max} more` : names.join(', ')
+}
+
+/**
+ * Deletes the generated folders (dependencies, builds, caches - ignored by
+ * git) of these worktrees, after asking. Code and uncommitted changes stay.
+ * A task's worktree can run its project's setup again from the toast.
+ */
+async function clearGeneratedIn(items: { wt: WorktreeRow; size: WorktreeSize }[], projects: Project[], tasks: Task[], dispatch: (a: Action) => void): Promise<boolean> {
+  const todo = items.filter((i) => i.size.generated.length)
+  if (!todo.length) return false
+  const bytes = todo.reduce((a, i) => a + generatedBytes(i.size), 0)
+  const one = todo.length === 1 ? todo[0] : null
+  const setups = [...new Set(todo.map((i) => projects.find((p) => p.id === i.wt.projectId)?.setupCmd).filter(Boolean))]
+  const ok = await confirm({
+    title: one ? `Clear ${formatBytes(bytes)} from ${one.wt.branch}?` : `Clear ${formatBytes(bytes)} from ${todo.length} worktrees?`,
+    body: `Deletes ${one ? folderNames(one.size, 6) : 'their dependencies, build output and caches'} - folders git ignores, which an install or a build makes again${setups.length ? ` (${setups.map((c) => `\`${c}\``).join(', ')})` : ''}. Code and uncommitted changes aren't touched.`,
+    detail: one ? one.wt.path : undefined,
+    confirmLabel: 'Clear',
+    danger: true
+  })
+  if (!ok) return false
+  let freed = 0
+  const failed: string[] = []
+  for (const i of todo) {
+    try {
+      freed += await window.api.disk.clearGenerated(i.wt.path, i.size.generated.map((g) => g.rel))
+    } catch (err) {
+      failed.push(`${i.wt.branch}: ${errText(err)}`)
+    }
+  }
+  const task = one ? (tasks.find((t) => t.id === one.wt.taskId) ?? null) : null
+  const project = one ? projects.find((p) => p.id === one.wt.projectId) : undefined
+  const setup = one && project?.setupCmd ? project.setupCmd : null
+  dispatch({
+    type: 'TOAST',
+    text: failed.length ? `Freed ${formatBytes(freed)} - but could not clear ${failed.join('; ')}` : `Freed ${formatBytes(freed)}.${setup ? ` Run the setup again before working in ${one!.wt.branch}.` : ''}`,
+    ...(setup && one && !failed.length
+      ? {
+          action: {
+            label: 'Run setup now',
+            run: () => {
+              const name = task?.key ?? one.wt.branch
+              runCommandSession(setupSessionId(task?.id ?? `disk-${one.wt.branch}`), one.wt.path, setup, projectEnv(project), () => {})
+                .then((code) => dispatch({ type: 'TOAST', text: code === 0 ? `${name}: setup done.` : `${name}: setup failed (exit ${code}) - run it in a terminal.` }))
+                .catch((err: unknown) => dispatch({ type: 'TOAST', text: `${name}: setup failed - ${errText(err)}` }))
+            }
+          }
+        }
+      : {})
+  })
+  return true
+}
+
+/** Where a worktree's room goes: a bar, and its biggest generated folders. */
+function SizeBar({ size }: { size: WorktreeSize }): React.JSX.Element {
+  const parts = (['code', 'deps', 'build', 'cache'] as const).map((k) => ({ k, bytes: size[k] })).filter((x) => x.bytes > 0)
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', height: 6, borderRadius: 3, overflow: 'hidden', background: 'var(--bd-1)' }}>
+        {parts.map((x) => (
+          <span key={x.k} title={`${x.k === 'code' ? 'Code' : SPACE_LABEL[x.k]} ${formatBytes(x.bytes)}`} style={{ width: `${(100 * x.bytes) / Math.max(1, size.total)}%`, minWidth: 2, background: KIND_COLOR[x.k] }} />
+        ))}
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', columnGap: 12, rowGap: 4, font: '11.5px var(--font-ui)', color: 'var(--t3)' }}>
+        {parts.map((x) => (
+          <span key={x.k} style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ width: 7, height: 7, borderRadius: 2, background: KIND_COLOR[x.k] }} />
+            {x.k === 'code' ? 'Code' : SPACE_LABEL[x.k]} <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--t2)' }}>{formatBytes(x.bytes)}</span>
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 /** Asks (Settings → Git: confirm before removing), then removes the worktree's folder; its branch stays. */
 async function removeWorktree(wt: WorktreeRow, task: Task | null, project: Project, askFirst: boolean, dispatch: (a: Action) => void): Promise<boolean> {
@@ -92,7 +186,7 @@ function openTerminalIn(wt: WorktreeRow, task: Task | null, dispatch: (a: Action
   }
 }
 
-function Row({ wt, onChanged }: { wt: WorktreeRow; onChanged: () => void }): React.JSX.Element {
+function Row({ wt, size, onChanged }: { wt: WorktreeRow; size?: WorktreeSize; onChanged: () => void }): React.JSX.Element {
   const { state, dispatch } = useAppStore()
   const [hover, hoverProps] = useHover()
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null)
@@ -136,7 +230,7 @@ function Row({ wt, onChanged }: { wt: WorktreeRow; onChanged: () => void }): Rea
       {...hoverProps}
       style={{
         display: 'grid',
-        gridTemplateColumns: '2.3fr 1.5fr 1.2fr 0.8fr 0.9fr 0.6fr',
+        gridTemplateColumns: GRID,
         gap: 16,
         alignItems: 'center',
         minHeight: 48,
@@ -181,15 +275,29 @@ function Row({ wt, onChanged }: { wt: WorktreeRow; onChanged: () => void }): Rea
       <span style={{ font: "12px var(--font-mono)", color: wt.dirty ? 'var(--t2)' : 'var(--t4)' }}>
         {wt.dirty ? `${wt.dirty} modified` : 'clean'}
       </span>
+      <span title={size ? sizeTitle(size) : 'Measuring…'} style={{ font: "12px var(--font-mono)", color: size ? 'var(--t2)' : 'var(--t5)', textAlign: 'right' }}>
+        {size ? formatBytes(size.total) : '…'}
+      </span>
       <span style={{ font: "12px var(--font-mono)", color: 'var(--t4)', textAlign: 'right' }}>{timeAgo(wt.lastActivityAt)}</span>
       {menu ? <Menu anchor={menu} items={menuItems} onClose={() => setMenu(null)} /> : null}
     </div>
   )
 }
 
-function DetailPanel({ worktrees, onChanged }: { worktrees: WorktreeRow[]; onChanged: () => void }): React.JSX.Element {
+function DetailPanel({
+  worktrees,
+  sizes,
+  onRemeasure,
+  onChanged
+}: {
+  worktrees: WorktreeRow[]
+  sizes: Record<string, WorktreeSize>
+  onRemeasure: (path: string) => void
+  onChanged: () => void
+}): React.JSX.Element | null {
   const { state, dispatch } = useAppStore()
   const wt = worktrees.find((w) => w.id === state.wtSelected)
+  const size = wt ? sizes[wt.path] : undefined
   const [syncing, setSyncing] = useState(false)
   const [conflict, setConflict] = useState<string[] | null>(null)
   useEffect(() => {
@@ -230,13 +338,8 @@ function DetailPanel({ worktrees, onChanged }: { worktrees: WorktreeRow[]; onCha
     return () => window.removeEventListener('keydown', onKey)
   }, [])
 
-  if (!wt) {
-    return (
-      <div style={{ borderLeft: '1px solid var(--bd-1)', padding: '22px 20px', color: 'var(--t4)', fontSize: 13, background: 'var(--bg-panel-2)' }}>
-        Select a worktree to see details.
-      </div>
-    )
-  }
+  // (Nothing selected: no panel - the list takes the room.)
+  if (!wt) return null
 
   const project = state.projects.find((p) => p.id === wt.projectId)!
   const busy = task?.st === 'working'
@@ -380,7 +483,47 @@ function DetailPanel({ worktrees, onChanged }: { worktrees: WorktreeRow[]; onCha
             <span style={{ color: 'var(--t2)' }}>{timeAgo(task.startedAt ?? task.createdAt)} ago</span>
           </>
         ) : null}
+        <span style={{ fontFamily: 'var(--font-ui)', color: 'var(--t4)' }}>On disk</span>
+        <span style={{ color: 'var(--t2)', display: 'flex', gap: 8 }}>
+          {size ? formatBytes(size.total) : 'measuring…'}
+          {size ? (
+            <span onClick={() => onRemeasure(wt.path)} title={`Measured ${timeAgo(size.measuredAt)} ago`} style={{ fontFamily: 'var(--font-ui)', color: 'var(--c-blue)', cursor: 'pointer' }}>
+              measure again
+            </span>
+          ) : null}
+        </span>
       </div>
+
+      {size && size.total > 0 ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <SizeBar size={size} />
+          {size.generated.length ? (
+            <>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 3, font: '11.5px var(--font-mono)' }}>
+                {size.generated.slice(0, 5).map((g) => (
+                  <div key={g.rel} style={{ display: 'flex', gap: 8 }}>
+                    <span style={{ flex: 1, minWidth: 0, color: 'var(--t3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={g.rel}>
+                      {g.rel}/
+                    </span>
+                    <span style={{ color: 'var(--t2)' }}>{formatBytes(g.bytes)}</span>
+                  </div>
+                ))}
+                {size.generated.length > 5 ? <span style={{ color: 'var(--t4)' }}>+{size.generated.length - 5} more</span> : null}
+              </div>
+              <div>
+                <Button
+                  size="sm"
+                  disabled={busy || !!task?.queued}
+                  title={busy ? 'Not while its agent is working' : 'Folders git ignores - made again by an install or a build'}
+                  onClick={() => clearGeneratedIn([{ wt, size }], state.projects, state.tasks, dispatch).then((done) => done && onRemeasure(wt.path))}
+                >
+                  Clear generated · {formatBytes(generatedBytes(size))}
+                </Button>
+              </div>
+            </>
+          ) : null}
+        </div>
+      ) : null}
 
       <div style={{ flex: 1 }} />
 
@@ -450,6 +593,37 @@ export function Worktrees(): React.JSX.Element {
   const { data: worktrees, loading } = useRealWorktrees(state.projects, state.tasks, refreshKey)
   const stale = useMemo(() => staleWorktrees(worktrees, state.prefs.staleDays), [worktrees, state.prefs.staleDays])
   const clean = stale.filter((w) => w.dirty === 0)
+  const paths = useMemo(() => worktrees.map((w) => w.path), [worktrees])
+  const { sizes, measuring, remeasure } = useWorktreeSizes(paths, refreshKey)
+  const { leftovers, free } = useLeftovers(refreshKey)
+  const totalBytes = worktrees.reduce((a, w) => a + (sizes[w.path]?.total ?? 0), 0)
+  // Generated folders of worktrees nobody is at: stale ones go whole, below.
+  const staleIds = new Set(stale.map((w) => w.id))
+  const idle = worktrees
+    .filter((w) => !staleIds.has(w.id) && idleForClearing(state.tasks.find((t) => t.id === w.taskId) ?? null))
+    .flatMap((w) => (sizes[w.path] && generatedBytes(sizes[w.path]) > 0 ? [{ wt: w, size: sizes[w.path] }] : []))
+    .sort((a, b) => generatedBytes(b.size) - generatedBytes(a.size))
+  const idleBytes = idle.reduce((a, i) => a + generatedBytes(i.size), 0)
+  const leftoverBytes = leftovers.reduce((a, l) => a + l.bytes, 0)
+  const staleBytes = clean.reduce((a, w) => a + (sizes[w.path]?.total ?? 0), 0)
+
+  const deleteLeftover = async (l: LeftoverFolder): Promise<void> => {
+    const ok = await confirm({
+      title: `Delete a folder git no longer knows (${formatBytes(l.bytes)})?`,
+      body: "It's where a worktree was - removed by hand, or after a crash. Git doesn't track it any more, so nothing in it can be checked for unsaved work: look inside first if you're not sure.",
+      detail: l.path,
+      confirmLabel: 'Delete folder',
+      danger: true
+    })
+    if (!ok) return
+    try {
+      await window.api.disk.deleteLeftover(l.path)
+      dispatch({ type: 'TOAST', text: `Deleted - freed ${formatBytes(l.bytes)}.` })
+    } catch (err) {
+      dispatch({ type: 'TOAST', text: `Could not delete ${l.path}: ${errText(err)}` })
+    }
+    setRefreshKey((k) => k + 1)
+  }
 
   // Automatic cleanup (Settings → Git) ran in the background.
   useEffect(() => window.api.git.onPruned(() => setRefreshKey((k) => k + 1)), [])
@@ -492,19 +666,27 @@ export function Worktrees(): React.JSX.Element {
   }
 
   return (
-    <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 312px' }}>
+    <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: worktrees.some((w) => w.id === state.wtSelected) ? 'minmax(0,1fr) 312px' : 'minmax(0,1fr)' }}>
       <div style={{ display: 'flex', flexDirection: 'column', padding: '24px 28px', gap: 16, minWidth: 0, overflow: 'auto' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
           <div style={{ font: "600 20px var(--font-ui)", letterSpacing: '-0.01em' }}>Worktrees</div>
           <div style={{ font: "12.5px var(--font-mono)", color: 'var(--t3)' }}>
-            {worktrees.length} on disk · {state.prefs.worktreeRoot || '.worktrees/ in each repo'}
-            {loading ? ' · refreshing…' : ''}
+            {worktrees.length} on disk{totalBytes ? ` · ${formatBytes(totalBytes)}${measuring ? '+' : ''}` : ''} · {state.prefs.worktreeRoot || '.worktrees/ in each repo'}
+            {free.length ? ` · ${free.map((f) => `${formatBytes(f.free)} free${free.length > 1 ? ` (${f.path})` : ''}`).join(', ')}` : ''}
+            {loading ? ' · refreshing…' : measuring ? ' · measuring…' : ''}
           </div>
+          <div style={{ flex: 1 }} />
+          {worktrees.length && !measuring ? (
+            <Button size="sm" variant="ghost" onClick={() => remeasure()} title="Sizes are kept for 10 minutes">
+              Measure again
+            </Button>
+          ) : null}
         </div>
+        {worktrees.length ? (
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: '2.3fr 1.5fr 1.2fr 0.8fr 0.9fr 0.6fr',
+            gridTemplateColumns: GRID,
             gap: 16,
             padding: '0 12px 8px',
             font: "500 11px var(--font-mono)",
@@ -519,19 +701,24 @@ export function Worktrees(): React.JSX.Element {
           <span>Agent</span>
           <span>vs base</span>
           <span>Working tree</span>
+          <span style={{ textAlign: 'right' }}>Size</span>
           <span style={{ textAlign: 'right' }}>Last</span>
         </div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: -8 }}>
+        ) : null}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: worktrees.length ? -8 : 0 }}>
           {[...byProject.entries()].map(([projectId, rows]) => {
             const project = state.projects.find((p) => p.id === projectId)!
             return (
               <div key={projectId} style={{ display: 'flex', flexDirection: 'column' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, height: 32, padding: '0 12px', font: '500 12.5px var(--font-ui)', color: 'var(--t2)' }}>
                   <span>{project.name}</span>
-                  <span style={{ font: "11.5px var(--font-mono)", color: 'var(--t4)' }}>{rows.length} worktree{rows.length === 1 ? '' : 's'}</span>
+                  <span style={{ font: "11.5px var(--font-mono)", color: 'var(--t4)' }}>
+                    {rows.length} worktree{rows.length === 1 ? '' : 's'}
+                    {rows.some((r) => sizes[r.path]) ? ` · ${formatBytes(rows.reduce((a, r) => a + (sizes[r.path]?.total ?? 0), 0))}` : ''}
+                  </span>
                 </div>
                 {rows.map((r) => (
-                  <Row key={r.id} wt={r} onChanged={() => setRefreshKey((k) => k + 1)} />
+                  <Row key={r.id} wt={r} size={sizes[r.path]} onChanged={() => setRefreshKey((k) => k + 1)} />
                 ))}
               </div>
             )
@@ -552,6 +739,60 @@ export function Worktrees(): React.JSX.Element {
           ) : null}
         </div>
 
+        {idle.length > 0 || leftovers.length > 0 ? (
+          <div style={{ marginTop: 4, border: '1px solid var(--bd-3)', borderRadius: 6, background: 'var(--bg-panel-3)', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderBottom: '1px solid var(--bd-1)' }}>
+              <span style={{ font: "500 13px var(--font-ui)", color: 'var(--t1)' }}>Reclaim space</span>
+              <span style={{ font: "12px var(--font-mono)", color: 'var(--t3)' }}>{formatBytes(idleBytes + leftoverBytes)} can go · nothing you wrote</span>
+              <div style={{ flex: 1 }} />
+              {idle.length > 1 ? (
+                <Button size="sm" onClick={() => clearGeneratedIn(idle, state.projects, state.tasks, dispatch).then((done) => done && remeasure())}>
+                  Clear all generated · {formatBytes(idleBytes)}
+                </Button>
+              ) : null}
+            </div>
+            {idle.map(({ wt: w, size: sz }) => {
+              const project = state.projects.find((p) => p.id === w.projectId)
+              const task = state.tasks.find((t) => t.id === w.taskId)
+              return (
+                <div key={w.id} style={{ display: 'grid', gridTemplateColumns: '2.3fr 3.2fr auto', gap: 16, alignItems: 'center', height: 44, padding: '0 12px', borderTop: '1px solid var(--bd-row)' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
+                    <span style={{ font: "12.5px var(--font-mono)", color: 'var(--t2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{w.branch}</span>
+                    <span style={{ font: "11.5px var(--font-mono)", color: 'var(--t4)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {project?.name} · {task ? `${task.key}, ${task.col === 'parked' ? 'parked' : task.col === 'done' ? 'done' : `idle ${timeAgo(task.lastActivityAt)}`}` : 'no task'}
+                    </span>
+                  </div>
+                  <span style={{ font: '12.5px var(--font-ui)', color: 'var(--t3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={sz.generated.map((g) => `${g.rel}/ ${formatBytes(g.bytes)}`).join('\n')}>
+                    {folderNames(sz)}
+                  </span>
+                  <Button variant="ghost" size="sm" onClick={() => clearGeneratedIn([{ wt: w, size: sz }], state.projects, state.tasks, dispatch).then((done) => done && remeasure(w.path))}>
+                    Clear {formatBytes(generatedBytes(sz))}
+                  </Button>
+                </div>
+              )
+            })}
+            {leftovers.map((l) => (
+              <div key={l.path} style={{ display: 'grid', gridTemplateColumns: '2.3fr 3.2fr auto', gap: 16, alignItems: 'center', height: 44, padding: '0 12px', borderTop: '1px solid var(--bd-row)' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 1, minWidth: 0 }}>
+                  <span style={{ font: "12.5px var(--font-mono)", color: 'var(--t2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{l.path.split(/[\\/]/).pop()}</span>
+                  <span title={l.path} style={{ font: "11.5px var(--font-mono)", color: 'var(--t4)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', direction: 'rtl', textAlign: 'left' }}>
+                    <bdi>{l.path}</bdi>
+                  </span>
+                </div>
+                <span style={{ font: '12.5px var(--font-ui)', color: 'var(--c-amber)' }}>Left behind - git no longer knows it · changed {timeAgo(l.modifiedAt)} ago</span>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  <Button variant="ghost" size="sm" onClick={() => window.api.sys.showItem(l.path).catch((err: unknown) => dispatch({ type: 'TOAST', text: errText(err) }))}>
+                    Show
+                  </Button>
+                  <Button variant="ghost" size="sm" tone="danger" onClick={() => deleteLeftover(l)}>
+                    Delete {formatBytes(l.bytes)}…
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : null}
+
         {stale.length > 0 ? (
           <div style={{ marginTop: 4, border: '1px solid var(--bd-3)', borderRadius: 6, background: 'var(--bg-panel-3)', display: 'flex', flexDirection: 'column' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px', borderBottom: '1px solid var(--bd-1)' }}>
@@ -562,6 +803,7 @@ export function Worktrees(): React.JSX.Element {
               <div style={{ flex: 1 }} />
               <Button size="sm" onClick={pruneAll} title={clean.length < stale.length ? 'Worktrees with uncommitted changes are left for you to prune one by one' : undefined}>
                 {clean.length === stale.length ? 'Prune all' : `Prune ${clean.length} clean`}
+                {staleBytes ? ` · ${formatBytes(staleBytes)}` : ''}
               </Button>
             </div>
             {stale.map((s) => {
@@ -574,7 +816,10 @@ export function Worktrees(): React.JSX.Element {
                       {project.name} · {s.path}
                     </span>
                   </div>
-                  <span style={{ font: '12.5px var(--font-ui)', color: s.dirty ? 'var(--c-amber)' : 'var(--t3)' }}>{s.reason}</span>
+                  <span style={{ font: '12.5px var(--font-ui)', color: s.dirty ? 'var(--c-amber)' : 'var(--t3)' }}>
+                    {s.reason}
+                    {sizes[s.path] ? <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--t4)' }}> · {formatBytes(sizes[s.path].total)}</span> : null}
+                  </span>
                   <Button variant="ghost" size="sm" tone={s.dirty ? 'danger' : undefined} onClick={() => pruneOne(s)}>
                     {s.dirty ? 'Discard & prune…' : 'Prune'}
                   </Button>
@@ -584,7 +829,7 @@ export function Worktrees(): React.JSX.Element {
           </div>
         ) : null}
       </div>
-      <DetailPanel worktrees={worktrees} onChanged={() => setRefreshKey((k) => k + 1)} />
+      <DetailPanel worktrees={worktrees} sizes={sizes} onRemeasure={remeasure} onChanged={() => setRefreshKey((k) => k + 1)} />
     </div>
   )
 }

@@ -4,6 +4,7 @@ import { IPC } from '@shared/ipc'
 import type { TextSearchOptions, TextSearchResult } from '@shared/textSearch'
 import type { Theme } from '@shared/themes'
 import type { UsageEntry } from '@shared/usage'
+import type { DiskFree, LeftoverFolder, WorktreeSize } from '@shared/diskSpace'
 import type { PackagePreview, PluginCommandContext, PluginInfo, PluginUiEvent } from '@shared/plugins'
 import type {
   ActivityEvent,
@@ -322,6 +323,22 @@ const api = {
       const handler = (_e: Electron.IpcRendererEvent, pruned: string[]): void => cb(pruned)
       ipcRenderer.on(IPC.worktreesPruned, handler)
       return () => ipcRenderer.removeListener(IPC.worktreesPruned, handler)
+    }
+  },
+  /** The room worktrees take, and giving it back. */
+  disk: {
+    /** A worktree's size - code, dependencies, builds, caches (measured again after 10 minutes, or with fresh). */
+    measure: (path: string, fresh?: boolean): Promise<WorktreeSize> => ipcRenderer.invoke(IPC.diskMeasure, path, fresh),
+    /** Folders in the worktree homes that git no longer knows. */
+    leftovers: (): Promise<LeftoverFolder[]> => ipcRenderer.invoke(IPC.diskLeftovers),
+    deleteLeftover: (path: string): Promise<void> => ipcRenderer.invoke(IPC.diskDeleteLeftover, path),
+    /** Deletes generated folders (ignored by git) in a worktree; the bytes freed. */
+    clearGenerated: (path: string, rels: string[]): Promise<number> => ipcRenderer.invoke(IPC.diskClearGenerated, path, rels),
+    free: (): Promise<DiskFree[]> => ipcRenderer.invoke(IPC.diskFree),
+    onLow: (cb: (d: DiskFree) => void): (() => void) => {
+      const handler = (_e: Electron.IpcRendererEvent, d: DiskFree): void => cb(d)
+      ipcRenderer.on(IPC.diskLow, handler)
+      return () => ipcRenderer.removeListener(IPC.diskLow, handler)
     }
   },
   /** Each project's base branch against origin, fetched in the background. */

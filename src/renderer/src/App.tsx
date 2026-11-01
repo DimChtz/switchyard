@@ -45,6 +45,7 @@ import { useThemePref, useThemes } from './lib/theme'
 import { useSpendAlerts } from './lib/usage'
 import { addNotice } from './lib/notices'
 import { formatCost } from '@shared/usage'
+import { formatBytes } from '@shared/diskSpace'
 
 const VIEW_NAME: Partial<Record<string, string>> = {
   dashboard: 'Projects',
@@ -100,6 +101,17 @@ function Shell(): React.JSX.Element {
     if (problems.length) dispatch({ type: 'TOAST', text: `Theme: ${problems[0]}${problems.length > 1 ? ` (+${problems.length - 1} more)` : ''} - see Settings → Appearance` })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [problemKey])
+
+  // A drive with projects on it running low (Settings → Git → Clean up).
+  useEffect(
+    () =>
+      window.api.disk.onLow((d) => {
+        const text = `Low on disk space: ${formatBytes(d.free)} free on the drive with ${d.path}.`
+        dispatch({ type: 'TOAST', text, action: { label: 'Free up space', run: () => dispatch({ type: 'NAV', view: 'worktrees' }) } })
+        if (!document.hasFocus()) window.api.sys.notify('Low on disk space', `${formatBytes(d.free)} free - Worktrees shows what can go.`, null)
+      }),
+    [dispatch]
+  )
 
   const { menus, run } = useCommands()
 

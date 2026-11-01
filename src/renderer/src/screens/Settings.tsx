@@ -557,6 +557,9 @@ function GlobalSettings({ section, scope, onScope }: { section: string; scope: P
             'Checks hourly. Skips any with uncommitted changes, and keeps branches that have commits - nothing is lost',
             'autoPrune'
           )}
+          <Row k="lowDiskGb" label="Warn when disk space is low" sub="When a drive with your projects or worktrees has less free than this - Worktrees shows what can go">
+            <Seg value={String(pf.lowDiskGb)} options={[['0', 'Never'], ['5', '5 GB'], ['10', '10 GB'], ['20', '20 GB'], ['50', '50 GB']]} onChange={(v) => set({ lowDiskGb: Number(v) })} />
+          </Row>
           <Row label="Clean up now" sub="The same check, once, whether or not it's automatic">
             <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
               <Button

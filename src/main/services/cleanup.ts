@@ -7,6 +7,7 @@ import { expandPath } from './repos'
 import { log } from './log'
 import { join } from 'path'
 import { canonical } from './paths'
+import { checkLowDisk } from './diskUsage'
 
 const norm = canonical
 
@@ -73,4 +74,7 @@ export async function pruneStale(now = false): Promise<string[]> {
 export function startCleanup(): void {
   setTimeout(() => pruneStale().catch(() => {}), 30_000)
   setInterval(() => pruneStale().catch(() => {}), HOUR)
+  // (And whether the disk runs low - every 15 minutes, a minute after start.)
+  setTimeout(() => checkLowDisk().catch(() => {}), 60_000)
+  setInterval(() => checkLowDisk().catch(() => {}), 15 * 60_000)
 }
