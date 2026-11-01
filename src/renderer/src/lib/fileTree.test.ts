@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { allDirPaths, applyPatch, buildTree, excludeMatcher } from './fileTree'
+import { DEFAULT_NESTING, allDirPaths, applyPatch, buildTree, excludeMatcher, nestFiles, parseNesting } from './fileTree'
 
 const items = [
   { path: 'src/b.ts', status: 'modified' as const },
@@ -117,8 +117,52 @@ describe('applyPatch', () => {
   })
 })
 
+describe('file nesting', () => {
+  const rules = parseNesting(DEFAULT_NESTING)
+  const f = (path: string, status: 'unchanged' | 'modified' = 'unchanged') => ({ path, status })
+  it('folds related files under their main one', () => {
+    const { top, kids } = nestFiles([f('Gemfile'), f('Gemfile.lock'), f('package.json'), f('yarn.lock'), f('.env'), f('.env.local'), f('README.md'), f('LICENSE')], rules)
+    expect(top.map((x) => x.path)).toEqual(['Gemfile', 'package.json', '.env', 'README.md'])
+    expect(kids.get('Gemfile')?.map((x) => x.path)).toEqual(['Gemfile.lock'])
+    expect(kids.get('.env')?.map((x) => x.path)).toEqual(['.env.local'])
+    expect(kids.get('README.md')?.map((x) => x.path)).toEqual(['LICENSE'])
+  })
+  it('by the same name (${capture}) - the shorter name claims first', () => {
+    const files = ['src/Button.tsx', 'src/Button.test.tsx', 'src/Button.module.css', 'src/api.ts', 'src/api.test.ts', 'src/api.d.ts', 'src/other.ts'].map((p) => f(p))
+    const { top, kids } = nestFiles(files, rules)
+    expect(top.map((x) => x.path)).toEqual(['src/Button.tsx', 'src/api.ts', 'src/other.ts'])
+    expect(kids.get('src/api.ts')?.map((x) => x.path)).toEqual(['src/api.test.ts', 'src/api.d.ts'])
+  })
+  it('in the tree: closed until opened, and says when one inside changed', () => {
+    const items = [f('package.json'), f('package-lock.json', 'modified'), f('index.js')]
+    const closed = buildTree(items, new Set(), { nesting: rules })
+    expect(closed.map((r) => r.path)).toEqual(['index.js', 'package.json'])
+    expect(closed.find((r) => r.path === 'package.json')?.nest).toEqual({ count: 1, open: false, changed: true })
+    const open = buildTree(items, new Set(), { nesting: rules, openNests: new Set(['package.json']) })
+    expect(open.map((r) => `${'  '.repeat(r.depth)}${r.name}`)).toEqual(['index.js', 'package.json', '  package-lock.json'])
+    expect(open[2].nestedIn).toBe('package.json')
+    // (Off, and while filtering: every file as it is.)
+    expect(buildTree(items, new Set()).map((r) => r.path)).toEqual(['index.js', 'package-lock.json', 'package.json'])
+    expect(buildTree(items, new Set(), { nesting: rules, filter: 'lock' }).map((r) => r.path)).toEqual(['package-lock.json'])
+  })
+  it('your own rules', () => {
+    const mine = parseNesting(['# mine', 'schema.rb: structure.sql, seeds.rb', '*.rb: ${capture}_spec.rb', 'bad line'])
+    const { kids } = nestFiles([f('db/schema.rb'), f('db/seeds.rb'), f('lib/a.rb'), f('lib/a_spec.rb')], mine)
+    expect(kids.get('db/schema.rb')?.map((x) => x.path)).toEqual(['db/seeds.rb'])
+    expect(kids.get('lib/a.rb')?.map((x) => x.path)).toEqual(['lib/a_spec.rb'])
+  })
+})
+
 describe('allDirPaths', () => {
   it('finds every folder, empty ones too', () => {
     expect(allDirPaths(items).sort()).toEqual(['docs', 'src', 'src/lib'])
+  })
+})
+
+describe('file nesting names', () => {
+  it('a dot is a dot (package.json is not packageXjson)', () => {
+    const rules = parseNesting(['package.json: yarn.lock'])
+    const { top } = nestFiles([{ path: 'packageXjson' }, { path: 'yarn.lock' }], rules)
+    expect(top.map((x) => x.path)).toEqual(['packageXjson', 'yarn.lock'])
   })
 })

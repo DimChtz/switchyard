@@ -20,6 +20,10 @@ export interface TreeRow extends TreeItem {
   open: boolean
   /** Where the filter matched in `name`. */
   match?: [number, number]
+  /** A file with related ones nested under it: how many, shown or not, and whether one of them changed. */
+  nest?: { count: number; open: boolean; changed: boolean }
+  /** Nested under this file. */
+  nestedIn?: string
 }
 
 export interface TreeOptions {
@@ -27,6 +31,10 @@ export interface TreeOptions {
   compact?: boolean
   /** Only what's named like this (and the folders it's in), all opened. */
   filter?: string
+  /** File nesting's rules (none: off). */
+  nesting?: NestRule[]
+  /** The nested groups shown (by their file); the rest are closed. */
+  openNests?: Set<string>
 }
 
 interface DirNode {
@@ -131,10 +139,28 @@ export function buildTree(items: TreeItem[], collapsed: Set<string>, opts: TreeO
       if (open) walk(dir, full, depth + 1)
     }
     const files = [...node.files].sort((a, b) => a.path.localeCompare(b.path))
+    const fileRow = (f: TreeItem, d: number, extra: Partial<TreeRow> = {}): TreeRow => {
+      const name = nameOf(f.path)
+      return { path: f.path, name, depth: d, isDir: false, status: f.status, ignored: f.ignored, dirHasChanges: false, open: false, ...(keep ? { match: matchIn(name) } : {}), ...extra }
+    }
+    // Nested: related files under their main one (not while filtering - every match shows).
+    if (opts.nesting?.length && !keep) {
+      const { top, kids } = nestFiles(files, opts.nesting)
+      for (const f of top) {
+        const under = kids.get(f.path)
+        if (!under) {
+          rows.push(fileRow(f, depth))
+          continue
+        }
+        const open = !!opts.openNests?.has(f.path)
+        rows.push(fileRow(f, depth, { nest: { count: under.length, open, changed: under.some((k) => k.status !== 'unchanged') } }))
+        if (open) for (const k of under) rows.push(fileRow(k, depth + 1, { nestedIn: f.path }))
+      }
+      return
+    }
     for (const f of files) {
       if (keep && !keep.has(f.path)) continue
-      const name = nameOf(f.path)
-      rows.push({ path: f.path, name, depth, isDir: false, status: f.status, ignored: f.ignored, dirHasChanges: false, open: false, ...(keep ? { match: matchIn(name) } : {}) })
+      rows.push(fileRow(f, depth))
     }
   }
 
@@ -209,4 +235,100 @@ export function applyPatch(entries: FileEntry[], patch: FilesPatch): FileEntry[]
     } else out[at] = e
   }
   return out
+}
+
+/**
+ * File nesting (Settings → File editor → Explorer), as VS Code's: related
+ * files folded under their main one - "package.json: package-lock.json,
+ * yarn.lock", "*.ts: ${capture}.test.ts" (${capture}: what the parent's *
+ * matched). Rules are lines of "parent: child, child".
+ */
+export interface NestRule {
+  parent: RegExp
+  children: string[]
+}
+
+/** Used when none are set: lock files, tests, styles and source maps, project files. */
+export const DEFAULT_NESTING = [
+  'package.json: package-lock.json, yarn.lock, pnpm-lock.yaml, pnpm-workspace.yaml, bun.lockb, bun.lock, .npmrc, .yarnrc*, .nvmrc, .node-version',
+  'Gemfile: Gemfile.lock, .ruby-version, .ruby-gemset',
+  'go.mod: go.sum, go.work, go.work.sum',
+  'Cargo.toml: Cargo.lock, rust-toolchain*',
+  'pyproject.toml: poetry.lock, uv.lock, Pipfile, Pipfile.lock, requirements*.txt, setup.cfg, setup.py',
+  'composer.json: composer.lock',
+  'mix.exs: mix.lock',
+  'tsconfig.json: tsconfig.*.json',
+  '.env: .env.*',
+  'Dockerfile: Dockerfile.*, .dockerignore, docker-compose*.yml, compose*.yml',
+  'README.md: CHANGELOG.md, LICENSE*, CONTRIBUTING.md, CODE_OF_CONDUCT.md, SECURITY.md, AUTHORS*',
+  '*.ts: ${capture}.test.ts, ${capture}.spec.ts, ${capture}.d.ts, ${capture}.js, ${capture}.js.map',
+  '*.tsx: ${capture}.test.tsx, ${capture}.spec.tsx, ${capture}.stories.tsx, ${capture}.module.css, ${capture}.module.scss, ${capture}.css',
+  '*.js: ${capture}.test.js, ${capture}.spec.js, ${capture}.js.map, ${capture}.min.js',
+  '*.jsx: ${capture}.test.jsx, ${capture}.spec.jsx, ${capture}.stories.jsx',
+  '*.vue: ${capture}.spec.ts, ${capture}.test.ts',
+  '*.css: ${capture}.css.map, ${capture}.min.css',
+  '*.scss: ${capture}.css, ${capture}.css.map',
+  '*.go: ${capture}_test.go',
+  '*.py: test_${capture}.py, ${capture}_test.py'
+]
+
+const globBody = (g: string): string => g.replace(/[.+^$()|[\]\\{}]/g, '\\$&').replace(/\*/g, '[^/]*').replace(/\?/g, '[^/]')
+
+/** "parent: child, child" lines → rules (blank lines and # comments skipped). */
+export function parseNesting(lines: string[]): NestRule[] {
+  const out: NestRule[] = []
+  for (const raw of lines) {
+    const line = raw.trim()
+    if (!line || line.startsWith('#')) continue
+    const at = line.indexOf(':')
+    if (at <= 0) continue
+    const parent = line.slice(0, at).trim()
+    const children = line
+      .slice(at + 1)
+      .split(',')
+      .map((c) => c.trim())
+      .filter(Boolean)
+    if (!children.length) continue
+    // (The parent's first * is what ${capture} stands for.)
+    const star = parent.indexOf('*')
+    const body = star < 0 ? globBody(parent) : `${globBody(parent.slice(0, star))}(.*?)${globBody(parent.slice(star + 1))}`
+    out.push({ parent: new RegExp(`^${body}$`, 'i'), children })
+  }
+  return out
+}
+
+/**
+ * One folder's files, nested: the ones shown (each with what's folded under
+ * it). A file goes under the first parent that claims it; one that has files
+ * under it isn't put under another. Shorter names claim first (foo.ts before
+ * foo.test.ts).
+ */
+export function nestFiles<T extends { path: string }>(files: T[], rules: NestRule[]): { top: T[]; kids: Map<string, T[]> } {
+  const name = (f: T): string => f.path.slice(f.path.lastIndexOf('/') + 1)
+  const byName = new Map(files.map((f) => [name(f).toLowerCase(), f]))
+  const taken = new Set<string>()
+  const kids = new Map<string, T[]>()
+  const order = [...files].sort((a, b) => name(a).length - name(b).length)
+  for (const p of order) {
+    if (taken.has(p.path)) continue
+    const n = name(p)
+    for (const r of rules) {
+      const m = r.parent.exec(n)
+      if (!m) continue
+      const capture = m[1] ?? ''
+      for (const c of r.children) {
+        const pattern = c.split('${capture}').join(capture)
+        const claim = (k: T | undefined): void => {
+          if (!k || k === p || taken.has(k.path) || kids.has(k.path)) return
+          taken.add(k.path)
+          kids.set(p.path, [...(kids.get(p.path) ?? []), k])
+        }
+        if (/[*?]/.test(pattern)) {
+          const re = new RegExp(`^${globBody(pattern)}$`, 'i')
+          for (const k of files) if (re.test(name(k))) claim(k)
+        } else claim(byName.get(pattern.toLowerCase()))
+      }
+    }
+  }
+  return { top: files.filter((f) => !taken.has(f.path)), kids }
 }

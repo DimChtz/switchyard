@@ -2,7 +2,9 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '../../../store/AppStore'
 import { useHover } from '../../../lib/useHover'
 import { fileIcon } from '../../../lib/fileLang'
-import { buildTree, allDirPaths, excludeMatcher, type TreeRow, type TreeItem } from '../../../lib/fileTree'
+import { buildTree, allDirPaths, excludeMatcher, nestFiles, parseNesting, DEFAULT_NESTING, type TreeRow, type TreeItem } from '../../../lib/fileTree'
+import { closeTab, groupsOf } from '../../../lib/wsLayout'
+import { useLayout, setLayout } from '../../../lib/wsStore'
 import { prefsFor } from '../../../lib/projectPrefs'
 import { FILE_DRAG_TYPE } from '../../../lib/dropPaths'
 import { Button, IconButton, Menu, TextInput, confirm, type MenuItem } from '../../../components/ui'
@@ -19,6 +21,9 @@ const parentOf = (rel: string): string => (rel.includes('/') ? rel.slice(0, rel.
 /** A row's height, and the tree's padding above the first. */
 const ROW_H = 24
 const PAD = 6
+
+// The nested groups shown, per task (kept while the workspace is closed).
+const openNestsOf = new Map<string, Set<string>>()
 
 // Cut or copied files and folders (absolute paths), kept across worktrees for Paste.
 let fileClipboard: { mode: 'copy' | 'cut'; items: { path: string; name: string }[] } | null = null
@@ -64,7 +69,33 @@ export function ExplorerView({ chrome, activePath }: { chrome: PanelChrome; acti
         .map((f) => ({ path: f.path, status: f.status, isDir: f.isDir, ignored: f.ignored, lazy: f.lazy })),
     [entries, pf.explorerShowIgnored, hide]
   )
-  const rows = useMemo(() => buildTree(allItems, collapsed, { compact: pf.explorerCompact, filter: filter ?? undefined }), [allItems, collapsed, pf.explorerCompact, filter])
+  // Settings → File nesting: related files under their main one (your rules, or the built-in ones).
+  const nestLines = (pf.explorerNestingRules ?? []).join('\n')
+  const nesting = useMemo(() => {
+    if (!pf.explorerNesting) return undefined
+    const mine = parseNesting(nestLines.split('\n'))
+    return mine.length ? mine : parseNesting(DEFAULT_NESTING)
+  }, [pf.explorerNesting, nestLines])
+  const [openNests, setOpenNests] = useState<Set<string>>(() => openNestsOf.get(task.id) ?? new Set())
+  const toggleNest = (path: string, open?: boolean): void =>
+    setOpenNests((prev) => {
+      const next = new Set(prev)
+      if (open ?? !next.has(path)) next.add(path)
+      else next.delete(path)
+      openNestsOf.set(task.id, next)
+      return next
+    })
+  /** A nested file's group, opened (to show it). */
+  const openNestOf = (path: string): void => {
+    if (!nesting) return
+    const dir = parentOf(path)
+    const siblings = allItems.filter((i) => !i.isDir && parentOf(i.path) === dir)
+    for (const [parent, kids] of nestFiles(siblings, nesting).kids) if (kids.some((k) => k.path === path)) toggleNest(parent, true)
+  }
+  const rows = useMemo(
+    () => buildTree(allItems, collapsed, { compact: pf.explorerCompact, filter: filter ?? undefined, nesting, openNests }),
+    [allItems, collapsed, pf.explorerCompact, filter, nesting, openNests]
+  )
 
   // Only the rows on screen are drawn (a folder can hold thousands of files).
   const [view, setView] = useState({ top: 0, height: 800 })
@@ -146,6 +177,7 @@ export function ExplorerView({ chrome, activePath }: { chrome: PanelChrome; acti
   /** Shows the file in the tree: its folders opened, the row selected and scrolled to. */
   const revealInTree = (path: string): void => {
     expandTo(parentOf(path))
+    openNestOf(path)
     setSelected(path)
     treeRef.current?.focus()
   }
@@ -169,6 +201,7 @@ export function ExplorerView({ chrome, activePath }: { chrome: PanelChrome; acti
   useEffect(() => {
     if (!pf.explorerFollow || !activePath || filter !== null || !entries?.some((e) => e.path === activePath)) return
     expandTo(parentOf(activePath))
+    openNestOf(activePath)
     setSelected(activePath)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activePath, pf.explorerFollow])
@@ -476,6 +509,8 @@ export function ExplorerView({ chrome, activePath }: { chrome: PanelChrome; acti
     let handled = true
     if (e.key === 'ArrowDown') move(rows[Math.min(rows.length - 1, i + 1)]?.path)
     else if (e.key === 'ArrowUp') move(rows[Math.max(0, i - 1)]?.path)
+    else if (e.key === 'ArrowRight' && row?.nest && !row.nest.open) toggleNest(row.path, true)
+    else if (e.key === 'ArrowLeft' && row?.nest?.open) toggleNest(row.path, false)
     else if (e.key === 'ArrowRight' && row?.isDir) {
       if (!row.open) toggleDir(row.path)
       else if (rows[i + 1]?.depth > row.depth) setSelected(rows[i + 1].path)
@@ -545,6 +580,7 @@ export function ExplorerView({ chrome, activePath }: { chrome: PanelChrome; acti
           <path d="M4.5 7h5" />
         </PanelIcon>
       </PanelHeader>
+      {pf.explorerOpenEditors ? <OpenEditors taskId={task.id} activePath={activePath} isDirty={files.isDirty} save={(path) => files.save(path)} /> : null}
       {filter !== null ? (
         <div style={{ flex: 'none', padding: '6px 8px 2px', display: 'flex', alignItems: 'center', gap: 6 }}>
           <TextInput
@@ -631,7 +667,8 @@ export function ExplorerView({ chrome, activePath }: { chrome: PanelChrome; acti
                     lead={l.r.path === selected}
                     dropTarget={!!dropDir && (l.r.path === dropDir || l.r.path.startsWith(`${dropDir}/`))}
                     treeFocused={treeFocused}
-                    collapsed={!l.r.open}
+                    collapsed={l.r.nest ? !l.r.nest.open : !l.r.open}
+                    onToggleNest={l.r.nest ? () => toggleNest(l.r.path) : undefined}
                     onClick={(e) => {
                       const r = l.r
                       if (e.shiftKey) return extendTo(r.path)
@@ -664,6 +701,95 @@ export function ExplorerView({ chrome, activePath }: { chrome: PanelChrome; acti
   )
 }
 
+/** Settings → Open Editors: the files open in this task's editor tabs - which group, unsaved or not; click to go, × to close. */
+function OpenEditors({ taskId, activePath, isDirty, save }: { taskId: string; activePath: string | null; isDirty: (path: string) => boolean; save: (path: string) => void }): React.JSX.Element | null {
+  const layout = useLayout(taskId)
+  const groups = groupsOf(layout.root)
+  const [folded, setFolded] = useState(() => {
+    try {
+      return localStorage.getItem('sy.openEditorsFolded') === '1'
+    } catch {
+      return false
+    }
+  })
+  const fold = (on: boolean): void => {
+    setFolded(on)
+    try {
+      localStorage.setItem('sy.openEditorsFolded', on ? '1' : '0')
+    } catch {
+      // ignore
+    }
+  }
+  const open = groups.flatMap((g, gi) => g.tabs.filter((t) => t.startsWith('file:')).map((t) => ({ path: t.slice(5), gid: g.g, gi, shown: g.a === t })))
+  const unsaved = [...new Set(open.map((o) => o.path))].filter(isDirty)
+  return (
+    <div style={{ flex: 'none', borderBottom: '1px solid var(--bd-1)', padding: '4px 6px 6px', maxHeight: '35%', overflow: 'auto' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, height: 22, padding: '0 4px', font: '500 10.5px var(--font-mono)', letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--t4)' }}>
+        <span onClick={() => fold(!folded)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 5, flex: 1 }}>
+          <svg width="8" height="8" viewBox="0 0 10 10" style={{ transform: folded ? 'rotate(0deg)' : 'rotate(90deg)', transition: 'transform .12s ease' }}>
+            <path d="M3.5 1.8 6.7 5 3.5 8.2" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          Open editors <span style={{ letterSpacing: 0 }}>{open.length || ''}</span>
+          {unsaved.length ? <span style={{ color: 'var(--c-amber)', letterSpacing: 0, textTransform: 'none' }}>· {unsaved.length} unsaved</span> : null}
+        </span>
+        {unsaved.length ? (
+          <span onClick={() => unsaved.forEach(save)} title="Save every unsaved file" style={{ cursor: 'pointer', color: 'var(--c-blue)', textTransform: 'none', letterSpacing: 0 }}>
+            save all
+          </span>
+        ) : null}
+        {open.length ? (
+          <span onClick={() => setLayout(taskId, (L) => open.reduce((acc, o) => closeTab(acc, `file:${o.path}`, o.gid), L))} title="Close every file tab (unsaved edits are kept)" style={{ cursor: 'pointer', textTransform: 'none', letterSpacing: 0 }}>
+            close all
+          </span>
+        ) : null}
+      </div>
+      {folded ? null : !open.length ? (
+        <div style={{ padding: '2px 8px 2px 18px', font: '12px var(--font-ui)', color: 'var(--t5)' }}>No files open.</div>
+      ) : (
+        open.map((o) => <OpenEditorRow key={`${o.gid}:${o.path}`} o={o} many={groups.length > 1} active={o.path === activePath} dirty={isDirty(o.path)} taskId={taskId} />)
+      )}
+    </div>
+  )
+}
+
+function OpenEditorRow({ o, many, active, dirty, taskId }: { o: { path: string; gid: string; gi: number; shown: boolean }; many: boolean; active: boolean; dirty: boolean; taskId: string }): React.JSX.Element {
+  const [hover, hoverProps] = useHover()
+  const name = o.path.split('/').pop() ?? o.path
+  const dir = o.path.includes('/') ? o.path.slice(0, o.path.lastIndexOf('/')) : ''
+  const [ic, icC] = fileIcon(name)
+  return (
+    <div
+      {...hoverProps}
+      onClick={() => wsOpen(taskId, `file:${o.path}`, o.gid)}
+      title={o.path}
+      style={{ display: 'flex', alignItems: 'center', gap: 6, height: 22, padding: '0 6px 0 18px', borderRadius: 4, cursor: 'pointer', font: '12.5px var(--font-ui)', background: active ? 'color-mix(in srgb, var(--c-blue) 10%, transparent)' : hover ? 'var(--bg-menu)' : 'transparent' }}
+    >
+      <span style={{ width: 16, flex: 'none', textAlign: 'center', font: '700 8px/1 var(--font-mono)', color: icC }}>{ic}</span>
+      <span style={{ color: active ? 'var(--t1)' : 'var(--t2)', whiteSpace: 'nowrap' }}>{name}</span>
+      <span style={{ flex: 1, minWidth: 0, font: '11px var(--font-mono)', color: 'var(--t5)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{dir}</span>
+      {many ? <span title={`In editor group ${o.gi + 1}`} style={{ font: '10.5px var(--font-mono)', color: 'var(--t4)' }}>{o.gi + 1}</span> : null}
+      {hover ? (
+        <span
+          onClick={(e) => {
+            e.stopPropagation()
+            setLayout(taskId, (L) => closeTab(L, `file:${o.path}`, o.gid))
+          }}
+          title={dirty ? 'Close (its unsaved edits are kept)' : 'Close'}
+          style={{ width: 14, textAlign: 'center', color: 'var(--t3)' }}
+        >
+          ×
+        </span>
+      ) : dirty ? (
+        <span title="Not saved" style={{ width: 14, textAlign: 'center', color: 'var(--c-amber)' }}>
+          ●
+        </span>
+      ) : (
+        <span style={{ width: 14 }} />
+      )}
+    </div>
+  )
+}
+
 function TreeRowView({
   row,
   active,
@@ -673,6 +799,7 @@ function TreeRowView({
   treeFocused,
   collapsed,
   onClick,
+  onToggleNest,
   onCreateFile,
   onCreateFolder,
   onContextMenu,
@@ -690,6 +817,8 @@ function TreeRowView({
   treeFocused: boolean
   collapsed: boolean
   onClick: (e: React.MouseEvent) => void
+  /** A file with others nested under it: its arrow opens and closes them. */
+  onToggleNest?: () => void
   onCreateFile?: () => void
   onCreateFolder?: () => void
   onContextMenu?: (e: React.MouseEvent) => void
@@ -746,8 +875,19 @@ function TreeRowView({
           <span style={{ width: 1, background: 'var(--bd-1)' }} />
         </span>
       ))}
-      <span style={{ width: 16, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--t3)' }}>
-        {row.isDir ? (
+      <span
+        onClick={
+          onToggleNest
+            ? (e) => {
+                e.stopPropagation()
+                onToggleNest()
+              }
+            : undefined
+        }
+        title={row.nest ? `${row.nest.count} related file${row.nest.count > 1 ? 's' : ''} nested here` : undefined}
+        style={{ width: 16, flex: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--t3)' }}
+      >
+        {row.isDir || row.nest ? (
           <svg width="10" height="10" viewBox="0 0 10 10" style={{ transform: collapsed ? 'rotate(0deg)' : 'rotate(90deg)', transition: 'transform .12s ease' }}>
             <path d="M3.5 1.8 6.7 5 3.5 8.2" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
@@ -802,6 +942,8 @@ function TreeRowView({
       ) : null}
       {row.isDir ? (
         row.dirHasChanges ? <span style={{ color: 'var(--c-amber)', font: '500 11px var(--font-mono)' }}>●</span> : null
+      ) : !statusChar && row.nest?.changed && !row.nest.open ? (
+        <span title="A file nested here has changes" style={{ color: 'var(--c-amber)', font: '500 11px var(--font-mono)' }}>●</span>
       ) : statusChar ? (
         <span style={{ color: statusChar === 'A' ? 'var(--c-green)' : statusChar === 'D' ? 'var(--c-red)' : 'var(--c-amber)', font: '500 11px var(--font-mono)', marginLeft: 6 }}>{statusChar}</span>
       ) : null}

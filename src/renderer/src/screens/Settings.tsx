@@ -668,6 +668,18 @@ function GlobalSettings({ section, scope, onScope }: { section: string; scope: P
           {tog('Compact folders', 'A folder holding only one folder shares its row - “app/models/concerns”', 'explorerCompact')}
           {tog('Show ignored files', 'What git ignores, dimmed - folders such as node_modules or tmp list their files when opened', 'explorerShowIgnored')}
           {tog('Follow the open file', 'The file in the editor is selected in the tree, its folders opened', 'explorerFollow')}
+          {tog('Open editors', "The files open in this task's editor tabs, listed above the tree - unsaved ones marked, any of them a click away", 'explorerOpenEditors')}
+          {tog('Nest related files', 'Lock files under their manifest (Gemfile.lock under Gemfile), tests and styles under their source - as VS Code’s file nesting', 'explorerNesting')}
+          <Row k="explorerNestingRules" label="Nesting rules" sub="One per line: a file, then what nests under it - ${capture} is what the file's * matched. Empty: the built-in ones (lock files, tests, styles, source maps)">
+            <UITextArea
+              mono
+              rows={3}
+              value={(pf.explorerNestingRules ?? []).join('\n')}
+              placeholder={'Gemfile: Gemfile.lock, .ruby-version\n*.ts: ${capture}.test.ts, ${capture}.d.ts'}
+              onChange={(e) => set({ explorerNestingRules: e.target.value ? e.target.value.split('\n') : [] })}
+              style={{ fontSize: 12 }}
+            />
+          </Row>
           <Row k="explorerExclude" label="Hide" sub="One per line: a name anywhere (tmp, *.log) or a path from the top (public/assets/**)">
             <UITextArea
               mono

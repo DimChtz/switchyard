@@ -876,6 +876,12 @@ export interface Prefs {
   explorerShowIgnored: boolean
   /** The explorer: the file open in the editor is selected in the tree, its folders opened. */
   explorerFollow: boolean
+  /** The explorer: related files nested under their main one (Gemfile.lock under Gemfile). */
+  explorerNesting: boolean
+  /** File nesting's rules, "parent: child, child" lines ("*.ts: ${capture}.test.ts"); none: the built-in ones. */
+  explorerNestingRules: string[]
+  /** The explorer: the files open in this task's editor tabs, listed above its tree. */
+  explorerOpenEditors: boolean
   /** The explorer: hidden files and folders - names or globs ("*.log", "tmp", "public/assets/**"). */
   explorerExclude: string[]
   /** Fetch every project's origin this often (minutes) to say when its base branch is behind; 0: never. */
