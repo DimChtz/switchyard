@@ -1,4 +1,5 @@
 import type { AgentDef, BoardColumn, Prefs, ProjectSettingKey } from './types'
+import { forAgent } from './mdImages'
 
 export const AGENTS: AgentDef[] = [
   { kind: 'claude', name: 'Claude Code', short: 'claude', bin: 'claude', note: 'Anthropic · general purpose', resumeArgs: ['--continue'], tools: 'claude' },
@@ -234,7 +235,8 @@ export function firstMessage(template: string | undefined, t: { key: string; tit
   return (template || DEFAULT_MESSAGE_TEMPLATE)
     .replace(/\{key\}/g, t.key)
     .replace(/\{title\}/g, t.title)
-    .replace(/\{desc\}/g, t.desc || t.title)
+    // (Pictures in the description: files for the agent to open. A function, so "$" in it stays as it is.)
+    .replace(/\{desc\}/g, () => forAgent(t.desc || t.title))
     .replace(/\{branch\}/g, branch)
 }
 

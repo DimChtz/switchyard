@@ -8,6 +8,7 @@ import { errText } from '../../lib/errors'
 import { keyLabel } from '../../lib/keys'
 import { useHover } from '../../lib/useHover'
 import { Menu, type MenuAnchor, type MenuItem } from '../ui'
+import { ImageIcon } from '../ImageIcon'
 import { refreshLive, type LiveLinks } from './livePreview'
 import { applyEdit, liveEditing, liveReading } from './liveSetup'
 import { indent, prefixLines, wrapWith, type MdEdit } from '../../lib/mdEdit'
@@ -203,7 +204,7 @@ export function NoteEditor({
   }
   const wrap = (l: string, r: string, placeholder: string): void => edit(wrapWith(l, r, placeholder))
   const linePrefix = (pre: string): void => edit(prefixLines(pre))
-  const tools: [string, string, string, () => void][] = [
+  const tools: [React.ReactNode, string, string, () => void][] = [
     ['H', 'Heading', '600 12.5px var(--font-ui)', () => linePrefix('## ')],
     ['B', `Bold ${keyLabel('⌘B')}`, '700 12.5px var(--font-ui)', () => wrap('**', '**', 'bold')],
     ['I', `Italic ${keyLabel('⌘I')}`, 'italic 500 13px var(--font-ui)', () => wrap('*', '*', 'italic')],
@@ -212,7 +213,7 @@ export function NoteEditor({
     ['[ ]', 'Checklist', `500 11px ${MONO}`, () => linePrefix('- [ ] ')],
     ['“', 'Quote', '600 16px var(--font-ui)', () => linePrefix('> ')],
     ['[[ ]]', 'Link another note', `500 11px ${MONO}`, () => wrap('[[', ']]', 'Note title')],
-    ['▣', 'Image - or paste a screenshot, or drop image files in', '500 14px var(--font-ui)', () => pickRef.current?.click()]
+    [<ImageIcon key="img" />, 'Image - or paste a screenshot, or drop image files in', '500 14px var(--font-ui)', () => pickRef.current?.click()]
   ]
   const onTextKey = (e: React.KeyboardEvent<HTMLTextAreaElement>): void => {
     const mod = e.metaKey || e.ctrlKey
@@ -388,7 +389,7 @@ export function NoteEditor({
         <div style={{ flex: 'none', display: 'flex', alignItems: 'center', gap: 2, padding: '6px 22px 8px' }}>
           {tools.map(([l, tip, font, fn]) => (
             <HoverBox
-              key={l}
+              key={tip}
               onMouseDown={(e) => e.preventDefault()}
               onClick={fn}
               title={tip}

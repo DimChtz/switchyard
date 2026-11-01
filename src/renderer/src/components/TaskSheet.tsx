@@ -197,8 +197,10 @@ function Sheet({ task }: { task: Task }): React.JSX.Element {
               autoFocus
               onSubmit={() => close()}
               links={links}
-              placeholder="What should the agent build? Context, constraints, a - [ ] checklist of what done means…"
-              hint="↵ continues lists"
+              placeholder="What should the agent build? Context, constraints, a - [ ] checklist of what done means… Paste a screenshot, too."
+              hint="↵ continues lists · paste images"
+              // Kept where every agent can open them (the data folder's attachments); the agent gets their paths.
+              onImage={(s) => window.api.attachments.save(s.dataUrl).then((p) => p.replace(/\\/g, '/'))}
             />
           </div>
           {offered.length ? (

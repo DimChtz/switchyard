@@ -48,6 +48,8 @@ export function plainText(text: string): string {
   return text
     .replace(/```[\s\S]*?```/g, ' ')
     .replace(/\[\[([^\]]+)\]\]/g, (_m, inner: string) => wikiLink(inner).label)
+    // A picture by its name (not "!name"), then a link by its text.
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, (_m, alt: string) => (alt ? `[image: ${alt}]` : '[image]'))
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
     .replace(/^\s*[-*]\s\[[ xX]\]\s?/gm, '')
     // Tables: their cells, not their pipes and dashes.

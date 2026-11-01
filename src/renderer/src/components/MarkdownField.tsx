@@ -9,6 +9,7 @@ import { prefixLines, wrapWith, type MdEdit } from '../lib/mdEdit'
 import { refreshLive, type LiveLinks } from './notes/livePreview'
 import { applyEdit, liveEditing, liveReading } from './notes/liveSetup'
 import { HoverBox } from './notes/NoteEditor'
+import { ImageIcon } from './ImageIcon'
 
 const MONO = 'var(--font-mono)'
 
@@ -53,6 +54,47 @@ function useRefresh(view: React.RefObject<EditorView | null>): void {
   }, [state.notes, state.tasks, view])
 }
 
+/** An image put into some Markdown: a file (dropped, picked) or a screenshot's data (pasted). */
+export interface ImageSource {
+  name: string
+  /** Its data, as a data: URL (always there). */
+  dataUrl: string
+  /** The file on disk, when it is one. */
+  path: string | null
+}
+
+const IMAGE_FILE = /\.(png|jpe?g|gif|webp|svg|bmp|avif)$/i
+/** The images among some files (a paste's, a drop's, a picker's). */
+export const imageFiles = (files: FileList | File[]): File[] => [...files].filter((f) => f.type.startsWith('image/') || IMAGE_FILE.test(f.name))
+
+/** Files read for putting into Markdown (their data; a file's path too). */
+export async function readImages(files: File[]): Promise<ImageSource[]> {
+  return Promise.all(
+    files.map(async (f) => ({
+      name: f.name || 'pasted.png',
+      path: window.api.fs.pathForFile(f) || null,
+      dataUrl: await new Promise<string>((ok, no) => {
+        const r = new FileReader()
+        r.onload = () => ok(String(r.result))
+        r.onerror = () => no(r.error)
+        r.readAsDataURL(f)
+      })
+    }))
+  )
+}
+
+/** The Markdown for images (`refs`: where each is kept), on a line of its own - the cursor on the next. */
+export function imagesEdit(sources: ImageSource[], refs: string[]): MdEdit {
+  const md = refs.map((ref, i) => `![${sources[i].name.replace(/\.[^.]+$/, '').replace(/[[\]]/g, '')}](${encodeURI(ref)})`).join('\n')
+  return (v, a, b) => {
+    const before = a > 0 && v[a - 1] !== '\n' ? '\n' : ''
+    const after = v[b] === '\n' ? '' : '\n'
+    const ins = `${before}${md}${after}`
+    const at = a + before.length + md.length + 1
+    return [v.slice(0, a) + ins + v.slice(b), at, at]
+  }
+}
+
 const TOOLS: [string, string, string, MdEdit][] = [
   ['H', 'Heading', '600 12.5px var(--font-ui)', prefixLines('## ')],
   ['B', `Bold ${keyLabel('⌘B')}`, '700 12.5px var(--font-ui)', wrapWith('**', '**', 'bold')],
@@ -76,7 +118,8 @@ export function MarkdownField({
   autoFocus,
   onSubmit,
   links,
-  hint
+  hint,
+  onImage
 }: {
   value: string
   onChange: (v: string) => void
@@ -86,8 +129,28 @@ export function MarkdownField({
   links: { current: LiveLinks }
   /** On the right of the formatting bar. */
   hint?: React.ReactNode
+  /** Images can go in (pasted, dropped, picked): keeps one, and says where (its path or URL, for the Markdown). */
+  onImage?: (s: ImageSource) => Promise<string>
 }): React.JSX.Element {
   const viewRef = useRef<EditorView | null>(null)
+  const pickRef = useRef<HTMLInputElement>(null)
+  const [adding, setAdding] = React.useState(false)
+  const { dispatch } = useAppStore()
+  const addImages = async (files: File[]): Promise<void> => {
+    if (!onImage || !files.length) return
+    setAdding(true)
+    try {
+      const sources = await readImages(files)
+      const refs: string[] = []
+      for (const s of sources) refs.push(await onImage(s))
+      edit.current(imagesEdit(sources, refs))
+      viewRef.current?.focus()
+    } catch (err) {
+      dispatch({ type: 'TOAST', text: `Could not add the image: ${err instanceof Error ? err.message : String(err)}` })
+    } finally {
+      setAdding(false)
+    }
+  }
   const edit = useRef((fn: MdEdit) => viewRef.current && applyEdit(viewRef.current, fn))
   const submit = useRef<(() => void) | null>(onSubmit ?? null)
   submit.current = onSubmit ?? null
@@ -109,10 +172,57 @@ export function MarkdownField({
             {l}
           </HoverBox>
         ))}
+        {onImage ? (
+          <>
+            <HoverBox
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => pickRef.current?.click()}
+              title="Image - or paste a screenshot, or drop image files in"
+              style={{ minWidth: 26, height: 24, padding: '0 5px', boxSizing: 'border-box', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--t-icon)', cursor: 'pointer', userSelect: 'none' }}
+              hover={{ background: 'var(--bg-hover)', color: 'var(--t1)' }}
+            >
+              <ImageIcon />
+            </HoverBox>
+            <input
+              ref={pickRef}
+              type="file"
+              accept="image/*"
+              multiple
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                const files = imageFiles(e.target.files ?? [])
+                e.target.value = ''
+                void addImages(files)
+              }}
+            />
+          </>
+        ) : null}
         <span style={{ flex: 1 }} />
+        {adding ? <span style={{ font: `11px ${MONO}`, color: 'var(--t4)', paddingRight: 8 }}>Adding the image…</span> : null}
         {hint ? <span style={{ font: `11px ${MONO}`, color: 'var(--t5)', whiteSpace: 'nowrap', paddingRight: 5 }}>{hint}</span> : null}
       </div>
       <div
+        onPasteCapture={(e) => {
+          const files = onImage ? imageFiles(e.clipboardData.files) : []
+          if (!files.length) return
+          e.preventDefault()
+          e.stopPropagation()
+          void addImages(files)
+        }}
+        onDragOverCapture={(e) => {
+          if (onImage && e.dataTransfer.types.includes('Files')) e.preventDefault()
+        }}
+        onDropCapture={(e) => {
+          const files = onImage ? imageFiles(e.dataTransfer.files) : []
+          if (!files.length) return
+          e.preventDefault()
+          e.stopPropagation()
+          // (Where it was dropped.)
+          const view = viewRef.current
+          const at = view?.posAtCoords({ x: e.clientX, y: e.clientY })
+          if (view && at != null) view.dispatch({ selection: { anchor: at } })
+          void addImages(files)
+        }}
         onMouseDown={(e) => {
           // Below the text: put the cursor at the end.
           const view = viewRef.current

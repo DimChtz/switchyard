@@ -41,6 +41,8 @@ describe('splitNote / joinNote', () => {
 describe('plainText', () => {
   it('drops Markdown marks for snippets', () => {
     expect(plainText('[[Plan|the plan]] and [[Plan#Risks]]')).toBe('the plan and Plan › Risks')
+    // A picture by its name, not "!name".
+    expect(plainText('See ![the button](C:/a/b.png) and ![](x.png), [docs](https://x.io)')).toBe('See [image: the button] and [image], docs')
     expect(plainText('| A | B |\n|---|:-:|\n| 1 | [[N|two]] |')).toBe('A B 1 two')
     expect(linksTo('see [[plan#x|y]]', 'Plan')).toBe(true)
     expect(linksTo('see [[planning]]', 'Plan')).toBe(false)
