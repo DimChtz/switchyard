@@ -70,6 +70,7 @@ export const IPC = {
   gitStashPush: 'git:stashPush',
   gitStashApply: 'git:stashApply',
   gitStashDrop: 'git:stashDrop',
+  gitStashRestoreFile: 'git:stashRestoreFile',
   gitRemoteFileUrl: 'git:remoteFileUrl',
   gitRemoteCommitUrl: 'git:remoteCommitUrl',
   gitBlame: 'git:blame',

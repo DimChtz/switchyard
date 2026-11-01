@@ -21,6 +21,8 @@ export function ChangesView({ chrome, activeDiff, activeConflict, root }: { chro
   const ch = useChanges()
   const { task, files } = ch
   const [menu, setMenu] = useState<{ x: number; y: number; file: FileDiff } | null>(null)
+  // Stash's ▾: stash and keep the changes (a copy put aside).
+  const [stashMenu, setStashMenu] = useState<{ x: number; y: number } | null>(null)
   const [filter, setFilter] = useState('')
   const [folded, setFolded] = useState<Set<string>>(new Set())
   const totalAdd = (files ?? []).reduce((n, f) => n + f.added, 0)
@@ -46,6 +48,7 @@ export function ChangesView({ chrome, activeDiff, activeConflict, root }: { chro
     { label: ch.viewed[f.path] ? 'Mark as not viewed' : 'Mark viewed', separatorBefore: true, onClick: () => ch.toggleViewed(f.path) },
     ...(ch.openSent(f.path) ? [{ label: `Resolve all ${ch.openSent(f.path)} comments`, onClick: () => ch.resolveAll(f.path) }] : []),
     ...(f.uncommitted ? [{ label: 'Discard uncommitted changes…', danger: true, onClick: () => ch.discard(f.path) }] : []),
+    ...(ch.shownStash ? [{ label: f.status === 'deleted' ? 'Delete it, as the stash has it' : 'Bring this file back from the stash', onClick: () => ch.restoreStashFile(f.path) }] : []),
     ...(!commitScope && ch.scope !== 'uncommitted'
       ? [{ label: ch.scope === 'branch' ? `Undo all changes (back to ${ch.base})…` : 'Undo changes not pushed…', danger: true, onClick: () => ch.revertFile(f) }]
       : []),
@@ -75,14 +78,18 @@ export function ChangesView({ chrome, activeDiff, activeConflict, root }: { chro
 
   // What the files are compared with, in so many words.
   const branch = task.branch ? `⎇ ${task.branch}` : 'The worktree'
-  const against = commitScope
+  const against = ch.shownStash
+    ? `What the stash holds (made on ${ch.shownStash.branch || 'a branch'}, ${timeAgo(ch.shownStash.at)} ago)`
+    : commitScope
     ? `What commit ${commitScope.slice(0, 7)} changed`
     : ch.scope === 'branch'
       ? `${branch} vs ${ch.base}`
       : ch.scope === 'unpushed'
         ? `${branch} vs origin`
         : `${branch} vs its last commit`
-  const empty = commitScope
+  const empty = ch.shownStash
+    ? 'This stash holds nothing to show.'
+    : commitScope
     ? 'This commit changed nothing to show.'
     : ch.scope === 'branch'
       ? `No changes vs ${ch.base}.`
@@ -113,7 +120,25 @@ export function ChangesView({ chrome, activeDiff, activeConflict, root }: { chro
           </div>
         ) : null}
         <div style={{ padding: '0 14px 8px' }}>
-          {commitScope ? (
+          {ch.shownStash ? (
+            <div
+              style={{ display: 'flex', alignItems: 'center', gap: 6, height: 26, padding: '0 4px 0 10px', borderRadius: 6, border: '1px solid color-mix(in srgb, var(--c-amber) 45%, transparent)', background: 'color-mix(in srgb, var(--c-amber) 8%, transparent)', font: '12px var(--font-mono)' }}
+            >
+              <span style={{ color: 'var(--c-amber)' }}>⧉</span>
+              <span title={ch.shownStash.message} style={{ flex: 1, minWidth: 0, color: 'var(--t2)', fontFamily: 'var(--font-ui)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {ch.shownStash.message}
+              </span>
+              <Button size="xs" onClick={() => ch.applyStash(ch.shownStash!, true)} title="Bring all its changes back and delete the stash">
+                Restore
+              </Button>
+              <Button size="xs" onClick={() => ch.applyStash(ch.shownStash!, false)} title="Bring all its changes back and keep the stash">
+                Apply
+              </Button>
+              <Button size="xs" onClick={() => ch.setScope('uncommitted')} title="Back to the changes">
+                ✕
+              </Button>
+            </div>
+          ) : commitScope ? (
             <div
               style={{ display: 'flex', alignItems: 'center', gap: 8, height: 26, padding: '0 4px 0 10px', borderRadius: 6, border: '1px solid color-mix(in srgb, var(--c-blue) 45%, transparent)', background: 'color-mix(in srgb, var(--c-blue) 8%, transparent)', font: '12px var(--font-mono)' }}
             >
@@ -223,10 +248,21 @@ export function ChangesView({ chrome, activeDiff, activeConflict, root }: { chro
               ) : null}
               <Button
                 disabled={ch.committing || picked.length === 0 || someLines}
-                onClick={ch.stash}
+                onClick={() => ch.stash()}
                 title={someLines ? 'Stash takes whole files - tick files, not lines' : picked.length < uncommitted.length ? 'Put the ticked files aside, uncommitted (the message box names it)' : 'Put the uncommitted changes aside (the message box names it) - bring them back from Stashed'}
               >
                 Stash
+              </Button>
+              <Button
+                disabled={ch.committing || picked.length === 0 || someLines}
+                onClick={(e) => {
+                  const r = e.currentTarget.getBoundingClientRect()
+                  setStashMenu({ x: r.left, y: r.bottom + 4 })
+                }}
+                title="More ways to stash"
+                style={{ padding: '0 6px' }}
+              >
+                ▾
               </Button>
             </div>
           </div>
@@ -286,11 +322,29 @@ export function ChangesView({ chrome, activeDiff, activeConflict, root }: { chro
             )
           )}
         </div>
-        {ch.stashes.length ? (
-          <div style={{ flex: 'none', borderTop: '1px solid var(--bd-1)', padding: '10px 8px 6px', display: 'flex', flexDirection: 'column', gap: 1, maxHeight: '25%', overflow: 'auto' }}>
-            <div style={{ ...SECTION, margin: '0 6px 4px' }}>Stashed</div>
+        {ch.stashes.length || ch.allStashes ? (
+          <div style={{ flex: 'none', borderTop: '1px solid var(--bd-1)', padding: '10px 8px 6px', display: 'flex', flexDirection: 'column', gap: 1, maxHeight: '30%', overflow: 'auto' }}>
+            <div style={{ ...SECTION, margin: '0 6px 4px', display: 'flex' }}>
+              <span style={{ flex: 1 }}>Stashed</span>
+              <span
+                onClick={() => ch.setAllStashes(!ch.allStashes)}
+                title={ch.allStashes ? "Only this task's branch's stashes" : "Every branch's stashes - bring another's changes here"}
+                style={{ textTransform: 'none', letterSpacing: 0, fontWeight: 400, color: 'var(--c-blue)', cursor: 'pointer' }}
+              >
+                {ch.allStashes ? 'this branch' : 'all branches'}
+              </span>
+            </div>
+            {!ch.stashes.length ? <div style={{ padding: '2px 6px', font: '12px var(--font-ui)', color: 'var(--t4)' }}>No stashes in this repository.</div> : null}
             {ch.stashes.map((s) => (
-              <StashRow key={s.ref} s={s} onApply={(pop) => ch.applyStash(s, pop)} onDrop={() => ch.dropStash(s)} />
+              <StashRow
+                key={s.ref}
+                s={s}
+                active={ch.shownStash?.sha === s.sha}
+                otherBranch={ch.allStashes && !!s.branch && s.branch !== task.branch && s.branch !== task.branch?.split('/').pop()}
+                onOpen={() => ch.showStash(s)}
+                onApply={(pop) => ch.applyStash(s, pop)}
+                onDrop={() => ch.dropStash(s)}
+              />
             ))}
           </div>
         ) : null}
@@ -324,6 +378,16 @@ export function ChangesView({ chrome, activeDiff, activeConflict, root }: { chro
         ) : null}
       </div>
       {menu ? <Menu anchor={menu} items={fileMenu(menu.file)} onClose={() => setMenu(null)} /> : null}
+      {stashMenu ? (
+        <Menu
+          anchor={stashMenu}
+          items={[
+            { label: 'Stash (put aside)', onClick: () => ch.stash() },
+            { label: 'Stash and keep the changes', onClick: () => ch.stash(true) }
+          ]}
+          onClose={() => setStashMenu(null)}
+        />
+      ) : null}
     </>
   )
 }
@@ -414,8 +478,23 @@ function DirRow({ dir, count, folded, onClick }: { dir: string; count: number; f
   )
 }
 
-/** A stash: what it is, and bringing it back (applying keeps it; Restore drops it after) or deleting it. */
-function StashRow({ s, onApply, onDrop }: { s: StashEntry; onApply: (pop: boolean) => void; onDrop: () => void }): React.JSX.Element {
+/** A stash: what it is (clicked: what's in it), and bringing it back (applying keeps it; Restore drops it after) or deleting it. */
+function StashRow({
+  s,
+  active,
+  otherBranch,
+  onOpen,
+  onApply,
+  onDrop
+}: {
+  s: StashEntry
+  active: boolean
+  /** Made on another branch (all branches shown). */
+  otherBranch: boolean
+  onOpen: () => void
+  onApply: (pop: boolean) => void
+  onDrop: () => void
+}): React.JSX.Element {
   const [hover, hoverProps] = useHover()
   const link = (label: string, title: string, on: () => void, danger = false): React.JSX.Element => (
     <span
@@ -432,11 +511,15 @@ function StashRow({ s, onApply, onDrop }: { s: StashEntry; onApply: (pop: boolea
   return (
     <div
       {...hoverProps}
-      title={`${s.message}\n${s.files.join('\n')}`}
-      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 6px', borderRadius: 4, font: '12px var(--font-mono)', whiteSpace: 'nowrap', background: hover ? 'var(--bg-menu)' : 'transparent' }}
+      onClick={onOpen}
+      title={`${s.message}${s.branch ? ` (on ${s.branch})` : ''}\n${s.files.join('\n')}\n\nClick to see what's in it`}
+      style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '3px 6px', borderRadius: 4, font: '12px var(--font-mono)', whiteSpace: 'nowrap', cursor: 'pointer', background: active ? 'color-mix(in srgb, var(--c-amber) 12%, transparent)' : hover ? 'var(--bg-menu)' : 'transparent' }}
     >
       <span style={{ color: 'var(--c-amber)' }}>⧉</span>
-      <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--t2)', fontFamily: 'var(--font-ui)' }}>{s.message}</span>
+      <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--t2)', fontFamily: 'var(--font-ui)' }}>
+        {s.message}
+        {otherBranch ? <span style={{ color: 'var(--t4)', fontFamily: 'var(--font-mono)', fontSize: 11 }}> · {s.branch}</span> : null}
+      </span>
       {hover ? (
         <span style={{ display: 'flex', gap: 8, fontSize: 11.5 }}>
           {link('restore', 'Bring the changes back and delete the stash', () => onApply(true))}

@@ -1038,7 +1038,8 @@ export interface FileDiff {
  * (like the pull request), what isn't on origin's copy of the branch yet, or just what isn't committed.
  * A commit's id: only what that commit changed.
  */
-export type DiffScope = 'branch' | 'unpushed' | 'uncommitted' | { commit: string }
+/** What Changes compares: the branch, what isn't pushed or committed - or one commit (`stash`: a stash, its new files too). */
+export type DiffScope = 'branch' | 'unpushed' | 'uncommitted' | { commit: string; stash?: boolean }
 
 /** An open pull request of a project's repository (the PR dashboard). */
 export interface OpenPr {
@@ -1068,6 +1069,8 @@ export interface DepShare {
 
 /** Changes put aside with git stash. */
 export interface StashEntry {
+  /** Its commit - which stays the same as stashes come and go (to show it by). */
+  sha: string
   /** "stash@{0}": which one, for applying or dropping it (it shifts as stashes come and go). */
   ref: string
   /** The branch it was made on. */

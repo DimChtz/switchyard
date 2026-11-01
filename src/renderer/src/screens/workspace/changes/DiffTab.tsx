@@ -556,6 +556,11 @@ export function DiffTab({ path, gid }: { path: string; gid: string }): React.JSX
             Discard…
           </Button>
         ) : null}
+        {file && ch.shownStash ? (
+          <Button size="xs" onClick={() => ch.restoreStashFile(path)} title="This file as the stash has it, into the worktree (uncommitted) - the stash stays">
+            Bring back from stash
+          </Button>
+        ) : null}
         {ch.openSent(path) > 1 ? (
           <Button size="xs" onClick={() => ch.resolveAll(path)} title="Fold away every comment sent on this file">
             Resolve all {ch.openSent(path)}
@@ -595,7 +600,7 @@ export function DiffTab({ path, gid }: { path: string; gid: string }): React.JSX
           <div style={{ padding: 40, display: 'flex', flexDirection: 'column', gap: 10, font: '13px var(--font-ui)', color: 'var(--t3)', alignItems: 'flex-start' }}>
             <span style={{ color: 'var(--t2)' }}>
               {typeof ch.scope === 'object'
-                ? `${path.split('/').pop()} isn’t in this commit.`
+                ? `${path.split('/').pop()} isn’t in this ${ch.shownStash ? 'stash' : 'commit'}.`
                 : ch.scope === 'branch'
                   ? `No changes to ${path.split('/').pop()} vs ${ch.base} any more.`
                   : `No ${ch.scope === 'unpushed' ? 'unpushed' : 'uncommitted'} changes to ${path.split('/').pop()}.`}

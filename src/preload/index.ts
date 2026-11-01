@@ -234,9 +234,12 @@ const api = {
     openPrs: (repoPath: string): Promise<OpenPr[]> => ipcRenderer.invoke(IPC.gitOpenPrs, repoPath),
     /** The stashes - only a branch's, given one. */
     stashList: (worktreePath: string, branch?: string): Promise<StashEntry[]> => ipcRenderer.invoke(IPC.gitStashList, worktreePath, branch),
-    stashPush: (worktreePath: string, message: string, paths?: string[]): Promise<void> => ipcRenderer.invoke(IPC.gitStashPush, worktreePath, message, paths),
+    /** `keep`: the changes stay in the worktree too (a copy put aside). */
+    stashPush: (worktreePath: string, message: string, paths?: string[], keep?: boolean): Promise<void> => ipcRenderer.invoke(IPC.gitStashPush, worktreePath, message, paths, keep),
     stashApply: (worktreePath: string, ref: string, pop: boolean): Promise<void> => ipcRenderer.invoke(IPC.gitStashApply, worktreePath, ref, pop),
     stashDrop: (worktreePath: string, ref: string): Promise<void> => ipcRenderer.invoke(IPC.gitStashDrop, worktreePath, ref),
+    /** One file of a stash (by its commit) back into the worktree, as the stash has it. */
+    stashRestoreFile: (worktreePath: string, sha: string, path: string): Promise<void> => ipcRenderer.invoke(IPC.gitStashRestoreFile, worktreePath, sha, path),
     fileHistory: (worktreePath: string, path: string): Promise<FileCommit[]> => ipcRenderer.invoke(IPC.gitFileHistory, worktreePath, path),
     blame: (worktreePath: string, path: string): Promise<Blame> => ipcRenderer.invoke(IPC.gitBlame, worktreePath, path),
     /** A file's link on origin's website (at the branch, or the commit for a permalink), and why it might not open yet. */

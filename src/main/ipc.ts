@@ -53,7 +53,7 @@ type NoteLink = { projectId: string | null; taskId: string | null }
 function diffScope(s: unknown): DiffScope {
   if (s === 'unpushed' || s === 'uncommitted') return s
   const commit = (s as { commit?: unknown } | null)?.commit
-  if (typeof commit === 'string' && /^[0-9a-f]{4,64}$/i.test(commit)) return { commit }
+  if (typeof commit === 'string' && /^[0-9a-f]{4,64}$/i.test(commit)) return (s as { stash?: unknown }).stash === true ? { commit, stash: true } : { commit }
   return 'branch'
 }
 
@@ -211,9 +211,10 @@ export function registerIpcHandlers(): void {
   )
   ipcMain.handle(IPC.gitOpenPrs, (_e, repoPath: string) => git.openPrs(repoPath))
   ipcMain.handle(IPC.gitStashList, (_e, worktreePath: string, branch?: string) => git.stashList(worktreePath, branch || undefined))
-  ipcMain.handle(IPC.gitStashPush, (_e, worktreePath: string, message: string, paths?: string[]) => git.stashPush(worktreePath, message, paths))
+  ipcMain.handle(IPC.gitStashPush, (_e, worktreePath: string, message: string, paths?: string[], keep?: boolean) => git.stashPush(worktreePath, message, paths, !!keep))
   ipcMain.handle(IPC.gitStashApply, (_e, worktreePath: string, ref: string, pop: boolean) => git.stashApply(worktreePath, ref, !!pop))
   ipcMain.handle(IPC.gitStashDrop, (_e, worktreePath: string, ref: string) => git.stashDrop(worktreePath, ref))
+  ipcMain.handle(IPC.gitStashRestoreFile, (_e, worktreePath: string, sha: string, path: string) => git.stashRestoreFile(worktreePath, sha, path))
   ipcMain.handle(IPC.gitFileHistory, (_e, worktreePath: string, path: string) => git.fileHistory(worktreePath, path))
   ipcMain.handle(IPC.gitBlame, (_e, worktreePath: string, path: string) => git.blame(worktreePath, path))
   ipcMain.handle(IPC.gitRemoteFileUrl, (_e, repoPath: string, rel: string, opts: { permalink: boolean; lines?: [number, number] | null }) => git.remoteFileUrl(repoPath, rel, opts))

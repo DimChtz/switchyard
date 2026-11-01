@@ -576,9 +576,12 @@ export async function diffImage(worktreePath: string, baseBranch: string, scope:
     buf = await fs.readFile(join(worktreePath, path)).catch(() => null)
   } else {
     const rev = typeof scope === 'object' ? (side === 'new' ? scope.commit : await parentOf(worktreePath, scope.commit)) : await diffStart(worktreePath, baseBranch, scope)
-    buf = await execFileP('git', gitArgs(['show', `${rev}:${side === 'old' ? (oldPath ?? path) : path}`]), { cwd: worktreePath, windowsHide: true, env: gitEnv(), encoding: 'buffer', maxBuffer: 32 * 1024 * 1024 })
-      .then((r) => r.stdout as Buffer)
-      .catch(() => null)
+    const show = (at: string): Promise<Buffer | null> =>
+      execFileP('git', gitArgs(['show', at]), { cwd: worktreePath, windowsHide: true, env: gitEnv(), encoding: 'buffer', maxBuffer: 32 * 1024 * 1024 })
+        .then((r) => r.stdout as Buffer)
+        .catch(() => null)
+    buf = await show(`${rev}:${side === 'old' ? (oldPath ?? path) : path}`)
+    if (!buf && side === 'new' && typeof scope === 'object' && scope.stash) buf = await show(`${scope.commit}^3:${path}`)
   }
   if (!buf || buf.length > 20 * 1024 * 1024) return null
   return `data:${type};base64,${buf.toString('base64')}`
@@ -699,7 +702,12 @@ export async function getDiffFiles(worktreePath: string, baseBranch: string, sco
   if (typeof scope === 'object') {
     const sha = scope.commit
     const raw = await git.raw(['diff', '-M', ...space, '--no-color', '--no-ext-diff', await parentOf(worktreePath, sha), sha])
-    return parseDiff(raw, () => false).sort((a, b) => a.path.localeCompare(b.path))
+    const files = parseDiff(raw, () => false)
+    if (scope.stash && (await gitYes(worktreePath, ['rev-parse', '--verify', '--quiet', `${sha}^3`]).catch(() => false))) {
+      const added = await git.raw(['diff', ...space, '--no-color', '--no-ext-diff', EMPTY_TREE, `${sha}^3`]).catch(() => '')
+      for (const f of parseDiff(added, () => false)) if (!files.some((x) => x.path === f.path)) files.push(f)
+    }
+    return files.sort((a, b) => a.path.localeCompare(b.path))
   }
   const from = await diffStart(worktreePath, baseBranch, scope)
   const status = await git.status()
@@ -837,15 +845,15 @@ export async function rebaseOnto(worktreePath: string, baseBranch: string, keepC
 
 /**
  * The repository's stashes, newest first, each with the branch it was made on. (Every worktree
- * of a repository shares them - the window shows a task the ones from its branch.)
+ * of a repository shares them - the window shows a task the ones from its branch, or all of them.)
  */
 export async function stashList(worktreePath: string, branch?: string): Promise<StashEntry[]> {
   const raw = await gitAt(worktreePath)
-    .raw(['stash', 'list', '--format=%gd%x1f%gs%x1f%ct%x1f%P'])
+    .raw(['stash', 'list', '--format=%gd%x1f%gs%x1f%ct%x1f%P%x1f%H'])
     .catch(() => '')
   const out: StashEntry[] = []
   for (const line of raw.split('\n').filter(Boolean)) {
-    const [ref, subject, ct, parents] = line.split('\x1f')
+    const [ref, subject, ct, parents, sha] = line.split('\x1f')
     // "On feature/x: my message" (with a message) or "WIP on feature/x: abc123 last commit".
     // (Some gits name only the branch's last part: "On x:" for feature/x.)
     const m = subject.match(/^(?:WIP on|On) ([^:]+): (.*)$/)
@@ -860,18 +868,39 @@ export async function stashList(worktreePath: string, branch?: string): Promise<
     const changed = await gitAt(worktreePath).raw(['stash', 'show', '--name-only', ref]).catch(() => '')
     const added = await gitAt(worktreePath).raw(['ls-tree', '-r', '--name-only', `${ref}^3`]).catch(() => '')
     const files = [...new Set(`${changed}\n${added}`.split('\n').filter(Boolean))]
-    out.push({ ref, branch: m?.[1] ?? '', message: m?.[2] ?? subject, at: Number(ct) * 1000, files })
+    out.push({ sha, ref, branch: m?.[1] ?? '', message: m?.[2] ?? subject, at: Number(ct) * 1000, files })
   }
   return out
 }
 
 /** Puts uncommitted changes aside (new files too): all of them, or these paths'. */
-export async function stashPush(worktreePath: string, message: string, paths?: string[]): Promise<void> {
+export async function stashPush(worktreePath: string, message: string, paths?: string[], keep = false): Promise<void> {
   const args = ['stash', 'push', '--include-untracked', '-m', message || 'Stashed in Switchyard']
   try {
     await gitAt(worktreePath).raw(paths?.length ? [...args, '--', ...paths] : args)
   } catch (err) {
     throw new Error(gitFailure(err, 'git stash failed'), { cause: err })
+  }
+  // A copy put aside: the changes come straight back (the stash stays).
+  if (keep) await gitAt(worktreePath).raw(['stash', 'apply', '--index', 'stash@{0}']).catch(() => gitAt(worktreePath).raw(['stash', 'apply', 'stash@{0}']))
+}
+
+/**
+ * One file of a stash back into the worktree, as the stash has it (over what's there now) -
+ * a file the stash added comes from its untracked part, one it deleted goes. The stash stays.
+ */
+export async function stashRestoreFile(worktreePath: string, sha: string, path: string): Promise<void> {
+  if (!/^[0-9a-f]{7,40}$/.test(sha)) throw new Error('Not a stash.')
+  const git = gitAt(worktreePath)
+  const has = (rev: string): Promise<boolean> => gitYes(worktreePath, ['cat-file', '-e', `${rev}:${path}`]).catch(() => false)
+  const from = (await has(sha)) ? sha : (await has(`${sha}^3`)) ? `${sha}^3` : null
+  if (from) {
+    await git.raw(['checkout', from, '--', path])
+    // (checkout stages it: left unstaged, like any change in the worktree.)
+    await git.raw(['reset', '--quiet', '--', path]).catch(() => {})
+  } else {
+    // (Deleted in the worktree only - unstaged, as any change there.)
+    await fs.rm(join(worktreePath, path), { force: true })
   }
 }
 
