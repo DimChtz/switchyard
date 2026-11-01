@@ -2,6 +2,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { CaptureShow, Prefs } from '@shared/types'
 import { toggleVoice, useVoice } from '../lib/voice/voice'
 import { isMac } from '../lib/keys'
+import { Annotator } from './ImageViewer'
 
 /**
  * The quick capture box (its own little window, over whatever app is in
@@ -19,6 +20,9 @@ export function QuickCapture(): React.JSX.Element {
   const [withText, setWithText] = useState(false)
   const [prefs, setPrefs] = useState<Prefs | null>(null)
   const [busy, setBusy] = useState(false)
+  // The screenshot drawn on (an arrow, a box, a blur over a secret) - attached in place of the one copied.
+  const [image, setImage] = useState<string | null>(null)
+  const [annotating, setAnnotating] = useState(false)
   const box = useRef<HTMLDivElement>(null)
   const titleRef = useRef<HTMLInputElement>(null)
   const voice = useVoice()
@@ -34,6 +38,8 @@ export function QuickCapture(): React.JSX.Element {
         setWithImage(!!s.clip.image)
         setWithText(false)
         setBusy(false)
+        setImage(null)
+        setAnnotating(false)
         window.api.prefs.get().then(setPrefs).catch(() => {})
         setTimeout(() => titleRef.current?.focus(), 30)
     }
@@ -46,18 +52,33 @@ export function QuickCapture(): React.JSX.Element {
   useLayoutEffect(() => {
     const el = box.current
     if (!el) return
-    const ro = new ResizeObserver(() => window.api.capture.resize(el.offsetHeight))
+    const ro = new ResizeObserver(() => !annotatingRef.current && window.api.capture.resize(el.offsetHeight))
     ro.observe(el)
     return () => ro.disconnect()
   }, [])
 
+  const annotatingRef = useRef(false)
+  annotatingRef.current = annotating
   const close = (): void => void window.api.capture.hide()
+  // Annotating: the box grows to draw in, and comes back after.
+  const startAnnotating = (): void => {
+    setAnnotating(true)
+    void window.api.capture.size(1100, 760)
+  }
+  const stopAnnotating = (): void => {
+    setAnnotating(false)
+    void window.api.capture.size(620, box.current?.offsetHeight ?? 200)
+    setTimeout(() => {
+      if (box.current) void window.api.capture.size(620, box.current.offsetHeight)
+      titleRef.current?.focus()
+    }, 50)
+  }
   const submit = async (start: boolean): Promise<void> => {
     const t = title.trim()
     if (!t || busy || !show) return
     setBusy(true)
     await window.api.capture
-      .submit({ title: t, desc, projectId, image: withImage ? show.clip.image : null, text: withText ? show.clip.text : null, start })
+      .submit({ title: t, desc, projectId, image: withImage ? (image ?? show.clip.image) : null, text: withText ? show.clip.text : null, start })
       .catch(() => setBusy(false))
   }
   const dictate = (): void => {
@@ -68,6 +89,21 @@ export function QuickCapture(): React.JSX.Element {
 
   const clip = show?.clip
   const mod = isMac ? '⌘' : 'Ctrl+'
+  if (annotating && clip?.image)
+    return (
+      <div style={{ height: '100vh', display: 'flex', flexDirection: 'column', background: 'var(--bg-app)', border: '1px solid var(--bd-3)', borderRadius: 10, overflow: 'hidden', boxSizing: 'border-box' }}>
+        <Annotator
+          src={image ?? clip.image}
+          onCancel={stopAnnotating}
+          onError={() => {}}
+          onSave={async (dataUrl) => {
+            setImage(dataUrl)
+            setWithImage(true)
+            stopAnnotating()
+          }}
+        />
+      </div>
+    )
   return (
     <div
       ref={box}
@@ -131,10 +167,23 @@ export function QuickCapture(): React.JSX.Element {
       {clip?.image || clip?.text ? (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 8px', border: '1px solid var(--bd-2)', borderRadius: 6, background: 'var(--bg-input)' }}>
           <input type="checkbox" checked={clip.image ? withImage : withText} onChange={(e) => (clip.image ? setWithImage(e.target.checked) : setWithText(e.target.checked))} style={{ margin: 0 }} />
-          {clip.image ? <img src={clip.image} alt="" style={{ height: 40, maxWidth: 120, objectFit: 'cover', borderRadius: 3, border: '1px solid var(--bd-2)' }} /> : null}
+          {clip.image ? (
+            <img
+              src={image ?? clip.image}
+              alt=""
+              onClick={startAnnotating}
+              title="Draw on it - an arrow, a box, a blur over a secret"
+              style={{ height: 40, maxWidth: 120, objectFit: 'cover', borderRadius: 3, border: '1px solid var(--bd-2)', cursor: 'pointer' }}
+            />
+          ) : null}
           <span style={{ flex: 1, minWidth: 0, font: '12px var(--font-ui)', color: 'var(--t3)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {clip.image ? 'Attach the screenshot on the clipboard' : <>Attach the copied text: <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--t2)' }}>{clip.text}</span></>}
+            {clip.image ? (image ? 'Attach the screenshot - annotated' : 'Attach the screenshot on the clipboard') : <>Attach the copied text: <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--t2)' }}>{clip.text}</span></>}
           </span>
+          {clip.image ? (
+            <span onClick={startAnnotating} title="Draw on it - an arrow, a box, a blur over a secret" style={{ flex: 'none', font: '12px var(--font-ui)', color: 'var(--c-blue)', cursor: 'pointer' }}>
+              {image ? 'Annotate again' : 'Annotate'}
+            </span>
+          ) : null}
         </div>
       ) : null}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, font: '11.5px var(--font-mono)', color: 'var(--t4)' }}>

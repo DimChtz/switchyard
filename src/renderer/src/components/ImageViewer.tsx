@@ -2,7 +2,8 @@ import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from
 import { createPortal } from 'react-dom'
 import { useAppStore } from '../store/AppStore'
 import { Button } from './ui'
-import { closeImage, imageChanged, useImageView } from '../lib/imageViewer'
+import { closeImage, imageChanged, useImageView, viewImage } from '../lib/imageViewer'
+import { agentShort } from '../lib/derive'
 import { revealLabel } from '../lib/keys'
 import { errText } from '../lib/errors'
 import { ANNOTATION_COLORS } from '../lib/annotationColors'
@@ -14,6 +15,7 @@ import { ANNOTATION_COLORS } from '../lib/annotationColors'
  * over a secret - and saves it in place, so wherever it shows is updated.
  */
 export function ImageViewer(): React.JSX.Element | null {
+  const { state, dispatch } = useAppStore()
   const view = useImageView()
   const [src, setSrc] = useState<string | null | undefined>(undefined)
   const [info, setInfo] = useState<{ path: string | null; editable: boolean }>({ path: null, editable: false })
@@ -50,17 +52,33 @@ export function ImageViewer(): React.JSX.Element | null {
       ) : mode === 'annotate' ? (
         <Annotator
           src={src}
-          name={name}
           onCancel={() => (view.mode === 'annotate' ? closeImage() : setMode('view'))}
-          onSaved={() => {
-            imageChanged(view.ref)
+          onError={(text) => dispatch({ type: 'TOAST', text })}
+          onSave={async (dataUrl) => {
+            if (info.editable) {
+              // One Switchyard keeps: saved over, so wherever it shows is updated.
+              await window.api.images.save(view.ref, dataUrl)
+              imageChanged(view.ref)
+              dispatch({ type: 'TOAST', text: `Annotated ${name} - updated wherever it shows.`, tone: 'done' })
+            } else {
+              // A file of yours (a repository's image): left as it is - the annotation is a copy, for an agent.
+              const copy = (await window.api.attachments.save(dataUrl)).replace(/\\/g, '/')
+              const task = view.taskId ? state.tasks.find((t) => t.id === view.taskId) : undefined
+              const agent = task?.agentKind ? agentShort(task.agentKind) : ''
+              dispatch({
+                type: 'TOAST',
+                text: `Saved an annotated copy of ${name} - ${name} itself is unchanged.`,
+                tone: 'done',
+                action: task && agent ? { label: `Send to ${agent}`, run: () => dispatch({ type: 'MESSAGE_AGENT', taskId: task.id, text: `An annotated image of ${name} - open and look at it: ${copy}`, toast: `Sent to ${agent}.` }) } : { label: 'Show', run: () => viewImage(copy) }
+              })
+              if (!(task && agent)) return void viewImage(copy)
+            }
             if (view.mode === 'annotate') closeImage()
             else {
               setMode('view')
               setVersion((v) => v + 1)
             }
           }}
-          imageRef={view.ref}
         />
       ) : (
         <Viewer src={src} name={name} info={info} onAnnotate={() => setMode('annotate')} />
@@ -135,13 +153,13 @@ function Viewer({ src, name, info, onAnnotate }: { src: string; name: string; in
       else if (e.key === '-') setScale(scale / 1.25)
       else if (e.key === '0') setScale(null)
       else if (e.key === '1') setScale(1)
-      else if ((e.key === 'a' || e.key === 'A') && info.editable) onAnnotate()
+      else if (e.key === 'a' || e.key === 'A') onAnnotate()
       else return
       e.preventDefault()
     }
     window.addEventListener('keydown', k)
     return () => window.removeEventListener('keydown', k)
-  }, [scale, info.editable, onAnnotate, setScale])
+  }, [scale, onAnnotate, setScale])
 
   const toastErr = (err: unknown): void => dispatch({ type: 'TOAST', text: errText(err) })
   return (
@@ -159,8 +177,13 @@ function Viewer({ src, name, info, onAnnotate }: { src: string; name: string; in
         <Button size="xs" onClick={() => setScale(1)} title="Actual size (1)">
           100%
         </Button>
-        <Button size="xs" variant="primary" disabled={!info.editable} onClick={onAnnotate} title={info.editable ? 'Draw on it - arrows, boxes, a highlight, a blur over a secret (A)' : "Only images Switchyard keeps (pasted, attached) can be annotated - this one is a file of yours"}>
-          Annotate
+        <Button
+          size="xs"
+          variant="primary"
+          onClick={onAnnotate}
+          title={info.editable ? 'Draw on it - arrows, boxes, a highlight, a blur over a secret (A)' : 'Draw on a copy - this image is a file of yours (a repository’s), which stays as it is (A)'}
+        >
+          {info.editable ? 'Annotate' : 'Annotate a copy'}
         </Button>
         {info.path ? (
           <>
@@ -283,8 +306,11 @@ function drawShape(g: CanvasRenderingContext2D, s: Shape, img: HTMLImageElement)
   g.restore()
 }
 
-function Annotator({ src, name, imageRef, onCancel, onSaved }: { src: string; name: string; imageRef: string; onCancel: () => void; onSaved: () => void }): React.JSX.Element {
-  const { dispatch } = useAppStore()
+/**
+ * Draws on a picture: `onSave` gets it, drawn on, as a PNG data: URL (the
+ * viewer saves it over the image or as a copy; Quick capture attaches it).
+ */
+export function Annotator({ src, onCancel, onSave, onError }: { src: string; onCancel: () => void; onSave: (dataUrl: string) => Promise<void>; onError: (text: string) => void }): React.JSX.Element {
   const canvas = useRef<HTMLCanvasElement>(null)
   const imgRef = useRef<HTMLImageElement | null>(null)
   const [ready, setReady] = useState(false)
@@ -361,12 +387,10 @@ function Annotator({ src, name, imageRef, onCancel, onSaved }: { src: string; na
     if (!shapes.length) return onCancel()
     setSaving(true)
     try {
-      await window.api.images.save(imageRef, c.toDataURL('image/png'))
-      dispatch({ type: 'TOAST', text: `Annotated ${name} - updated wherever it shows.`, tone: 'done' })
-      onSaved()
+      await onSave(c.toDataURL('image/png'))
     } catch (err) {
       setSaving(false)
-      dispatch({ type: 'TOAST', text: `Could not save the annotation: ${errText(err)}` })
+      onError(`Could not save the annotation: ${errText(err)}`)
     }
   }
 

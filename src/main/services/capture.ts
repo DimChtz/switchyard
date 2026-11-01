@@ -119,6 +119,15 @@ export function registerCapture(): void {
   ipcMain.handle(IPC.captureResize, (_e, height: number) => {
     if (win && Number.isFinite(height)) win.setSize(win.getSize()[0], Math.max(120, Math.min(560, Math.round(height))))
   })
+  // Bigger for annotating the screenshot, back to the box after: kept on its screen, centred.
+  ipcMain.handle(IPC.captureSize, (_e, width: number, height: number) => {
+    if (!win || !Number.isFinite(width) || !Number.isFinite(height)) return
+    const [x, y] = win.getPosition()
+    const d = screen.getDisplayNearestPoint({ x, y }).workArea
+    const w = Math.round(Math.min(d.width - 40, Math.max(420, width)))
+    const h = Math.round(Math.min(d.height - 40, Math.max(120, height)))
+    win.setBounds({ width: w, height: h, x: Math.round(d.x + (d.width - w) / 2), y: Math.round(w > 700 ? d.y + (d.height - h) / 2 : d.y + d.height * 0.28) })
+  })
   ipcMain.handle(IPC.captureStatus, () => ({ key: registered.key, ok: registered.ok }))
   // The task: to the main window, quietly (it doesn't come to the front).
   ipcMain.handle(IPC.captureSubmit, async (_e, s: CaptureSubmit) => {

@@ -14,6 +14,7 @@ import { isMac, keyLabel, revealLabel } from '../../../lib/keys'
 import { addShell, setDrag, startTabDrag, wsOpen } from '../../../lib/wsStore'
 import { useFiles } from './FilesContext'
 import { useChangesMaybe } from '../changes/ChangesContext'
+import { annotateImage, viewImage } from '../../../lib/imageViewer'
 import { PanelHeader, PanelIcon, type PanelChrome } from '../layout/PanelHeader'
 
 const parentOf = (rel: string): string => (rel.includes('/') ? rel.slice(0, rel.lastIndexOf('/')) : '')
@@ -464,7 +465,14 @@ export function ExplorerView({ chrome, activePath }: { chrome: PanelChrome; acti
           ...(row.status !== 'unchanged' ? [{ label: 'Open Changes', onClick: () => showChanges(row.path) }] : []),
           ...(row.status !== 'added' ? [{ label: 'File History', onClick: () => wsOpen(task.id, `history:${row.path}`) }] : []),
           { label: 'Open in Editor', onClick: () => window.api.sys.openInEditor(abs(row.path)).catch(toastErr) },
-          { label: 'Open with Default App', onClick: () => window.api.sys.reveal(abs(row.path)).catch(toastErr) }
+          { label: 'Open with Default App', onClick: () => window.api.sys.reveal(abs(row.path)).catch(toastErr) },
+          // An image of the repository's: full size, or a copy drawn on for the agent (the file stays as it is).
+          ...(/\.(png|jpe?g|gif|webp|svg|bmp|avif|ico)$/i.test(row.path)
+            ? [
+                { label: 'View Image', separatorBefore: true, onClick: () => viewImage(abs(row.path), task.id) },
+                { label: 'Annotate a Copy…', onClick: () => annotateImage(abs(row.path), task.id) }
+              ]
+            : [])
         ]
     return [
       ...opens,

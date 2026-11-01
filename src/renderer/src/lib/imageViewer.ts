@@ -7,21 +7,21 @@ import { useSyncExternalStore } from 'react'
  * message names it (a path, or one in the notes folder).
  */
 
-export type ImageView = { ref: string; mode: 'view' | 'annotate' } | null
+export type ImageView = { ref: string; mode: 'view' | 'annotate'; taskId?: string } | null
 
 let current: ImageView = null
 const listeners = new Set<() => void>()
 const emit = (): void => listeners.forEach((l) => l())
 
-/** Shows the image full size. */
-export function viewImage(ref: string): void {
-  current = { ref, mode: 'view' }
+/** Shows the image full size (`taskId`: a task's file - an annotated copy can go to its agent). */
+export function viewImage(ref: string, taskId?: string): void {
+  current = { ref, mode: 'view', taskId }
   emit()
 }
 
 /** Opens the image straight in the annotator (an arrow, a box, a blur over a secret…). */
-export function annotateImage(ref: string): void {
-  current = { ref, mode: 'annotate' }
+export function annotateImage(ref: string, taskId?: string): void {
+  current = { ref, mode: 'annotate', taskId }
   emit()
 }
 

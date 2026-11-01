@@ -132,6 +132,8 @@ const api = {
     current: (): Promise<CaptureShow | null> => ipcRenderer.invoke(IPC.captureCurrent),
     /** Its height, to fit what it shows. */
     resize: (height: number): Promise<void> => ipcRenderer.invoke(IPC.captureResize, height),
+    /** Its size (bigger to annotate the screenshot, back after), centred on its screen. */
+    size: (width: number, height: number): Promise<void> => ipcRenderer.invoke(IPC.captureSize, width, height),
     /** The shortcut, and whether the system let Switchyard have it. */
     status: (): Promise<{ key: string; ok: boolean }> => ipcRenderer.invoke(IPC.captureStatus),
     submit: (s: CaptureSubmit): Promise<void> => ipcRenderer.invoke(IPC.captureSubmit, s),

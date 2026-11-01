@@ -18,6 +18,7 @@ import { taskOfCommit } from '../../../lib/commitTask'
 import { changeGutter, setChangeBase } from '../../../lib/changeGutter'
 import { rememberFile } from '../../../lib/quickOpen'
 import { taskRoot } from '../../../lib/multiRepo'
+import { annotateImage, viewImage } from '../../../lib/imageViewer'
 import type { Blame } from '@shared/types'
 
 /** A file's editor tab. */
@@ -344,6 +345,9 @@ export function FileEditor({ path, visible }: { path: string; visible: boolean }
       >
         {loading ? (
           <div style={{ padding: 40, font: '13px var(--font-ui)', color: 'var(--t3)' }}>Loading…</div>
+        ) : meta && meta.kind !== 'text' && IMAGE_FILE.test(path) ? (
+          // An image: shown, a click away from full size (and annotating a copy).
+          <ImagePreview file={f.abs(path)} taskId={task.id} />
         ) : meta && meta.kind !== 'text' ? (
           <div style={{ padding: 40, font: '13px/1.5 var(--font-ui)', color: 'var(--t3)' }}>
             {meta.kind === 'binary' ? 'A binary file' : `A large file (${(meta.size / 1_000_000).toFixed(1)} MB)`} - not opened here, so it can't be saved over by accident.{' '}
@@ -376,6 +380,42 @@ export function FileEditor({ path, visible }: { path: string; visible: boolean }
         )}
       </div>
       {menu ? <Menu anchor={menu} items={menuItems()} onClose={() => setMenu(null)} /> : null}
+    </div>
+  )
+}
+
+const IMAGE_FILE = /\.(png|jpe?g|gif|webp|svg|bmp|avif|ico)$/i
+
+/** An image file's tab: the picture, fitted - a click shows it full size, to annotate a copy for the agent. */
+function ImagePreview({ file, taskId }: { file: string; taskId: string }): React.JSX.Element {
+  const [src, setSrc] = useState<string | null | undefined>(undefined)
+  useEffect(() => {
+    let live = true
+    window.api.notes
+      .image(file)
+      .then((s) => live && setSrc(s))
+      .catch(() => live && setSrc(null))
+    return () => {
+      live = false
+    }
+  }, [file])
+  return (
+    <div style={{ height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, padding: 24, boxSizing: 'border-box' }}>
+      {src === undefined ? (
+        <span style={{ font: '13px var(--font-ui)', color: 'var(--t3)' }}>Loading…</span>
+      ) : src === null ? (
+        <span style={{ font: '13px var(--font-ui)', color: 'var(--t3)' }}>Can&apos;t show this image (over 15 MB, or unreadable).</span>
+      ) : (
+        <img src={src} alt="" onClick={() => viewImage(file, taskId)} title="Click to see it full size, or annotate a copy" style={{ maxWidth: '100%', maxHeight: 'calc(100% - 50px)', objectFit: 'contain', cursor: 'zoom-in', boxShadow: '0 6px 24px color-mix(in srgb, var(--sh) 40%, transparent)' }} />
+      )}
+      <span style={{ display: 'flex', gap: 8 }}>
+        <Button size="sm" onClick={() => viewImage(file, taskId)}>
+          View full size
+        </Button>
+        <Button size="sm" onClick={() => annotateImage(file, taskId)} title="Draw on a copy - for the agent; the file stays as it is">
+          Annotate a copy
+        </Button>
+      </span>
     </div>
   )
 }

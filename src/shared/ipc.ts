@@ -93,6 +93,7 @@ export const IPC = {
   captureOpen: 'capture:open',
   captureHide: 'capture:hide',
   captureResize: 'capture:resize',
+  captureSize: 'capture:size',
   captureStatus: 'capture:status',
   captureSubmit: 'capture:submit',
   cliTake: 'cli:take',
