@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import React, { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { plural } from '../lib/summary'
 import { codeTheme } from '../lib/codeTheme'
 import CodeMirror from '@uiw/react-codemirror'
@@ -24,6 +24,8 @@ import { onReveal, revealSetting, setSettingsIndex, takeReveal, type Reveal, typ
 import { Button, FooterNote, IconButton, Menu, Modal, Segmented, SectionLabel, Select as MenuSelect, TextArea as UITextArea, TextInput, Toggle as UIToggle, confirm, type MenuAnchor } from '../components/ui'
 import { askInstall, usePlugins } from '../lib/plugins'
 import type { PluginInfo, PluginSource } from '@shared/plugins'
+import { PORTS_PER_SLOT, hasOwnPort, withOwnPort } from '@shared/worktreeEnv'
+import { DEFAULT_URL, PROVIDER_LABEL, type LocalModel, type LocalProvider } from '@shared/localModels'
 import { AGENTS, APP_PREF_KEYS, COLUMN_LABEL, COLUMN_ORDER, DEFAULT_MESSAGE_TEMPLATE, DEFAULT_PREFS, LANGUAGES, PROJECT_SETTING_KEYS, firstMessage, parseEnv } from '@shared/constants'
 import type { AgentKind, EditorOption, NoticeKind, Prefs, Project, ProjectSettingKey, ProjectSettingScope, RepoScan, SavedCommand, ShellOption } from '@shared/types'
 
@@ -477,6 +479,7 @@ function GlobalSettings({ section, scope, onScope }: { section: string; scope: P
             </Row>
           ))}
         </Group>
+        {!scope ? <LocalModels ollamaUrl={pf.ollamaUrl} lmStudioUrl={pf.lmStudioUrl} onChange={set} /> : null}
         {!scope ? <ModelPrices prices={pf.modelPrices} onChange={(modelPrices) => set({ modelPrices })} /> : null}
         {!scope ? (
           <Group title="Spending" note="At API prices, from Claude Code sessions (see Usage). Each alert is said once in its period; weeks start on Monday.">
@@ -526,6 +529,9 @@ function GlobalSettings({ section, scope, onScope }: { section: string; scope: P
         <Group title="Worktrees">
           <Row k="worktreeRoot" label="Worktree root" sub={pf.worktreeRoot ? 'Each task gets its own folder here, under the project name' : 'Each task gets its own folder in .worktrees inside the repository'}>
             <TextField value={pf.worktreeRoot} placeholder="<repo>/.worktrees" onChange={(v) => set({ worktreeRoot: v })} />
+          </Row>
+          <Row k="worktreePortBase" label="Worktree ports start at" sub={`Your own checkout gets this port; each open task the next block of ${PORTS_PER_SLOT} - {port} in a project's environment variables`}>
+            <Seg value={String(pf.worktreePortBase)} options={['3100', '4100', '5100', '8100'].map((n): [string, string] => [n, n])} onChange={(v) => set({ worktreePortBase: Number(v) })} />
           </Row>
           <Row k="branchPattern" label="Branch name pattern" sub="{slug} and {key} come from the task">
             <TextField value={pf.branchPattern} placeholder="feature/{slug}" onChange={(v) => set({ branchPattern: v })} />
@@ -1288,8 +1294,17 @@ function ProjectSettings({ project: p }: { project: Project }): React.JSX.Elemen
         </Row>
       </Group>
       <Group title="Environment" note="Kept on this machine - these are often secrets. A value in the repository’s settings file is shown as shared.">
-        <Row label="Environment variables" sub={`KEY=value per line. Set for setup, tests, the dev server, agents and terminals in this project's worktrees${envCount ? ` · ${envCount} set` : ''}`}>
-          <TextArea value={p.env ?? ''} placeholder={'DATABASE_URL=postgres://localhost/app_dev\nRAILS_ENV=development'} rows={4} onChange={(v) => update({ env: v.trim() ? v : undefined })} />
+        <Row
+          label="Each worktree gets its own port"
+          sub={`PORT={port}: every task's dev server, tests and terminals get a port of their own (a block of ${PORTS_PER_SLOT} each), so tasks run side by side without fighting over one`}
+        >
+          <Toggle on={hasOwnPort(p.env)} onChange={(v) => update({ env: withOwnPort(p.env, v) })} />
+        </Row>
+        <Row
+          label="Environment variables"
+          sub={`KEY=value per line. Set for setup, tests, the dev server, agents and terminals in this project's worktrees. {port} (and {port+1}…{port+9}), {slot} and {task} are filled in per worktree - e.g. DATABASE_URL=postgres://localhost/app_{task}${envCount ? ` · ${envCount} set` : ''}`}
+        >
+          <TextArea value={p.env ?? ''} placeholder={'DATABASE_URL=postgres://localhost/app_{task}\nRAILS_ENV=development'} rows={4} onChange={(v) => update({ env: v.trim() ? v : undefined })} />
           {where('env')}
         </Row>
       </Group>
@@ -1433,6 +1448,44 @@ function Group({ title, note, children }: { title: string; note?: string; childr
         ))}
       </div>
     </div>
+  )
+}
+
+/** Ollama and LM Studio: whether they answer, their models, and where they are. */
+function LocalModels({ ollamaUrl, lmStudioUrl, onChange }: { ollamaUrl: string; lmStudioUrl: string; onChange: (patch: Partial<Prefs>) => void }): React.JSX.Element {
+  const [found, setFound] = useState<{ models: LocalModel[]; running: LocalProvider[] } | null>(null)
+  const [checking, setChecking] = useState(false)
+  const check = useCallback((fresh: boolean) => {
+    setChecking(true)
+    window.api.localModels
+      .list(fresh)
+      .then(setFound)
+      .catch(() => setFound({ models: [], running: [] }))
+      .finally(() => setChecking(false))
+  }, [])
+  useEffect(() => check(false), [check, ollamaUrl, lmStudioUrl])
+  const status = (pr: LocalProvider): string => {
+    if (!found) return 'Looking…'
+    if (!found.running.includes(pr)) return `Not running at ${(pr === 'ollama' ? ollamaUrl : lmStudioUrl) || DEFAULT_URL[pr]}`
+    const names = found.models.filter((m) => m.provider === pr).map((m) => m.name)
+    return names.length ? `${names.length} model${names.length === 1 ? '' : 's'}: ${names.slice(0, 4).join(', ')}${names.length > 4 ? '…' : ''}` : 'Running - no models yet'
+  }
+  return (
+    <Group title="Local models" note="Models on this machine - free, private, offline. Pick one as a task's model in Start: Aider runs Ollama and LM Studio models, Codex runs Ollama's (--oss).">
+      <Row label={PROVIDER_LABEL.ollama} sub={status('ollama')}>
+        <TextField value={ollamaUrl} placeholder={DEFAULT_URL.ollama} onChange={(v) => onChange({ ollamaUrl: v.trim() })} />
+      </Row>
+      <Row label={PROVIDER_LABEL.lmstudio} sub={status('lmstudio')}>
+        <TextField value={lmStudioUrl} placeholder={DEFAULT_URL.lmstudio} onChange={(v) => onChange({ lmStudioUrl: v.trim() })} />
+      </Row>
+      <Row label="Look again" sub="After starting one, or pulling a model">
+        <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+          <Button disabled={checking} onClick={() => check(true)}>
+            {checking ? 'Looking…' : 'Refresh'}
+          </Button>
+        </div>
+      </Row>
+    </Group>
   )
 }
 

@@ -13,6 +13,8 @@ import { branchProblem } from '@shared/branchName'
 import { repoDir, reposOf } from '../lib/multiRepo'
 import { baseFor, parentFinished, parentOf, waitsFor } from '@shared/stack'
 import { MODEL_SUGGESTIONS, canPlanFirst } from '../lib/agentControl'
+import { LOCAL_SUPPORT, PROVIDER_LABEL, localModelId, runsLocal, type LocalModel } from '@shared/localModels'
+import { formatBytes } from '@shared/diskSpace'
 import { droppedImages, fileName, pastedImages } from '../lib/attachments'
 import { errText } from '../lib/errors'
 
@@ -690,6 +692,21 @@ function ModelField(): React.JSX.Element {
   const start = state.start!
   const options = MODEL_SUGGESTIONS[start.agentKind] ?? []
   const set = (model: string): void => dispatch({ type: 'SET_START_OPTIONS', patch: { model } })
+  // Models on this machine (Ollama, LM Studio), for agents that can run them.
+  const [local, setLocal] = useState<LocalModel[]>([])
+  const supports = LOCAL_SUPPORT[start.agentKind] ?? []
+  useEffect(() => {
+    let live = true
+    window.api.localModels
+      .list()
+      .then((r) => live && setLocal(r.models))
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [])
+  const usable = local.filter((m) => supports.includes(m.provider))
+  const isLocal = runsLocal(start.agentKind, start.model)
   return (
     <span style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
       <Combo
@@ -699,9 +716,24 @@ function ModelField(): React.JSX.Element {
         style={FIELD}
         items={() => [
           { label: 'Default', sub: "the agent's own", checked: !start.model.trim(), onClick: () => set('') },
-          ...options.map((m, i) => ({ label: m, checked: m === start.model.trim(), separatorBefore: i === 0, onClick: () => set(m) }))
+          ...options.map((m, i) => ({ label: m, checked: m === start.model.trim(), separatorBefore: i === 0, onClick: () => set(m) })),
+          ...usable.map((m, i) => ({
+            label: m.name,
+            sub: `${i === 0 ? 'on this machine · ' : ''}${PROVIDER_LABEL[m.provider]}${m.size ? ` · ${formatBytes(m.size)}` : ''}`,
+            checked: localModelId(m) === start.model.trim(),
+            separatorBefore: i === 0,
+            onClick: () => set(localModelId(m))
+          })),
+          ...(!supports.length && local.length
+            ? [{ label: `${local.length} model${local.length === 1 ? '' : 's'} on this machine`, sub: 'Aider or Codex can run them', separatorBefore: true, disabled: true, onClick: () => {} }]
+            : [])
         ]}
       />
+      {isLocal ? (
+        <span title="Runs on this machine - free, private, offline" style={{ flex: 'none', font: '11px var(--font-mono)', color: 'var(--c-green)' }}>
+          local
+        </span>
+      ) : null}
       {canPlanFirst(start.agentKind) ? (
         <label title="It plans first and waits for your go-ahead before changing anything (plan mode)" style={{ display: 'flex', alignItems: 'center', gap: 5, font: '12px var(--font-ui)', color: 'var(--t2)', cursor: 'pointer', flex: 'none' }}>
           <input type="checkbox" checked={start.planFirst} onChange={(e) => dispatch({ type: 'SET_START_OPTIONS', patch: { planFirst: e.target.checked } })} />

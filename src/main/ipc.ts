@@ -15,6 +15,8 @@ import * as fsService from './services/fs'
 import * as menu from './menu'
 import * as cleanup from './services/cleanup'
 import * as disk from './services/diskUsage'
+import * as worktreeEnv from './services/worktreeEnv'
+import * as localModels from './services/localModels'
 import * as repos from './services/repos'
 import * as system from './services/system'
 import * as hooks from './services/hooks'
@@ -413,7 +415,10 @@ export function registerIpcHandlers(): void {
     return shell.openExternal(url)
   })
 
-  ipcMain.handle(IPC.netFreePort, () => ports.freePort())
+  // (In a task's worktree: its own port when that's free - see worktreeEnv.)
+  ipcMain.handle(IPC.netFreePort, (_e, cwd?: string) => ports.freePort(cwd ? worktreeEnv.worktreeInfo(cwd).port : undefined))
+  ipcMain.handle(IPC.localModelsList, (_e, fresh?: boolean) => localModels.listLocalModels(fresh))
+  ipcMain.handle(IPC.worktreeEnvInfo, (_e, cwd: string) => worktreeEnv.worktreeInfo(cwd))
   ipcMain.handle(IPC.netPortOpen, (_e, port: number) => ports.portOpen(port))
 
   ipcMain.handle(IPC.notesList, () => {

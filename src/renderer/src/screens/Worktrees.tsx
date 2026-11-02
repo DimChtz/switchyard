@@ -17,6 +17,7 @@ import { prefsFor } from '../lib/projectPrefs'
 import { isMulti, reposOf, taskRoot } from '../lib/multiRepo'
 import { useLeftovers, useWorktreeSizes } from '../lib/diskUsage'
 import { projectEnv, runCommandSession, setupSessionId } from '../lib/agentControl'
+import { PORTS_PER_SLOT, type WorktreeEnvInfo } from '@shared/worktreeEnv'
 import { SPACE_LABEL, formatBytes, generatedBytes, idleForClearing, type LeftoverFolder, type SpaceKind, type WorktreeSize } from '@shared/diskSpace'
 
 const GRID = '2.3fr 1.5fr 1.2fr 0.8fr 0.9fr 0.7fr 0.6fr'
@@ -298,6 +299,13 @@ function DetailPanel({
   const { state, dispatch } = useAppStore()
   const wt = worktrees.find((w) => w.id === state.wtSelected)
   const size = wt ? sizes[wt.path] : undefined
+  // Its own slot: the ports (and names) its processes get.
+  const [slot, setSlot] = useState<WorktreeEnvInfo | null>(null)
+  const wtPath = wt?.path
+  useEffect(() => {
+    setSlot(null)
+    if (wtPath) window.api.worktreeEnv.info(wtPath).then(setSlot).catch(() => {})
+  }, [wtPath, wt?.taskId])
   const [syncing, setSyncing] = useState(false)
   const [conflict, setConflict] = useState<string[] | null>(null)
   useEffect(() => {
@@ -481,6 +489,14 @@ function DetailPanel({
           <>
             <span style={{ fontFamily: 'var(--font-ui)', color: 'var(--t4)' }}>Created</span>
             <span style={{ color: 'var(--t2)' }}>{timeAgo(task.startedAt ?? task.createdAt)} ago</span>
+          </>
+        ) : null}
+        {slot && slot.slot > 0 ? (
+          <>
+            <span style={{ fontFamily: 'var(--font-ui)', color: 'var(--t4)' }}>Ports</span>
+            <span style={{ color: 'var(--t2)' }} title={`SWITCHYARD_PORT=${slot.port} · {port} in the project's environment variables`}>
+              {slot.port}–{slot.port + PORTS_PER_SLOT - 1} · slot {slot.slot}
+            </span>
           </>
         ) : null}
         <span style={{ fontFamily: 'var(--font-ui)', color: 'var(--t4)' }}>On disk</span>

@@ -185,7 +185,7 @@ function PreviewPane({ task, project, cwd, sessionId }: { task: Task; project: P
 
   const start = async (): Promise<void> => {
     if (!project.devCmd || !cwd) return
-    const port = await window.api.net.freePort()
+    const port = await window.api.net.freePort(cwd)
     portByTask.set(sessionId, port)
     setUrl(null)
     setExitCode(null)

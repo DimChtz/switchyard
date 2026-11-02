@@ -38,6 +38,14 @@ function setKv(key: string, value: unknown): void {
   db.setKv(key, value)
 }
 
+/** A value kept by name (small state of the services' own). */
+export function kvGet<T>(key: string): T | undefined {
+  return kv<T>(key)
+}
+export function kvSet(key: string, value: unknown): void {
+  setKv(key, value)
+}
+
 /** Closes the database (on quit). */
 export function closeStore(): void {
   if (opened) db.close()

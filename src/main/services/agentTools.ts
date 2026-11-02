@@ -7,6 +7,7 @@ import { basename, join, resolve, sep } from 'path'
 import { getComments, getProjects, getTasks, updateComments } from './store'
 import * as ptyService from './pty'
 import { freePort } from './ports'
+import { worktreeInfo } from './worktreeEnv'
 import * as conflicts from './conflicts'
 import { checkoutPath } from './conflicts'
 import { commentsChanged } from './review'
@@ -123,7 +124,7 @@ async function startDevServer(task: Task, repo: { project: Project; path: string
   const w = window()
   if (!w) throw new ToolError('Switchyard’s window is closed.')
   const id = previewSession(task, repo.project)
-  const port = await freePort()
+  const port = await freePort(worktreeInfo(repo.path).port)
   ptyService.spawn(w.webContents, { id, cwd: repo.path, execCommand: repo.project.devCmd, env: { ...parseEnv(repo.project.env), PORT: String(port) }, cols: 120, rows: 12 })
   // Ready once it prints its address (or its port answers).
   const until = Date.now() + 90_000

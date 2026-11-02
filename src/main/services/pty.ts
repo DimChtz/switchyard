@@ -8,6 +8,7 @@ import { USER_GIT_ENV } from './gitEnv'
 import { findOnPath, windowsLaunch } from './winLaunch'
 import { profileFor } from './system'
 import { log } from './log'
+import { envFor } from './worktreeEnv'
 
 interface Session {
   proc: pty.IPty
@@ -118,7 +119,8 @@ export function spawn(sender: WebContents, opts: PtySpawnOptions): void {
       cols: opts.cols ?? 80,
       rows: opts.rows ?? 24,
       cwd: opts.cwd || homedir(),
-      env: { ...childEnv(), COLORTERM: 'truecolor', TERM_PROGRAM: 'Switchyard', ...opts.env }
+      // (In a task's worktree: its own slot - ports, names - and {port} in the project's variables filled in.)
+      env: { ...childEnv(), COLORTERM: 'truecolor', TERM_PROGRAM: 'Switchyard', ...envFor(opts.cwd || '', opts.env) }
     })
   } catch (err) {
     log.error('pty', `Could not start ${shell} in ${opts.cwd}`, err)

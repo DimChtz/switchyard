@@ -802,6 +802,12 @@ export interface Prefs {
   autoPrune: boolean
   /** Warn when a drive with projects on it has less free than this (GB); 0: never. */
   lowDiskGb: number
+  /** The first port of the worktrees' port blocks: your checkout gets it, each open task the next block of 10 ({port} in project env). */
+  worktreePortBase: number
+  /** Ollama's address; empty: http://127.0.0.1:11434. */
+  ollamaUrl: string
+  /** LM Studio's server address; empty: http://127.0.0.1:1234. */
+  lmStudioUrl: string
   /** Where notes are kept. Empty: "Switchyard Notes" in Documents. */
   notesDir: string
   /** Command of the external editor. Empty: the first one found. */

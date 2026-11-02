@@ -116,6 +116,8 @@ export const IPC = {
   diskClearGenerated: 'disk:clearGenerated',
   diskFree: 'disk:free',
   diskLow: 'disk:low',
+  worktreeEnvInfo: 'worktreeEnv:info',
+  localModelsList: 'localModels:list',
 
   ptySpawn: 'pty:spawn',
   ptyExists: 'pty:exists',

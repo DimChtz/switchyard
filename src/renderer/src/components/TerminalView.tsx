@@ -19,6 +19,7 @@ import type { ILink, ITheme } from '@xterm/xterm'
 import { useFilesMaybe } from '../screens/workspace/files/FilesContext'
 import { inCheckout, pathMatches } from '../lib/termLinks'
 import { registerTerminal } from '../lib/voice/voice'
+import { taskFromOutput } from '../lib/terminalTask'
 import type { FileEntry } from '@shared/types'
 
 /** A checkout's files (not folders), by path - built once per listing. */
@@ -85,6 +86,21 @@ interface Props {
   initialInput?: string
 }
 
+/** The last lines up to the cursor, as text. */
+function recentLines(term: Terminal, n: number): string {
+  const buf = term.buffer.active
+  const end = buf.baseY + buf.cursorY
+  const out: string[] = []
+  for (let i = Math.max(0, end - n); i <= end; i++) {
+    const line = buf.getLine(i)
+    const text = line?.translateToString(true) ?? ''
+    // (A long line the terminal wrapped: one line again.)
+    if (line?.isWrapped && out.length) out[out.length - 1] += text
+    else out.push(text)
+  }
+  return out.join('\n')
+}
+
 export function TerminalView({ sessionId, cwd, cmd, args, execCommand, onExit, attachOnly, env, autoFocus = true, initialInput }: Props): React.JSX.Element {
   const initialInputRef = useRef(initialInput)
   initialInputRef.current = initialInput
@@ -94,7 +110,7 @@ export function TerminalView({ sessionId, cwd, cmd, args, execCommand, onExit, a
   // Where xterm draws: inside the container's margin. (Not the container itself - with border-box
   // sizing the fit addon counts its padding as room, and the text ran into the edges.)
   const hostRef = useRef<HTMLDivElement>(null)
-  const { state } = useAppStore()
+  const { state, dispatch } = useAppStore()
   // A project can set its own terminal font and the like.
   const prefs = prefsFor(state, projectIdForPath(state, cwd))
   const options = termOptions(prefs)
@@ -370,6 +386,7 @@ export function TerminalView({ sessionId, cwd, cmd, args, execCommand, onExit, a
     }
     typePaths(paths)
   }
+  const project = state.projects.find((p) => p.id === projectIdForPath(state, cwd))
   const menuItems = (): MenuItem[] => {
     const term = termRef.current?.term
     return [
@@ -385,7 +402,18 @@ export function TerminalView({ sessionId, cwd, cmd, args, execCommand, onExit, a
       },
       { label: 'Select All', onClick: () => term?.selectAll() },
       { label: 'Find…', shortcut: keyLabel('⌘F'), onClick: () => setFind((f) => f ?? '') },
-      { label: 'Clear', separatorBefore: true, onClick: () => term?.clear() }
+      // An error seen here, as a task: the selection, else the last lines.
+      {
+        label: term?.hasSelection() ? 'New Task from This…' : 'New Task from Recent Output…',
+        separatorBefore: true,
+        disabled: !project,
+        onClick: () => {
+          if (!term || !project) return
+          const text = term.hasSelection() ? term.getSelection() : recentLines(term, 40)
+          if (text.trim()) taskFromOutput(text, cwd, project, state.tasks, dispatch)
+        }
+      },
+      { label: 'Clear', onClick: () => term?.clear() }
     ]
   }
 

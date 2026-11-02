@@ -1,12 +1,20 @@
 import { createServer, connect } from 'net'
 
-/** A TCP port that's free right now, picked by the OS. */
-export function freePort(): Promise<number> {
+/** A TCP port that's free right now: `preferred` when it is, else one the OS picks. */
+export async function freePort(preferred?: number): Promise<number> {
+  if (preferred && !(await portOpen(preferred))) {
+    const ok = await listenOn(preferred).catch(() => 0)
+    if (ok) return ok
+  }
+  return listenOn(0)
+}
+
+function listenOn(port: number): Promise<number> {
   return new Promise((resolve, reject) => {
     const srv = createServer()
     srv.unref()
     srv.on('error', reject)
-    srv.listen(0, () => {
+    srv.listen(port, () => {
       const addr = srv.address()
       const port = typeof addr === 'object' && addr ? addr.port : 0
       srv.close(() => resolve(port))

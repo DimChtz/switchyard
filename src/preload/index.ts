@@ -5,6 +5,8 @@ import type { TextSearchOptions, TextSearchResult } from '@shared/textSearch'
 import type { Theme } from '@shared/themes'
 import type { UsageEntry } from '@shared/usage'
 import type { DiskFree, LeftoverFolder, WorktreeSize } from '@shared/diskSpace'
+import type { WorktreeEnvInfo } from '@shared/worktreeEnv'
+import type { LocalModel, LocalProvider } from '@shared/localModels'
 import type { PackagePreview, PluginCommandContext, PluginInfo, PluginUiEvent } from '@shared/plugins'
 import type {
   ActivityEvent,
@@ -325,6 +327,14 @@ const api = {
       return () => ipcRenderer.removeListener(IPC.worktreesPruned, handler)
     }
   },
+  /** A worktree's own slot: its port block and name ({port}, {task} in project env). */
+  /** Models Ollama and LM Studio have on this machine. */
+  localModels: {
+    list: (fresh?: boolean): Promise<{ models: LocalModel[]; running: LocalProvider[] }> => ipcRenderer.invoke(IPC.localModelsList, fresh)
+  },
+  worktreeEnv: {
+    info: (cwd: string): Promise<WorktreeEnvInfo> => ipcRenderer.invoke(IPC.worktreeEnvInfo, cwd)
+  },
   /** The room worktrees take, and giving it back. */
   disk: {
     /** A worktree's size - code, dependencies, builds, caches (measured again after 10 minutes, or with fresh). */
@@ -454,7 +464,8 @@ const api = {
     }
   },
   net: {
-    freePort: (): Promise<number> => ipcRenderer.invoke(IPC.netFreePort),
+    /** A free port - in a task's worktree (cwd), its own one when that's free. */
+    freePort: (cwd?: string): Promise<number> => ipcRenderer.invoke(IPC.netFreePort, cwd),
     portOpen: (port: number): Promise<boolean> => ipcRenderer.invoke(IPC.netPortOpen, port)
   },
   team: {

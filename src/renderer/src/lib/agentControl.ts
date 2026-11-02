@@ -1,5 +1,6 @@
 import { AGENTS, parseEnv } from '@shared/constants'
 import type { AgentKind, Prefs, Project, Task } from '@shared/types'
+import { localModelArgs, localModelEnv } from '@shared/localModels'
 
 export function agentSessionId(taskId: string): string {
   return `agent-${taskId}`
@@ -106,7 +107,10 @@ export function taskArgs(task: Pick<Task, 'agentKind' | 'model' | 'planFirst'>):
   if (!kind) return []
   const args: string[] = []
   const flag = MODEL_FLAG[kind]
-  if (task.model?.trim() && flag) args.push(flag, task.model.trim())
+  // A model on this machine (ollama/…, lmstudio/…): the agent's own way of running it.
+  const local = localModelArgs(kind, task.model)
+  if (local) args.push(...local)
+  else if (task.model?.trim() && flag) args.push(flag, task.model.trim())
   if (task.planFirst && canPlanFirst(kind)) args.push('--permission-mode', 'plan')
   return args
 }
@@ -165,7 +169,7 @@ export async function startAgent(task: Task, project: Project, prefs: Prefs, mod
   args = [...args, ...options]
 
   const id = agentSessionId(task.id)
-  const env = { ...projectEnv(project), ...tools.env }
+  const env = { ...projectEnv(project), ...localModelEnv(def.kind, task.model, { ollama: prefs.ollamaUrl, lmstudio: prefs.lmStudioUrl }), ...tools.env }
   // A task in several repositories works in its folder, where they sit side by side.
   const cwd = task.taskDir || task.worktreePath
   await window.api.pty.spawn({ id, cwd, cmd: bin, args, env })
