@@ -1,7 +1,8 @@
 import { BrowserWindow } from 'electron'
 import { statSync } from 'fs'
 import { isAbsolute, join } from 'path'
-import { gitAt, gitBusy, gitFailure, gitYes, refClash } from './gitEnv'
+import { gitAt, gitFailure, gitYes, refClash } from './gitEnv'
+import { repoAtWork, whenQuiet } from './gitQuiet'
 import { listWorktrees } from './git'
 import { getPrefs, getProjects } from './store'
 import { log } from './log'
@@ -18,6 +19,8 @@ import type { BaseStatus } from '@shared/types'
  */
 
 const statuses = new Map<string, BaseStatus>()
+/** How long the background fetch waits for agents to finish their turns before leaving it to the next round. */
+const QUIET_WAIT_MS = 5 * 60_000
 let timer: NodeJS.Timeout | null = null
 
 function broadcast(): void {
@@ -69,9 +72,9 @@ export async function fetchNow(projectId?: string, background = false): Promise<
   await Promise.all(
     projects.map(async (p) => {
       if (!(await hasOrigin(p.repoPath))) return
-      // The timer's fetch waits while a git is at work there (an agent's rebase): next round.
-      const busy = background ? await gitBusy(p.repoPath) : null
-      if (busy) return log.info('base', `Not fetching ${p.name} now - git is busy (${busy})`)
+      // The timer's fetch waits for a quiet moment - no agent mid-turn there, no git at work (a rebase) -
+      // so it never holds a ref an agent's fetch, pull or push needs. Still busy after a while: next round.
+      if (background && !(await whenQuiet(p.repoPath, QUIET_WAIT_MS))) return log.info('base', `Not fetching ${p.name} now - ${(await repoAtWork(p.repoPath)) ?? 'busy'}`)
       try {
         const fetch = (): Promise<unknown> => gitAt(p.repoPath, { network: true }).fetch(['origin', '--prune', '--progress'])
         await fetch().catch(async (err: unknown) => {
@@ -89,7 +92,7 @@ export async function fetchNow(projectId?: string, background = false): Promise<
         statuses.set(p.id, { ...(statuses.get(p.id) ?? { projectId: p.id, base: p.defaultBranch ?? 'main', hasRemote: true, behind: 0, ahead: 0, fetchedAt: 0, checkedOutAt: null }), error: msg })
       }
       await statusOf(p.id)
-      if (getPrefs().autoPullBase && !(await gitBusy(p.repoPath))) await pull(p.id, true).catch(() => {})
+      if (getPrefs().autoPullBase && !(await repoAtWork(p.repoPath))) await pull(p.id, true).catch(() => {})
     })
   )
   broadcast()

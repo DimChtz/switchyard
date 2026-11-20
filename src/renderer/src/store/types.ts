@@ -178,6 +178,12 @@ export type Action =
   | { type: 'ANSWER_TASK'; taskId: string; answer: 'yes' | 'no' | 'retry' }
   | { type: 'PAUSE_TASK'; taskId: string }
   | { type: 'RESUME_TASK'; taskId: string }
+  /**
+   * Ends the task's agent session (if one runs) and starts a new one - the
+   * same agent or another. `blank`: it waits for your message; otherwise it's
+   * told to pick up from the work already in the worktree.
+   */
+  | { type: 'NEW_AGENT_SESSION'; taskId: string; agentKind?: AgentKind; blank?: boolean }
   | { type: 'PRIMARY_ACTION'; taskId: string }
   | { type: 'TOGGLE_PALETTE' }
   | { type: 'SET_START_REPOS'; repos: string[] }

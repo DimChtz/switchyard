@@ -8,7 +8,8 @@ import { errText } from '../../lib/errors'
 import { keyLabel } from '../../lib/keys'
 import { useHover } from '../../lib/useHover'
 import { Menu, type MenuAnchor, type MenuItem } from '../ui'
-import { ImageIcon } from '../ImageIcon'
+import { AttachIcon, ImageIcon } from '../ImageIcon'
+import { filesEdit, readFiles, splitFiles } from '../../lib/attachFiles'
 import { annotateImage } from '../../lib/imageViewer'
 import { refreshLive, type LiveLinks } from './livePreview'
 import { applyEdit, liveEditing, liveReading } from './liveSetup'
@@ -146,7 +147,29 @@ export function NoteEditor({
     }, 0)
   }
   // Images: pasted (a screenshot), dropped or picked - kept in the notes folder's attachments, shown in place.
+  // Other files (a PDF, a log): kept there too, linked as [name](attachments/…) - a click opens one.
   const pickRef = useRef<HTMLInputElement>(null)
+  const attachRef = useRef<HTMLInputElement>(null)
+  const attachFiles = async (files: File[]): Promise<void> => {
+    if (!files.length) return
+    try {
+      const sources = await readFiles(files)
+      const refs: string[] = []
+      for (const s of sources) refs.push(await window.api.notes.addFile(s))
+      edit(filesEdit(sources, refs))
+      dispatch({ type: 'TOAST', text: refs.length === 1 ? `Attached ${sources[0].name}.` : `Attached ${refs.length} files.` })
+    } catch (err) {
+      dispatch({ type: 'TOAST', text: `Could not attach it: ${errText(err)}` })
+    }
+  }
+  /** Files pasted, dropped or picked: pictures in place, the rest as links. */
+  const takeFiles = (list: FileList | File[]): void => {
+    const { images, others } = splitFiles(list)
+    void (async () => {
+      await fromFiles(images)
+      await attachFiles(others)
+    })()
+  }
   const insertImages = async (sources: { dataUrl?: string; path?: string; name: string }[]): Promise<void> => {
     if (!sources.length) return
     try {
@@ -189,15 +212,13 @@ export function NoteEditor({
       )
     )
   const onPasteImages = (e: React.ClipboardEvent): void => {
-    const files = imageFiles(e.clipboardData.files)
-    if (!files.length || mode === 'preview') return
+    if (!e.clipboardData.files.length || mode === 'preview') return
     e.preventDefault()
     e.stopPropagation()
-    void fromFiles(files)
+    takeFiles(e.clipboardData.files)
   }
   const onDropImages = (e: React.DragEvent): void => {
-    const files = imageFiles(e.dataTransfer.files)
-    if (!files.length || mode === 'preview') return
+    if (!e.dataTransfer.files.length || mode === 'preview') return
     e.preventDefault()
     e.stopPropagation()
     // (Where it was dropped, in the live editor.)
@@ -206,7 +227,7 @@ export function NoteEditor({
       const at = view.posAtCoords({ x: e.clientX, y: e.clientY })
       if (at != null) view.dispatch({ selection: { anchor: at } })
     }
-    void fromFiles(files)
+    takeFiles(e.dataTransfer.files)
   }
   const wrap = (l: string, r: string, placeholder: string): void => edit(wrapWith(l, r, placeholder))
   const linePrefix = (pre: string): void => edit(prefixLines(pre))
@@ -219,7 +240,8 @@ export function NoteEditor({
     ['[ ]', 'Checklist', `500 11px ${MONO}`, () => linePrefix('- [ ] ')],
     ['“', 'Quote', '600 16px var(--font-ui)', () => linePrefix('> ')],
     ['[[ ]]', 'Link another note', `500 11px ${MONO}`, () => wrap('[[', ']]', 'Note title')],
-    [<ImageIcon key="img" />, 'Image - or paste a screenshot, or drop image files in', '500 14px var(--font-ui)', () => pickRef.current?.click()]
+    [<ImageIcon key="img" />, 'Image - or paste a screenshot, or drop image files in', '500 14px var(--font-ui)', () => pickRef.current?.click()],
+    [<AttachIcon key="file" />, 'Attach a file - a PDF, a log, a spreadsheet… (or drop files in)', '500 14px var(--font-ui)', () => attachRef.current?.click()]
   ]
   const onTextKey = (e: React.KeyboardEvent<HTMLTextAreaElement>): void => {
     const mod = e.metaKey || e.ctrlKey
@@ -417,8 +439,19 @@ export function NoteEditor({
               void fromFiles(files)
             }}
           />
+          <input
+            ref={attachRef}
+            type="file"
+            multiple
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const files = [...(e.target.files ?? [])]
+              e.target.value = ''
+              takeFiles(files)
+            }}
+          />
           <span style={{ flex: 1 }} />
-          <span style={{ font: `11px ${MONO}`, color: 'var(--t5)', whiteSpace: 'nowrap' }}>↵ continues lists · [[ ]] links notes · paste images</span>
+          <span style={{ font: `11px ${MONO}`, color: 'var(--t5)', whiteSpace: 'nowrap' }}>↵ continues lists · [[ ]] links notes · paste images · drop files</span>
         </div>
       ) : null}
       <div

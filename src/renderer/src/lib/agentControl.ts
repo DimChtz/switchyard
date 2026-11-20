@@ -1,6 +1,7 @@
 import { AGENTS, parseEnv } from '@shared/constants'
 import type { AgentKind, Prefs, Project, Task } from '@shared/types'
 import { localModelArgs, localModelEnv } from '@shared/localModels'
+import { forAgent } from '@shared/mdImages'
 
 export function agentSessionId(taskId: string): string {
   return `agent-${taskId}`
@@ -169,7 +170,15 @@ export async function startAgent(task: Task, project: Project, prefs: Prefs, mod
   args = [...args, ...options]
 
   const id = agentSessionId(task.id)
-  const env = { ...projectEnv(project), ...localModelEnv(def.kind, task.model, { ollama: prefs.ollamaUrl, lmstudio: prefs.lmStudioUrl }), ...tools.env }
+  const env = {
+    ...projectEnv(project),
+    ...localModelEnv(def.kind, task.model, { ollama: prefs.ollamaUrl, lmstudio: prefs.lmStudioUrl }),
+    ...tools.env,
+    // Its CLI runs `git status` on its own (at start, beside its other commands): without this each
+    // one may take the index lock for a moment - and the agent's own commit or rebase then fails on it.
+    // (It only skips status's opportunistic index refresh; nothing else changes.)
+    GIT_OPTIONAL_LOCKS: '0'
+  }
   // A task in several repositories works in its folder, where they sit side by side.
   const cwd = task.taskDir || task.worktreePath
   await window.api.pty.spawn({ id, cwd, cmd: bin, args, env })
@@ -193,6 +202,31 @@ export async function startAgent(task: Task, project: Project, prefs: Prefs, mod
     if (typed) await window.api.agents.typeWhenReady(task.id, typed)
   })
   const timer = setTimeout(off, 15_000)
+}
+
+/**
+ * What a new session on a task that's under way is told: the task, as it
+ * was given at the start, and that the work so far is already in its
+ * folder - to look at that and carry on, not to start over.
+ */
+export function pickUpMessage(task: Task, project: Pick<Project, 'defaultBranch'>): string {
+  const base = task.baseBranch || project.defaultBranch || 'main'
+  const intro = task.firstMessage?.trim() || `${task.key}: ${task.title}${task.desc?.trim() ? `\n\n${forAgent(task.desc.trim())}` : ''}`
+  const where = task.inPlace ? 'this folder' : 'this worktree'
+  const log = task.inPlace ? '`git status`' : `\`git status\` and \`git log ${base}..HEAD\``
+  return `${intro}\n\nAn earlier agent session already worked on this task in ${where}: what it did is here (changed files, and commits). Look at ${log} first, then carry on from where it stopped - don't start over.`
+}
+
+/**
+ * Starts a new session for the task's agent (or another one) in its
+ * worktree, replacing the one that runs. `blank`: no message - it waits for
+ * yours; otherwise it's told to pick up from the work so far.
+ */
+export function newAgentSession(task: Task, project: Project, prefs: Prefs, kind: AgentKind | null, blank: boolean): Promise<void> {
+  const fresh: Task = { ...task, agentKind: kind, session: null, planFirst: false, firstMessage: blank ? null : pickUpMessage(task, project) }
+  // A task that never started has nothing to pick up: its own first message.
+  if (!blank && !task.startedAt && task.firstMessage) fresh.firstMessage = task.firstMessage
+  return startAgent(fresh, project, prefs, 'fresh')
 }
 
 /**

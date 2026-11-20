@@ -281,6 +281,11 @@ export function start(): void {
   })
 }
 
+/** The folders agents are in the middle of a turn in: Switchyard's own git chores wait for them (see gitQuiet). */
+export function workingIn(): string[] {
+  return [...watches.entries()].filter(([id, w]) => w.st === 'working' && ptyService.exists(id)).flatMap(([id]) => ptyService.cwdOf(id) ?? [])
+}
+
 /** Latest known status of every running agent session (for a reloaded renderer). */
 export function current(): AgentStatusUpdate[] {
   return [...watches.entries()]

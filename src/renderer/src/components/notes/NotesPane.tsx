@@ -4,6 +4,8 @@ import { ago, createNote, importNotes, joinNote, linkOf, noteMenuItems, noteTitl
 import { useContextMenu } from '../ui'
 import { HoverBox, NoteEditor, PinIcon, type NoteMode } from './NoteEditor'
 import type { LiveLinks } from './livePreview'
+import { isWebLink } from '../../lib/attachFiles'
+import { errText } from '../../lib/errors'
 import { reposOf } from '../../lib/multiRepo'
 import type { Note, Task } from '@shared/types'
 
@@ -310,7 +312,9 @@ export function NoteTab({ id, onOpen }: { id: string; onOpen: (id: string) => vo
     findTask: (key) => state.tasks.find((t) => t.key === key),
     openTask: (t) => (t.worktreePath ? dispatch({ type: 'OPEN_TASK', taskId: t.id }) : (dispatch({ type: 'NAV', view: 'board', projectId: t.projectId }), dispatch({ type: 'SET_BOARD_FOCUS', id: t.id }))),
     openUrl: (url) => {
-      if (/^https?:\/\//i.test(url)) window.api.sys.openExternal(url)
+      if (isWebLink(url)) window.api.sys.openExternal(url)
+      // An attached file (attachments/x.pdf, or a path): opened with its app.
+      else window.api.notes.openFile(url).catch((err: unknown) => dispatch({ type: 'TOAST', text: `Could not open it: ${errText(err)}` }))
     }
   }
   const duplicate = (n: Note): void => {

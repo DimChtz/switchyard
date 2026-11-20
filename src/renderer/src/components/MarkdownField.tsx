@@ -9,14 +9,17 @@ import { prefixLines, wrapWith, type MdEdit } from '../lib/mdEdit'
 import { refreshLive, type LiveLinks } from './notes/livePreview'
 import { applyEdit, liveEditing, liveReading } from './notes/liveSetup'
 import { HoverBox } from './notes/NoteEditor'
-import { ImageIcon } from './ImageIcon'
+import { AttachIcon, ImageIcon } from './ImageIcon'
+import { filesEdit, isWebLink, readFiles, splitFiles, type FileSource } from '../lib/attachFiles'
+import { errText } from '../lib/errors'
 import { annotateImage } from '../lib/imageViewer'
 
 const MONO = 'var(--font-mono)'
 
 /**
  * What links in rendered Markdown do outside the Notes screen: [[note]]
- * opens the note, a task key its task, a web address the browser.
+ * opens the note, a task key its task, a web address the browser, an
+ * attached file the app it belongs to.
  * `leave` runs first (to close a sheet that's in the way).
  */
 export function useLiveLinks(leave?: () => void): { current: LiveLinks } {
@@ -39,7 +42,8 @@ export function useLiveLinks(leave?: () => void): { current: LiveLinks } {
       }
     },
     openUrl: (url) => {
-      if (/^https?:\/\//i.test(url)) window.api.sys.openExternal(url)
+      if (isWebLink(url)) window.api.sys.openExternal(url)
+      else window.api.attachments.open(url).catch((err: unknown) => dispatch({ type: 'TOAST', text: `Could not open it: ${errText(err)}` }))
     }
   }
   const ref = useRef(links)
@@ -120,7 +124,8 @@ export function MarkdownField({
   onSubmit,
   links,
   hint,
-  onImage
+  onImage,
+  onFile
 }: {
   value: string
   onChange: (v: string) => void
@@ -132,14 +137,17 @@ export function MarkdownField({
   hint?: React.ReactNode
   /** Images can go in (pasted, dropped, picked): keeps one, and says where (its path or URL, for the Markdown). */
   onImage?: (s: ImageSource) => Promise<string>
+  /** Other files can go in too (a PDF, a log): keeps one, and says where - linked as [name](path). */
+  onFile?: (s: FileSource) => Promise<string>
 }): React.JSX.Element {
   const viewRef = useRef<EditorView | null>(null)
   const pickRef = useRef<HTMLInputElement>(null)
-  const [adding, setAdding] = React.useState(false)
+  const attachRef = useRef<HTMLInputElement>(null)
+  const [adding, setAdding] = React.useState<string | null>(null)
   const { dispatch } = useAppStore()
   const addImages = async (files: File[]): Promise<void> => {
     if (!onImage || !files.length) return
-    setAdding(true)
+    setAdding('Adding the image…')
     try {
       const sources = await readImages(files)
       const refs: string[] = []
@@ -148,10 +156,38 @@ export function MarkdownField({
       viewRef.current?.focus()
       if (refs.length === 1) dispatch({ type: 'TOAST', text: 'Image added.', action: { label: 'Annotate', run: () => annotateImage(refs[0]) } })
     } catch (err) {
-      dispatch({ type: 'TOAST', text: `Could not add the image: ${err instanceof Error ? err.message : String(err)}` })
+      dispatch({ type: 'TOAST', text: `Could not add the image: ${errText(err)}` })
     } finally {
-      setAdding(false)
+      setAdding(null)
     }
+  }
+  const addFiles = async (files: File[]): Promise<void> => {
+    if (!onFile || !files.length) return
+    setAdding(files.length > 1 ? `Attaching ${files.length} files…` : 'Attaching the file…')
+    try {
+      const sources = await readFiles(files)
+      const refs: string[] = []
+      for (const s of sources) refs.push(await onFile(s))
+      edit.current(filesEdit(sources, refs))
+      viewRef.current?.focus()
+      dispatch({ type: 'TOAST', text: refs.length === 1 ? `Attached ${sources[0].name}.` : `Attached ${refs.length} files.` })
+    } catch (err) {
+      dispatch({ type: 'TOAST', text: `Could not attach it: ${errText(err)}` })
+    } finally {
+      setAdding(null)
+    }
+  }
+  /** Files pasted, dropped or picked: pictures go in as pictures, the rest as links - false when none can go in here. */
+  const take = (list: FileList | File[]): boolean => {
+    const { images, others } = splitFiles(list)
+    const pics = onImage ? images : []
+    const rest = onFile ? (onImage ? others : [...images, ...others]) : []
+    if (!pics.length && !rest.length) return false
+    void (async () => {
+      await addImages(pics)
+      await addFiles(rest)
+    })()
+    return true
   }
   const edit = useRef((fn: MdEdit) => viewRef.current && applyEdit(viewRef.current, fn))
   const submit = useRef<(() => void) | null>(onSubmit ?? null)
@@ -199,31 +235,52 @@ export function MarkdownField({
             />
           </>
         ) : null}
+        {onFile ? (
+          <>
+            <HoverBox
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => attachRef.current?.click()}
+              title="Attach a file - a PDF, a log, a spreadsheet… (or drop files in)"
+              style={{ minWidth: 26, height: 24, padding: '0 5px', boxSizing: 'border-box', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--t-icon)', cursor: 'pointer', userSelect: 'none' }}
+              hover={{ background: 'var(--bg-hover)', color: 'var(--t1)' }}
+            >
+              <AttachIcon />
+            </HoverBox>
+            <input
+              ref={attachRef}
+              type="file"
+              multiple
+              style={{ display: 'none' }}
+              onChange={(e) => {
+                const files = [...(e.target.files ?? [])]
+                e.target.value = ''
+                take(files)
+              }}
+            />
+          </>
+        ) : null}
         <span style={{ flex: 1 }} />
-        {adding ? <span style={{ font: `11px ${MONO}`, color: 'var(--t4)', paddingRight: 8 }}>Adding the image…</span> : null}
+        {adding ? <span style={{ font: `11px ${MONO}`, color: 'var(--t4)', paddingRight: 8 }}>{adding}</span> : null}
         {hint ? <span style={{ font: `11px ${MONO}`, color: 'var(--t5)', whiteSpace: 'nowrap', paddingRight: 5 }}>{hint}</span> : null}
       </div>
       <div
         onPasteCapture={(e) => {
-          const files = onImage ? imageFiles(e.clipboardData.files) : []
-          if (!files.length) return
+          if (!e.clipboardData.files.length || !take(e.clipboardData.files)) return
           e.preventDefault()
           e.stopPropagation()
-          void addImages(files)
         }}
         onDragOverCapture={(e) => {
-          if (onImage && e.dataTransfer.types.includes('Files')) e.preventDefault()
+          if ((onImage || onFile) && e.dataTransfer.types.includes('Files')) e.preventDefault()
         }}
         onDropCapture={(e) => {
-          const files = onImage ? imageFiles(e.dataTransfer.files) : []
-          if (!files.length) return
+          if (!e.dataTransfer.files.length) return
           e.preventDefault()
           e.stopPropagation()
           // (Where it was dropped.)
           const view = viewRef.current
           const at = view?.posAtCoords({ x: e.clientX, y: e.clientY })
           if (view && at != null) view.dispatch({ selection: { anchor: at } })
-          void addImages(files)
+          take(e.dataTransfer.files)
         }}
         onMouseDown={(e) => {
           // Below the text: put the cursor at the end.

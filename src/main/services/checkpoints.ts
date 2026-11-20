@@ -1,7 +1,7 @@
 import { BrowserWindow } from 'electron'
 import { execFile } from 'child_process'
 import { promisify } from 'util'
-import { gitArgs, gitEnv } from './gitEnv'
+import { gitArgs, gitEnv, retryOnLock } from './gitEnv'
 import { promises as fs, existsSync, readdirSync } from 'fs'
 import { tmpdir } from 'os'
 import { basename, join, resolve } from 'path'
@@ -312,8 +312,25 @@ function commonRoot(c: Checkpoint): string | null {
   return s.dir ? resolve(s.path, '..') : s.path
 }
 
-async function dropRefs(refs: { gitDir: string; ref: string }[]): Promise<void> {
-  for (const r of refs) await execFileP('git', gitArgs(['--git-dir', r.gitDir, 'update-ref', '-d', r.ref]), { windowsHide: true, env: gitEnv() }).catch(() => {})
+/**
+ * Deletes checkpoint refs - all of a repository's in one go (one
+ * transaction), not one git per ref: each deletion of a packed ref rewrites
+ * packed-refs under its lock, and a finished task can have hundreds.
+ */
+export async function dropRefs(refs: { gitDir: string; ref: string }[]): Promise<void> {
+  const byRepo = new Map<string, Set<string>>()
+  for (const r of refs) byRepo.set(r.gitDir, (byRepo.get(r.gitDir) ?? new Set()).add(r.ref))
+  for (const [gitDir, set] of byRepo) {
+    const run = (): Promise<unknown> =>
+      new Promise<void>((done, fail) => {
+        const child = execFile('git', gitArgs(['--git-dir', gitDir, 'update-ref', '--stdin']), { windowsHide: true, env: gitEnv() }, (err) => (err ? fail(err) : done()))
+        child.stdin?.end([...set].map((ref) => `delete ${ref}\n`).join(''))
+      })
+    // (One that's already gone fails the whole transaction: then one at a time.)
+    await retryOnLock(run).catch(async () => {
+      for (const ref of set) await execFileP('git', gitArgs(['--git-dir', gitDir, 'update-ref', '-d', ref]), { windowsHide: true, env: gitEnv() }).catch(() => {})
+    })
+  }
 }
 
 async function forgetCheckpoints(cps: Checkpoint[]): Promise<void> {

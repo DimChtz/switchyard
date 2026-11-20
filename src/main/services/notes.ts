@@ -3,6 +3,7 @@ import { promises as fs, watch, type FSWatcher } from 'fs'
 import { basename, isAbsolute, join, relative } from 'path'
 import { getPrefs } from './store'
 import { expandPath } from './repos'
+import { keepFile, openLinked, type FileSource } from './attachments'
 import type { Note, NoteDraft } from '@shared/types'
 
 /**
@@ -264,6 +265,20 @@ export async function addImage(from: { dataUrl?: string; path?: string }): Promi
       if ((err as NodeJS.ErrnoException).code !== 'EEXIST' || i > 500) throw err
     }
   }
+}
+
+/**
+ * A file put into a note (any kind - a PDF, a log): copied into the notes
+ * folder's attachments, so it travels with the notes. Its path from the
+ * notes folder ("attachments/report.pdf"), for the note's link.
+ */
+export async function addFile(from: FileSource): Promise<string> {
+  return `attachments/${await keepFile(join(notesDir(), 'attachments'), from)}`
+}
+
+/** Opens a file a note links to (a path, or one relative to the notes folder). */
+export function openFile(ref: string): Promise<void> {
+  return openLinked(ref, notesDir())
 }
 
 // Edits made outside the app (another editor, a sync client) show up live.

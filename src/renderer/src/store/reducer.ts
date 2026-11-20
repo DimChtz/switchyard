@@ -833,6 +833,32 @@ function reduce(state: AppState, action: Action): AppState {
       return { ...state, tasks, view: 'workspace', projectId: project.id, taskId: id, palette: null }
     }
 
+    case 'NEW_AGENT_SESSION': {
+      const task = state.tasks.find((t) => t.id === action.taskId)
+      if (!task) return state
+      const kind = action.agentKind ?? task.agentKind
+      const name = agentShort(kind)
+      return withToast(
+        {
+          ...state,
+          tasks: mapTask(state, task.id, (t) => ({
+            ...t,
+            agentKind: kind,
+            // (A blank one waits for your message: idle, not at work.)
+            st: action.blank ? 'done' : 'working',
+            ask: null,
+            askKind: null,
+            session: null,
+            activity: null,
+            sleeping: null,
+            lastActivityAt: Date.now(),
+            ...(t.col === 'parked' ? { col: 'progress' as const } : {})
+          }))
+        },
+        action.blank ? `New ${name} session - tell it what to do.` : `New ${name} session - picking up from the work so far.`
+      )
+    }
+
     case 'SET_TASK_AGENT':
       return {
         ...state,

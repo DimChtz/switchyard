@@ -161,9 +161,9 @@ export async function exportOne(win: BrowserWindow | null, body: string): Promis
   return path
 }
 
-/** The images a note shows from its attachments folder go along with it (not over files already there). */
+/** The images a note shows, and the files it links to, from its attachments folder go along with it (not over files already there). */
 async function copyAttachments(body: string, destDir: string): Promise<void> {
-  const refs = new Set([...body.matchAll(/!\[[^\]]*\]\((attachments\/[^)\s]+)\)/g)].map((m) => decodeURIComponent(m[1])))
+  const refs = new Set([...body.matchAll(/\[[^\]]*\]\((attachments\/[^)\s]+)\)/g)].map((m) => decodeURIComponent(m[1])))
   for (const ref of refs) {
     const name = basename(ref)
     const src = join(notes.notesDir(), ATTACHMENTS, name)

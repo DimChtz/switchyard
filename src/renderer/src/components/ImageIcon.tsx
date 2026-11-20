@@ -10,3 +10,12 @@ export function ImageIcon({ size = 14 }: { size?: number }): React.JSX.Element {
     </svg>
   )
 }
+
+/** A paperclip - the formatting bar's "attach a file" button. */
+export function AttachIcon({ size = 14 }: { size?: number }): React.JSX.Element {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round" strokeLinecap="round">
+      <path d="M13.2 7.6 8.1 12.7a3.3 3.3 0 0 1-4.7-4.7l5.4-5.4a2.2 2.2 0 0 1 3.1 3.1L6.6 11a1.1 1.1 0 0 1-1.6-1.6l4.8-4.8" />
+    </svg>
+  )
+}

@@ -4,7 +4,8 @@ import { agentShort } from '../../../lib/derive'
 import { TerminalView } from '../../../components/TerminalView'
 import { AGENTS } from '@shared/constants'
 import { agentSessionId, projectEnv, setupSessionId, startAgent, testsSessionId } from '../../../lib/agentControl'
-import { Button } from '../../../components/ui'
+import { Button, Menu, confirm, type MenuAnchor, type MenuItem } from '../../../components/ui'
+import type { Action } from '../../../store/types'
 import { taskRoot } from '../../../lib/multiRepo'
 import { useShells } from '../../../lib/wsStore'
 import { prefsFor } from '../../../lib/projectPrefs'
@@ -56,6 +57,8 @@ export function AgentTab({ task, visible }: { task: Task; visible: boolean }): R
             hint={session.exitCode === 0 ? '' : 'R'}
             danger={session.exitCode !== 0}
             onClick={() => dispatch(session.exitCode === 0 ? { type: 'RESUME_TASK', taskId: task.id } : { type: 'ANSWER_TASK', taskId: task.id, answer: 'retry' })}
+            // Its conversation may be what fails (gone, broken): a new one, from the work so far.
+            extra={<NewSessionButton task={task} running={false} />}
           />
         ) : null}
       </>
@@ -64,10 +67,15 @@ export function AgentTab({ task, visible }: { task: Task; visible: boolean }): R
     return (
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, padding: 20, textAlign: 'center' }}>
         <div style={{ font: '13px var(--font-ui)', color: 'var(--t3)' }}>{agentDef.name} isn't running for this task.</div>
-        <Button variant="primary" size="lg" onClick={() => dispatch({ type: 'RESUME_TASK', taskId: task.id })}>
-          Resume {agentDef.name}
-        </Button>
-        <div style={{ font: '12px var(--font-ui)', color: 'var(--t4)' }}>{agentDef.resumeArgs ? 'Reopens its previous conversation in this worktree.' : "Starts a new session with the task's first message."}</div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+          <Button variant="primary" size="lg" onClick={() => dispatch({ type: 'RESUME_TASK', taskId: task.id })}>
+            Resume {agentDef.name}
+          </Button>
+          <NewSessionButton task={task} running={false} size="lg" />
+        </div>
+        <div style={{ font: '12px var(--font-ui)', color: 'var(--t4)', maxWidth: 440, textWrap: 'pretty' } as React.CSSProperties}>
+          {agentDef.resumeArgs ? 'Resume reopens its previous conversation in this worktree.' : "Resume starts a new session with the task's first message."} A new session starts over in conversation, not in code: it picks up from the work already here - or with another agent.
+        </div>
       </div>
     )
   return (
@@ -158,7 +166,51 @@ export function OutputTab({ task, kind, visible }: { task: Task; kind: 'setup' |
   return <TerminalView key="setup" sessionId={setupSessionId(task.id)} cwd={cwd} attachOnly autoFocus={visible} />
 }
 
-function AgentBar({ text, action, hint, danger, onClick }: { text: string; action: string; hint: string; danger: boolean; onClick: () => void }): React.JSX.Element {
+/**
+ * The ways to start a task's agent afresh: a new session of the same agent
+ * (told to pick up from the work in the worktree), a blank one, or another
+ * agent. `running`: one is at work - it's ended first, after asking.
+ */
+export function newSessionItems(task: Task, agents: typeof AGENTS, dispatch: (a: Action) => void, running: boolean): MenuItem[] {
+  const current = AGENTS.find((a) => a.kind === task.agentKind)
+  const go = async (agentKind: AgentKind, blank: boolean): Promise<void> => {
+    if (running) {
+      const ok = await confirm({
+        title: `End ${current?.name ?? 'the agent'}'s session?`,
+        body: 'Its conversation stops here and a new one starts. The files and commits stay as they are - and the old conversation can still be found in the agent\'s own history.',
+        confirmLabel: 'New session'
+      })
+      if (!ok) return
+    }
+    dispatch({ type: 'NEW_AGENT_SESSION', taskId: task.id, agentKind, blank })
+  }
+  const items: MenuItem[] = []
+  if (current) {
+    items.push({ label: `New ${current.name} session`, sub: 'picks up from the work so far', onClick: () => void go(current.kind, false) })
+    items.push({ label: `New blank ${current.name} session`, sub: 'waits for your message', onClick: () => void go(current.kind, true) })
+  }
+  const others = agents.filter((a) => a.kind !== current?.kind)
+  others.forEach((a, i) => items.push({ label: `Switch to ${a.name}`, sub: 'picks up from the work so far', separatorBefore: i === 0 && !!current, onClick: () => void go(a.kind, false) }))
+  return items
+}
+
+/** "New session ▾": the menu of newSessionItems, under a button. */
+export function NewSessionButton({ task, running, size = 'sm' }: { task: Task; running: boolean; size?: 'sm' | 'lg' }): React.JSX.Element | null {
+  const { state, dispatch } = useAppStore()
+  const [menu, setMenu] = useState<MenuAnchor | null>(null)
+  if (!task.worktreePath) return null
+  const agents = AGENTS.filter((a) => !state.prefs.agentsOff.includes(a.kind))
+  return (
+    <>
+      <Button size={size} title="Start the agent over in a new conversation - this one, or another agent" onClick={(e) => setMenu((m) => (m ? null : { el: e.currentTarget }))}>
+        New session…
+      </Button>
+      {menu ? <Menu anchor={menu} width={290} items={newSessionItems(task, agents, dispatch, running)} onClose={() => setMenu(null)} /> : null}
+    </>
+  )
+}
+
+function AgentBar({ text, action, hint, danger, onClick, extra }: { text: string; action: string; hint: string; danger: boolean; onClick: () => void; extra?: React.ReactNode }): React.JSX.Element {
   return (
     <div
       style={{
@@ -175,6 +227,7 @@ function AgentBar({ text, action, hint, danger, onClick }: { text: string; actio
     >
       <span style={{ width: 7, height: 7, borderRadius: '50%', background: danger ? 'var(--c-red)' : 'var(--t4)', flex: 'none' }} />
       <span style={{ flex: 1, font: '13px var(--font-ui)', color: 'var(--t1)' }}>{text}</span>
+      {extra}
       <Button variant="primary" size="sm" hint={hint} onClick={onClick}>
         {action}
       </Button>

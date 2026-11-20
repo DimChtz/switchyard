@@ -3,7 +3,7 @@ import { useAppStore } from '../../../store/AppStore'
 import { useHover } from '../../../lib/useHover'
 import { statusColor, statusLabel } from '../../../lib/status'
 import { agentShort } from '../../../lib/derive'
-import { setupSessionId } from '../../../lib/agentControl'
+import { agentSessionId, setupSessionId } from '../../../lib/agentControl'
 import { previewPortOf } from '../WorkspacePreview'
 import { Menu, type MenuAnchor } from '../../../components/ui'
 import { prefsFor } from '../../../lib/projectPrefs'
@@ -13,6 +13,8 @@ import type { Layout } from '../../../lib/wsLayout'
 import { groupsOf } from '../../../lib/wsLayout'
 import type { SavedCommand, ShellOption, Task } from '@shared/types'
 import { PanelHeader, PanelIcon, type PanelChrome } from '../layout/PanelHeader'
+import { newSessionItems } from './TerminalTabs'
+import { AGENTS } from '@shared/constants'
 
 /** The Sessions side bar view: the agent, the terminals and the tools - click to show, drag onto a group (or its edge). */
 export function SessionsView({ task, layout, chrome }: { task: Task; layout: Layout; chrome: PanelChrome }): React.JSX.Element {
@@ -34,6 +36,8 @@ export function SessionsView({ task, layout, chrome }: { task: Task; layout: Lay
   }, [task.id])
   const [profiles, setProfiles] = useState<ShellOption[]>([])
   const [profileMenu, setProfileMenu] = useState<MenuAnchor | null>(null)
+  const [agentMenu, setAgentMenu] = useState<MenuAnchor | null>(null)
+  const [agentRunning, setAgentRunning] = useState(false)
   useEffect(() => {
     window.api.sys.shells().then(setProfiles)
   }, [])
@@ -57,7 +61,22 @@ export function SessionsView({ task, layout, chrome }: { task: Task; layout: Lay
         </PanelIcon>
       </PanelHeader>
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '0 8px 12px', display: 'flex', flexDirection: 'column', gap: 1 }}>
-        <Head>Agent</Head>
+        <Head
+          action={
+            task.worktreePath && !task.scratch
+              ? {
+                  title: 'New agent session - start over in a new conversation, or switch agents',
+                  onClick: (el) => {
+                    // (One at work is ended first - after asking.)
+                    window.api.pty.info(agentSessionId(task.id)).then((i) => setAgentRunning(!!i?.running))
+                    setAgentMenu((m) => (m ? null : { el }))
+                  }
+                }
+              : undefined
+          }
+        >
+          Agent
+        </Head>
         {row('agent', task.agentKind ? agentShort(task.agentKind) : 'Agent', task.agentKind ? statusLabel(task) || 'stopped' : 'none', '◆', 'var(--c-blue)', task.agentKind ? statusColor(task.st) : undefined)}
         <Head>Terminals</Head>
         {hasSetup ? row('setup', 'setup', 'launch setup', '›', 'var(--t3)') : null}
@@ -86,6 +105,7 @@ export function SessionsView({ task, layout, chrome }: { task: Task; layout: Lay
         />
         <div style={{ padding: '14px 8px 0', font: '12px/1.5 var(--font-ui)', color: 'var(--t4)', textWrap: 'pretty' }}>Click to open in the focused group. Drag onto any group edge to open it in a split.</div>
       </div>
+      {agentMenu ? <Menu anchor={agentMenu} width={290} items={newSessionItems(task, AGENTS.filter((a) => !state.prefs.agentsOff.includes(a.kind)), dispatch, agentRunning)} onClose={() => setAgentMenu(null)} /> : null}
       {profileMenu ? (
         <Menu
           anchor={profileMenu}
@@ -118,8 +138,25 @@ function CommandRow({ c, onRun }: { c: SavedCommand; onRun: () => void }): React
   )
 }
 
-function Head({ children }: { children: React.ReactNode }): React.JSX.Element {
-  return <div style={{ padding: '12px 8px 5px', font: '500 10.5px var(--font-mono)', letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--t5)' }}>{children}</div>
+function Head({ children, action }: { children: React.ReactNode; action?: { title: string; onClick: (el: HTMLElement) => void } }): React.JSX.Element {
+  const [hover, hoverProps] = useHover()
+  return (
+    <div style={{ padding: '12px 8px 5px', display: 'flex', alignItems: 'center', font: '500 10.5px var(--font-mono)', letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--t5)' }}>
+      <span style={{ flex: 1 }}>{children}</span>
+      {action ? (
+        <span
+          {...hoverProps}
+          title={action.title}
+          onClick={(e) => action.onClick(e.currentTarget)}
+          style={{ width: 18, height: 18, margin: '-4px -4px -4px 0', borderRadius: 4, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: hover ? 'var(--t1)' : 'var(--t4)', background: hover ? 'var(--bg-hover)' : 'transparent' }}
+        >
+          <svg width="10" height="10" viewBox="0 0 10 10">
+            <path d="M5 1.5v7M1.5 5h7" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+          </svg>
+        </span>
+      ) : null}
+    </div>
+  )
 }
 
 function SessionRow({ id, taskId, label, sub, ic, icColor, dot, active, open }: { id: string; taskId: string; label: string; sub: string; ic: string; icColor: string; dot?: string; active: boolean; open: boolean }): React.JSX.Element {

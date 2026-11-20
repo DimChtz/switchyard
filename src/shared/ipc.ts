@@ -31,6 +31,8 @@ export const IPC = {
   dialogSaveText: 'dialog:saveText',
   dialogPickImages: 'dialog:pickImages',
   attachmentsSave: 'attachments:save',
+  attachmentsAddFile: 'attachments:addFile',
+  attachmentsOpen: 'attachments:open',
 
   gitCheckRepo: 'git:checkRepo',
   gitRepoInfo: 'git:repoInfo',
@@ -253,6 +255,8 @@ export const IPC = {
   themesOpenDir: 'themes:openDir',
   notesImage: 'notes:image',
   notesAddImage: 'notes:addImage',
+  notesAddFile: 'notes:addFile',
+  notesOpenFile: 'notes:openFile',
   imagesInfo: 'images:info',
   imagesSave: 'images:save',
   notesImportPick: 'notes:importPick',

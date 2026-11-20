@@ -4,7 +4,7 @@ import { dueForPark, summaryDue } from '../lib/autoPark'
 import { startUpdateWatch } from '../lib/updates'
 import type { Action, AppState } from './types'
 import { initialState, reducer } from './reducer'
-import { agentSessionId, killTaskSessions, projectEnv, runCommandSession, setupSessionId, startAgent, testsSessionId } from '../lib/agentControl'
+import { agentSessionId, killTaskSessions, newAgentSession, projectEnv, runCommandSession, setupSessionId, startAgent, testsSessionId } from '../lib/agentControl'
 import { tailLines } from '../lib/ptyTail'
 import { startPlugins } from '../lib/plugins'
 import { busyAgents, hasTools, knowKeyHigh, nextTaskKey, queuedTasks } from '../lib/derive'
@@ -170,6 +170,11 @@ ${u.ask}` : ''}`, task.id, actions)
         if (running) window.api.pty.sendText(sessionId, 'Please continue.')
         else restart()
       })
+    } else if (task && project && action.type === 'NEW_AGENT_SESSION') {
+      // (Starting it replaces the session that runs, if one does.)
+      newAgentSession(task, project, prefsFor(s, project.id), action.agentKind ?? task.agentKind, !!action.blank).catch((err: unknown) =>
+        rawDispatch({ type: 'TOAST', text: `Could not start the agent: ${errText(err)}` })
+      )
     } else if (task && action.type === 'WAKE_TASK') {
       // The usage limit has reset: on from where it stopped.
       const text = 'Your usage limit has reset - please continue where you left off.'

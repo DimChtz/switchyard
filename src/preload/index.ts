@@ -220,7 +220,11 @@ const api = {
   },
   attachments: {
     /** Keeps a pasted image (a data: URL) as a file for an agent to open; resolves with its path. */
-    save: (dataUrl: string): Promise<string> => ipcRenderer.invoke(IPC.attachmentsSave, dataUrl)
+    save: (dataUrl: string): Promise<string> => ipcRenderer.invoke(IPC.attachmentsSave, dataUrl),
+    /** Keeps any file (a path on disk, or a pasted one's data) for a task's description; resolves with its path. */
+    addFile: (from: { path?: string | null; dataUrl?: string | null; name?: string | null }): Promise<string> => ipcRenderer.invoke(IPC.attachmentsAddFile, from),
+    /** Opens a file a link names with its app (a program: shown in its folder). */
+    open: (ref: string): Promise<void> => ipcRenderer.invoke(IPC.attachmentsOpen, ref)
   },
   git: {
     checkRepo: (path: string): Promise<boolean> => ipcRenderer.invoke(IPC.gitCheckRepo, path),
@@ -566,6 +570,10 @@ const api = {
     image: (ref: string): Promise<string | null> => ipcRenderer.invoke(IPC.notesImage, ref),
     /** An image put into a note (a screenshot's data, or a file), kept in the notes folder's attachments; its path from there. */
     addImage: (from: { dataUrl?: string; path?: string }): Promise<string> => ipcRenderer.invoke(IPC.notesAddImage, from),
+    /** Any file put into a note, kept in the notes folder's attachments; its path from there. */
+    addFile: (from: { path?: string | null; dataUrl?: string | null; name?: string | null }): Promise<string> => ipcRenderer.invoke(IPC.notesAddFile, from),
+    /** Opens a file a note links to (a path, or relative to the notes folder) with its app. */
+    openFile: (ref: string): Promise<void> => ipcRenderer.invoke(IPC.notesOpenFile, ref),
     /** Asks for Markdown files or a folder (an Obsidian vault, a Notion export) and imports them; null when cancelled. */
     importPick: (kind: 'files' | 'folder', link?: { projectId: string | null; taskId: string | null }): Promise<NoteImportResult | null> =>
       ipcRenderer.invoke(IPC.notesImportPick, kind, link),

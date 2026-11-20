@@ -1,5 +1,6 @@
 import { BrowserWindow } from 'electron'
-import { gitAt, gitBusy, retryOnLock } from './gitEnv'
+import { gitAt, retryOnLock } from './gitEnv'
+import { housekeepAll, repoAtWork } from './gitQuiet'
 import { staleReason } from '@shared/constants'
 import { getPrefs, getProjects, getTasks } from './store'
 import { getWorktreeStatus, listWorktrees } from './git'
@@ -33,8 +34,8 @@ export async function pruneStale(now = false): Promise<string[]> {
   const pruned: string[] = []
   for (const project of getProjects()) {
     const base = project.defaultBranch ?? 'main'
-    // (Not beside a git at work there - an agent's rebase: next hour.)
-    if (!now && (await gitBusy(project.repoPath))) continue
+    // (Not beside a git or an agent at work there - an agent's rebase: next hour.)
+    if (!now && (await repoAtWork(project.repoPath))) continue
     let worktrees: Awaited<ReturnType<typeof listWorktrees>>
     try {
       worktrees = (await listWorktrees(project.repoPath)).filter((w) => !w.isMain && !w.locked)
@@ -74,6 +75,9 @@ export async function pruneStale(now = false): Promise<string[]> {
 export function startCleanup(): void {
   setTimeout(() => pruneStale().catch(() => {}), 30_000)
   setInterval(() => pruneStale().catch(() => {}), HOUR)
+  // git's housekeeping, at quiet moments - not in the middle of an agent's commit.
+  setTimeout(() => housekeepAll().catch(() => {}), 5 * 60_000)
+  setInterval(() => housekeepAll().catch(() => {}), HOUR)
   // (And whether the disk runs low - every 15 minutes, a minute after start.)
   setTimeout(() => checkLowDisk().catch(() => {}), 60_000)
   setInterval(() => checkLowDisk().catch(() => {}), 15 * 60_000)

@@ -22,6 +22,8 @@ import * as system from './services/system'
 import * as hooks from './services/hooks'
 import * as transcript from './services/transcript'
 import * as notes from './services/notes'
+import * as attachments from './services/attachments'
+import type { FileSource } from './services/attachments'
 import * as notesTransfer from './services/notesTransfer'
 import * as themes from './services/themes'
 import * as usage from './services/usage'
@@ -175,6 +177,10 @@ export function registerIpcHandlers(): void {
     await writeFile(file, Buffer.from(m[2], 'base64'))
     return file
   })
+  // Other files (a PDF, a log, a CSV) for a task's description: copied there too; the agent is told where.
+  ipcMain.handle(IPC.attachmentsAddFile, (_e, from: FileSource) => attachments.addTaskFile(from))
+  // A file a description links to, opened with its app (a program is only shown in its folder).
+  ipcMain.handle(IPC.attachmentsOpen, (_e, ref: string) => attachments.openLinked(String(ref), attachments.dataAttachmentsDir()))
   ipcMain.handle(IPC.dialogPickFolder, async (e) => {
     const win = BrowserWindow.fromWebContents(e.sender)
     const result = win
@@ -443,6 +449,8 @@ export function registerIpcHandlers(): void {
     if (err) throw new Error(err)
   })
   ipcMain.handle(IPC.notesImage, (_e, ref: string) => notes.imageData(ref))
+  ipcMain.handle(IPC.notesAddFile, (_e, from: FileSource) => notes.addFile(from))
+  ipcMain.handle(IPC.notesOpenFile, (_e, ref: string) => notes.openFile(String(ref)))
   ipcMain.handle(IPC.notesAddImage, (_e, from: { dataUrl?: string; path?: string }) => notes.addImage(from))
   ipcMain.handle(IPC.imagesInfo, (_e, ref: string) => notes.imageInfo(String(ref)))
   ipcMain.handle(IPC.imagesSave, (_e, ref: string, dataUrl: string) => notes.saveImage(String(ref), String(dataUrl)))
